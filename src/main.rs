@@ -1,5 +1,7 @@
+mod event_handler;
 mod event_pool;
 mod httpretty;
+mod tui;
 
 use tracing_subscriber::FmtSubscriber;
 

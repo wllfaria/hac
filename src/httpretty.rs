@@ -1,19 +1,27 @@
-use crate::event_pool::EventPool;
+use crate::{
+    event_handler::{Action, EventHandler},
+    event_pool::EventPool,
+    tui::Tui,
+};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io::Stdout;
 
 pub struct Httpretty {
-    event_handler: EventPool,
-    _terminal: Terminal<CrosstermBackend<Stdout>>,
+    event_pool: EventPool,
+    event_handler: EventHandler,
+    terminal: Terminal<CrosstermBackend<Stdout>>,
     should_quit: bool,
+    tui: Tui,
 }
 
 impl Httpretty {
     pub fn new() -> anyhow::Result<Self> {
         Ok(Self {
-            event_handler: EventPool::new(),
-            _terminal: Terminal::new(CrosstermBackend::new(std::io::stdout()))?,
+            event_pool: EventPool::new(),
+            event_handler: EventHandler::default(),
+            terminal: Terminal::new(CrosstermBackend::new(std::io::stdout()))?,
             should_quit: false,
+            tui: Tui::default(),
         })
     }
 
@@ -21,9 +29,19 @@ impl Httpretty {
         startup()?;
 
         loop {
-            let event = self.event_handler.next().await;
+            if let Some(action) = self
+                .event_pool
+                .next()
+                .await
+                .and_then(|ev| self.event_handler.handle(ev))
+            {
+                match action {
+                    Action::Quit => self.should_quit = true,
+                }
+                self.tui.update(action)
+            }
 
-            println!("{event:#?}");
+            self.terminal.draw(|f| self.tui.draw(f))?;
 
             if self.should_quit {
                 break;
