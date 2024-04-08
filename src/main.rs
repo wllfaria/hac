@@ -1,4 +1,4 @@
-mod event_handler;
+mod command;
 mod event_pool;
 mod httpretty;
 mod tui;

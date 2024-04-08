@@ -1,8 +1,13 @@
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     widgets::{Block, Borders},
     Frame,
 };
+
+use crate::command::Command;
+
+use super::components::Component;
 
 pub struct EditorLayout {
     sidebar: Rect,
@@ -15,16 +20,6 @@ pub struct EditorLayout {
 pub struct Editor {}
 
 impl Editor {
-    pub fn draw(&self, frame: &mut Frame) {
-        let layout = self.build_layout(frame);
-        let b = Block::default().borders(Borders::ALL);
-
-        frame.render_widget(b.clone(), layout.sidebar);
-        frame.render_widget(b.clone(), layout.url_bar);
-        frame.render_widget(b.clone(), layout.editor);
-        frame.render_widget(b, layout.preview);
-    }
-
     fn build_layout(&self, frame: &mut Frame) -> EditorLayout {
         let container = Layout::default()
             .direction(Direction::Horizontal)
@@ -47,5 +42,39 @@ impl Editor {
             editor: editor[0],
             preview: editor[1],
         }
+    }
+}
+
+impl Component for Editor {
+    fn draw(&self, frame: &mut Frame) -> anyhow::Result<()> {
+        let layout = self.build_layout(frame);
+        let b = Block::default().borders(Borders::ALL);
+
+        frame.render_widget(b.clone(), layout.sidebar);
+        frame.render_widget(b.clone(), layout.url_bar);
+        frame.render_widget(b.clone(), layout.editor);
+        frame.render_widget(b, layout.preview);
+
+        Ok(())
+    }
+
+    fn handle_key_event(
+        &mut self,
+        KeyEvent {
+            code, modifiers, ..
+        }: KeyEvent,
+    ) -> anyhow::Result<Option<Command>> {
+        let command = match (code, modifiers) {
+            (KeyCode::Char('q'), KeyModifiers::CONTROL) => Some(Command::Quit),
+            _ => None,
+        };
+        Ok(command)
+    }
+
+    fn handle_mouse_event(
+        &mut self,
+        _mouse_event: crossterm::event::MouseEvent,
+    ) -> anyhow::Result<Option<Command>> {
+        Ok(None)
     }
 }
