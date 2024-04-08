@@ -1,3 +1,6 @@
+mod event_pool;
+mod httpretty;
+
 use tracing_subscriber::FmtSubscriber;
 
 fn setup_tracing() {
@@ -12,6 +15,11 @@ fn setup_tracing() {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     setup_tracing();
+
+    let mut httpretty = httpretty::Httpretty::new()?;
+    httpretty.run().await?;
+
+    Ok(())
 }
