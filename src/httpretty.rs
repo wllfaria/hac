@@ -36,6 +36,7 @@ impl Httpretty {
                 match event {
                     Event::Tick => command_tx.send(Command::Tick)?,
                     Event::Render => command_tx.send(Command::Render)?,
+                    Event::Key(k) => tracing::trace!("{k:?}"),
                     _ => {}
                 };
 
