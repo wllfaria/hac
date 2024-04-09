@@ -1,6 +1,7 @@
 mod command;
 mod event_pool;
 mod httpretty;
+mod schema;
 mod tui;
 
 use std::path::PathBuf;

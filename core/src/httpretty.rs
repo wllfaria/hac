@@ -3,6 +3,7 @@ use crate::{
     event_pool::{Event, EventPool},
     tui::Tui,
 };
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io::Stdout;
 use tokio::sync::mpsc;
@@ -37,7 +38,10 @@ impl Httpretty {
                 match event {
                     Event::Tick => command_tx.send(Command::Tick)?,
                     Event::Render => command_tx.send(Command::Render)?,
-                    Event::Key(k) => tracing::trace!("{k:?}"),
+                    Event::Key(KeyEvent {
+                        code: KeyCode::Char('q'),
+                        ..
+                    }) => command_tx.send(Command::Quit)?,
                     _ => {}
                 };
 
