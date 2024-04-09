@@ -30,5 +30,11 @@ pub fn get_logfile() -> &'static str {
 
 pub fn get_schemas_dir() -> anyhow::Result<PathBuf> {
     let data_dir = get_data_dir()?;
-    Ok(data_dir.join("schemas"))
+    let schemas_dir = data_dir.join("schemas");
+
+    if !schemas_dir.exists() && !schemas_dir.is_dir() {
+        std::fs::create_dir(&schemas_dir)?;
+    }
+
+    Ok(schemas_dir)
 }

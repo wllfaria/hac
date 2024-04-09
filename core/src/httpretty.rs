@@ -45,8 +45,10 @@ impl Httpretty {
                     _ => {}
                 };
 
-                if let Some(command) = self.tui.update(Some(event.clone()))? {
-                    command_tx.send(command)?;
+                {
+                    if let Some(command) = self.tui.update(Some(event.clone()))? {
+                        command_tx.send(command)?;
+                    }
                 }
             }
 
@@ -71,6 +73,7 @@ impl Httpretty {
                     Command::Error(e) => {
                         tracing::error!("{e:?}");
                     }
+                    Command::SelectSchema(_) => self.tui.handle_command(command),
                 }
             }
 

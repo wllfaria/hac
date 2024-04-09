@@ -1,6 +1,6 @@
-use super::types::Collection;
+use super::types::Schema;
 
-pub fn get_collections() -> anyhow::Result<Vec<Collection>> {
+pub fn get_schemas() -> anyhow::Result<Vec<Schema>> {
     let schemas_dir = config::get_schemas_dir()?;
     let items = std::fs::read_dir(&schemas_dir)?;
 
@@ -9,8 +9,7 @@ pub fn get_collections() -> anyhow::Result<Vec<Collection>> {
     for item in items.into_iter().flatten() {
         let file_name = item.file_name();
         let file = std::fs::read_to_string(schemas_dir.join(file_name.to_string_lossy().as_ref()))?;
-        let schema: Collection = serde_json::from_str(&file)?;
-        tracing::debug!("{schema:?}");
+        let schema: Schema = serde_json::from_str(&file)?;
         collections.push(schema);
     }
 

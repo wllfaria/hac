@@ -144,6 +144,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "tui-scrollview",
 ]
 
 [[package]]
@@ -953,6 +954,16 @@ dependencies = [
  "thread_local",
  "tracing-core",
  "tracing-log",
+]
+
+[[package]]
+name = "tui-scrollview"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf21fd52e27875c6634a03b5918f0ea61dfd42226866882e464b85901a8f0df5"
+dependencies = [
+ "indoc",
+ "ratatui",
 ]
 
 [[package]]

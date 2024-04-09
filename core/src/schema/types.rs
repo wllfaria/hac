@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Collection {
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct Schema {
     pub openapi: String,
     pub info: Info,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Info {
     pub title: String,
     pub summary: Option<String>,

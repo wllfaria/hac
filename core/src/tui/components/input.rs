@@ -9,10 +9,11 @@ use crate::command::Command;
 
 use super::Component;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Input {
     text: String,
     focus: bool,
+    placeholder: &'static str,
 }
 
 impl Input {
@@ -20,21 +21,39 @@ impl Input {
         Self {
             text: self.text,
             focus: true,
+            placeholder: self.placeholder,
+        }
+    }
+
+    pub fn focus(&mut self) {
+        self.focus = true;
+    }
+
+    pub fn unfocus(&mut self) {
+        self.focus = false;
+    }
+
+    pub fn placeholder(self, placeholder: &'static str) -> Self {
+        Self {
+            text: self.text,
+            focus: self.focus,
+            placeholder,
         }
     }
 }
 
 impl Component for Input {
-    fn draw(&self, frame: &mut ratatui::prelude::Frame, area: Rect) -> anyhow::Result<()> {
+    fn draw(&mut self, frame: &mut ratatui::prelude::Frame, area: Rect) -> anyhow::Result<()> {
         let text = if self.text.is_empty() {
-            "Enter the url".blue()
+            self.placeholder.blue().dim()
         } else {
-            self.text.clone().white()
+            self.text.as_str().white()
         };
 
         let mut borders = Block::new()
             .borders(Borders::ALL)
-            .border_type(BorderType::Rounded);
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().gray().dim());
 
         if self.focus {
             borders = borders.border_style(Style::new().blue());

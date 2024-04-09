@@ -9,7 +9,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::{command::Command, event_pool::Event};
 
 pub trait Component {
-    fn draw(&self, frame: &mut Frame, area: Rect) -> anyhow::Result<()>;
+    fn draw(&mut self, frame: &mut Frame, area: Rect) -> anyhow::Result<()>;
 
     fn handle_event(&mut self, event: Option<Event>) -> anyhow::Result<Option<Command>> {
         let action = match event {

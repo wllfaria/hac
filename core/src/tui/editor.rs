@@ -6,6 +6,7 @@ use ratatui::{
 
 use crate::{
     command::Command,
+    schema::types::Schema,
     tui::components::{Component, Input},
 };
 
@@ -27,6 +28,7 @@ pub struct Editor {
     url: Input,
     layout: EditorLayout,
     focus: Focus,
+    schema: Option<Schema>,
 }
 
 impl Editor {
@@ -36,12 +38,17 @@ impl Editor {
             url: Input::default().with_focus(),
             layout,
             focus: Focus::UrlBar,
+            schema: None,
         }
+    }
+
+    pub fn set_schema(&mut self, schema: Schema) {
+        self.schema = Some(schema);
     }
 }
 
 impl Component for Editor {
-    fn draw(&self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
+    fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
         self.url.draw(frame, self.layout.url)?;
 
         Ok(())
