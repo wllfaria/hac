@@ -3,7 +3,10 @@ use ratatui::{
     Frame,
 };
 
-use crate::tui::components::Component;
+use crate::{
+    schema::{collections, types::Collection},
+    tui::components::Component,
+};
 
 struct DashboardLayout {
     header: Rect,
@@ -12,12 +15,17 @@ struct DashboardLayout {
 
 pub struct Dashboard {
     layout: DashboardLayout,
+    collections: Vec<Collection>,
 }
 
 impl Dashboard {
-    pub fn new(area: Rect) -> Self {
+    pub fn new(area: Rect) -> anyhow::Result<Self> {
         let layout = build_layout(area);
-        Self { layout }
+
+        Ok(Self {
+            layout,
+            collections: collections::get_collections()?,
+        })
     }
 }
 

@@ -19,12 +19,12 @@ pub struct Tui {
 }
 
 impl Tui {
-    pub fn new(area: Rect) -> Self {
-        Self {
+    pub fn new(area: Rect) -> anyhow::Result<Self> {
+        Ok(Self {
             cur_screen: CurrentScreen::Dashboard,
             editor: Editor::new(area),
-            dashboard: Dashboard::new(area),
-        }
+            dashboard: Dashboard::new(area)?,
+        })
     }
 
     pub fn draw(&self, frame: &mut Frame) -> anyhow::Result<()> {

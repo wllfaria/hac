@@ -27,3 +27,8 @@ pub fn setup_data_dir() -> anyhow::Result<PathBuf> {
 pub fn get_logfile() -> &'static str {
     "httpretty.log"
 }
+
+pub fn get_schemas_dir() -> anyhow::Result<PathBuf> {
+    let data_dir = get_data_dir()?;
+    Ok(data_dir.join("schemas"))
+}

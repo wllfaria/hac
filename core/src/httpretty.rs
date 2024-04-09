@@ -19,7 +19,7 @@ impl Httpretty {
     pub fn new() -> anyhow::Result<Self> {
         let terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
         Ok(Self {
-            tui: Tui::new(terminal.size()?),
+            tui: Tui::new(terminal.size()?)?,
             event_pool: EventPool::new(30f64, 60f64),
             should_quit: false,
             terminal,
