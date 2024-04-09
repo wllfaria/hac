@@ -35,12 +35,16 @@ impl Component for Input {
         let mut borders = Block::new()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded);
+
         if self.focus {
             borders = borders.border_style(Style::new().blue());
         }
-        let p = Paragraph::new(text).block(borders);
 
-        frame.render_widget(p, area);
+        frame.render_widget(Paragraph::new(text).block(borders), area);
+
+        if self.focus {
+            frame.set_cursor(area.x + 1 + self.text.len() as u16, area.y + 1);
+        }
 
         Ok(())
     }
