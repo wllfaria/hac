@@ -1,11 +1,16 @@
+mod input;
+
+pub use input::Input;
+
 use crossterm::event::{KeyEvent, MouseEvent};
-use ratatui::Frame;
+use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{command::Command, event_pool::Event};
 
 pub trait Component {
-    fn draw(&self, frame: &mut Frame) -> anyhow::Result<()>;
+    fn draw(&self, frame: &mut Frame, area: Rect) -> anyhow::Result<()>;
+
     fn handle_event(&mut self, event: Option<Event>) -> anyhow::Result<Option<Command>> {
         let action = match event {
             Some(Event::Key(key_event)) => self.handle_key_event(key_event)?,

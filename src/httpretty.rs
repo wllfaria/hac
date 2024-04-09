@@ -16,11 +16,12 @@ pub struct Httpretty {
 
 impl Httpretty {
     pub fn new() -> anyhow::Result<Self> {
+        let terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
         Ok(Self {
+            tui: Tui::new(terminal.size()?),
             event_pool: EventPool::new(30f64, 60f64),
-            terminal: Terminal::new(CrosstermBackend::new(std::io::stdout()))?,
             should_quit: false,
-            tui: Tui::default(),
+            terminal,
         })
     }
 

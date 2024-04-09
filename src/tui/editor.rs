@@ -1,73 +1,65 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    widgets::{Block, Borders},
     Frame,
 };
 
-use crate::command::Command;
+use crate::{
+    command::Command,
+    tui::components::{Component, Input},
+};
 
-use super::components::Component;
-
-pub struct EditorLayout {
-    sidebar: Rect,
-    url_bar: Rect,
-    editor: Rect,
-    preview: Rect,
+pub enum Focus {
+    Sidebar,
+    UrlBar,
+    Editor,
+    Preview,
 }
 
-#[derive(Default)]
-pub struct Editor {}
+pub struct EditorLayout {
+    url: Rect,
+    _sidebar: Rect,
+    _editor: Rect,
+    _preview: Rect,
+}
+
+pub struct Editor {
+    url: Input,
+    layout: EditorLayout,
+    focus: Focus,
+}
 
 impl Editor {
-    fn build_layout(&self, frame: &mut Frame) -> EditorLayout {
-        let container = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Length(30), Constraint::Fill(1)])
-            .split(frame.size());
-
-        let right_pane = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(3), Constraint::Fill(1)])
-            .split(container[1]);
-
-        let editor = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(right_pane[1]);
-
-        EditorLayout {
-            sidebar: container[0],
-            url_bar: right_pane[0],
-            editor: editor[0],
-            preview: editor[1],
+    pub fn new(area: Rect) -> Self {
+        let layout = build_layout(area);
+        Self {
+            url: Input::default().with_focus(),
+            layout,
+            focus: Focus::UrlBar,
         }
     }
 }
 
 impl Component for Editor {
-    fn draw(&self, frame: &mut Frame) -> anyhow::Result<()> {
-        let layout = self.build_layout(frame);
-        let b = Block::default().borders(Borders::ALL);
-
-        frame.render_widget(b.clone(), layout.sidebar);
-        frame.render_widget(b.clone(), layout.url_bar);
-        frame.render_widget(b.clone(), layout.editor);
-        frame.render_widget(b, layout.preview);
+    fn draw(&self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
+        self.url.draw(frame, self.layout.url)?;
 
         Ok(())
     }
 
-    fn handle_key_event(
-        &mut self,
-        KeyEvent {
+    fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
+        let KeyEvent {
             code, modifiers, ..
-        }: KeyEvent,
-    ) -> anyhow::Result<Option<Command>> {
+        } = key_event;
+
         let command = match (code, modifiers) {
             (KeyCode::Char('q'), KeyModifiers::CONTROL) => Some(Command::Quit),
-            _ => None,
+            _ => match self.focus {
+                Focus::UrlBar => self.url.handle_key_event(key_event)?,
+                _ => None,
+            },
         };
+
         Ok(command)
     }
 
@@ -76,5 +68,29 @@ impl Component for Editor {
         _mouse_event: crossterm::event::MouseEvent,
     ) -> anyhow::Result<Option<Command>> {
         Ok(None)
+    }
+}
+
+fn build_layout(area: Rect) -> EditorLayout {
+    let container = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Length(30), Constraint::Fill(1)])
+        .split(area);
+
+    let right_pane = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(3), Constraint::Fill(1)])
+        .split(container[1]);
+
+    let editor = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(right_pane[1]);
+
+    EditorLayout {
+        _sidebar: container[0],
+        url: right_pane[0],
+        _editor: editor[0],
+        _preview: editor[1],
     }
 }

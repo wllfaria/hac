@@ -1,4 +1,4 @@
-use ratatui::Frame;
+use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{command::Command, event_pool::Event, tui::editor::Editor};
@@ -9,22 +9,22 @@ enum CurrentScreen {
     Editor,
 }
 
-impl Default for CurrentScreen {
-    fn default() -> Self {
-        Self::Editor
-    }
-}
-
-#[derive(Default)]
 pub struct Tui {
     cur_screen: CurrentScreen,
     editor: Editor,
 }
 
 impl Tui {
+    pub fn new(area: Rect) -> Self {
+        Self {
+            cur_screen: CurrentScreen::Editor,
+            editor: Editor::new(area),
+        }
+    }
+
     pub fn draw(&self, frame: &mut Frame) -> anyhow::Result<()> {
         match &self.cur_screen {
-            CurrentScreen::Editor => self.editor.draw(frame)?,
+            CurrentScreen::Editor => self.editor.draw(frame, frame.size())?,
         };
 
         Ok(())
