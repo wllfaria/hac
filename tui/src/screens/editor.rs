@@ -1,4 +1,4 @@
-use crate::components::{input::Input, Component};
+use crate::components::{input::Input, sidebar::Sidebar, Component};
 use httpretty::{command::Command, schema::types::Schema};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -16,13 +16,14 @@ pub enum Focus {
 
 pub struct EditorLayout {
     url: Rect,
-    _sidebar: Rect,
+    sidebar: Rect,
     _editor: Rect,
     _preview: Rect,
 }
 
 pub struct Editor {
     url: Input,
+    sidebar: Sidebar,
     layout: EditorLayout,
     focus: Focus,
     schema: Option<Schema>,
@@ -33,6 +34,7 @@ impl Editor {
         let layout = build_layout(area);
         Self {
             url: Input::default().with_focus(),
+            sidebar: Sidebar::default(),
             layout,
             focus: Focus::UrlBar,
             schema: None,
@@ -40,13 +42,16 @@ impl Editor {
     }
 
     pub fn set_schema(&mut self, schema: Schema) {
+        tracing::debug!("{schema:?}");
         self.schema = Some(schema);
+        self.sidebar.set_schema(self.schema.clone());
     }
 }
 
 impl Component for Editor {
     fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
         self.url.draw(frame, self.layout.url)?;
+        self.sidebar.draw(frame, self.layout.sidebar)?;
 
         Ok(())
     }
@@ -92,7 +97,7 @@ fn build_layout(area: Rect) -> EditorLayout {
         .split(right_pane[1]);
 
     EditorLayout {
-        _sidebar: container[0],
+        sidebar: container[0],
         url: right_pane[0],
         _editor: editor[0],
         _preview: editor[1],

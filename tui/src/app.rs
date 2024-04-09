@@ -35,7 +35,6 @@ impl App {
         startup()?;
 
         loop {
-            tracing::debug!("lol");
             if let Some(event) = self.event_pool.next().await {
                 match event {
                     Event::Tick => command_tx.send(Command::Tick)?,
@@ -47,10 +46,8 @@ impl App {
                     _ => {}
                 };
 
-                {
-                    if let Some(command) = self.tui.update(Some(event.clone()))? {
-                        command_tx.send(command)?;
-                    }
+                if let Some(command) = self.tui.update(Some(event.clone()))? {
+                    command_tx.send(command).expect("failed to send")
                 }
             }
 

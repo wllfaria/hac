@@ -69,16 +69,14 @@ impl Component for Dashboard {
             .map(|(i, c)| {
                 Row::new([
                     Cell::new(i.to_string()).dim(),
-                    Cell::new(c.info.title.as_str()),
-                    Cell::new(c.info.summary.as_deref().unwrap_or_default()),
-                    Cell::new(c.info.version.as_str()),
+                    Cell::new(c.info.name.as_str()),
+                    Cell::new(c.info.description.as_deref().unwrap_or_default()),
                 ])
             })
             .collect::<Table>()
             .widths([
                 Constraint::Length(2),
                 Constraint::Fill(2),
-                Constraint::Fill(1),
                 Constraint::Fill(1),
             ])
             .column_spacing(1)
