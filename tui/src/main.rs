@@ -1,7 +1,7 @@
-mod command;
+mod app;
+mod components;
 mod event_pool;
-mod httpretty;
-mod schema;
+mod screens;
 mod tui;
 
 use std::path::PathBuf;
@@ -31,8 +31,8 @@ async fn main() -> anyhow::Result<()> {
     let data_dir = config::setup_data_dir()?;
     let _guard = setup_tracing(&data_dir)?;
 
-    let mut httpretty = httpretty::Httpretty::new()?;
-    httpretty.run().await?;
+    let mut app = app::App::new()?;
+    app.run().await?;
 
     Ok(())
 }

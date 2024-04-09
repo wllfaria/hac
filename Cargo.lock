@@ -130,24 +130,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "config",
- "crossterm",
- "futures",
- "ratatui",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "tui-scrollview",
-]
-
-[[package]]
 name = "crossbeam-channel"
 version = "0.5.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -351,6 +333,17 @@ name = "hermit-abi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
+
+[[package]]
+name = "httpretty"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "config",
+ "serde",
+ "serde_json",
+ "tracing",
+]
 
 [[package]]
 name = "indoc"
@@ -957,13 +950,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "tui-scrollview"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf21fd52e27875c6634a03b5918f0ea61dfd42226866882e464b85901a8f0df5"
+name = "tui"
+version = "0.1.0"
 dependencies = [
- "indoc",
+ "anyhow",
+ "config",
+ "crossterm",
+ "futures",
+ "httpretty",
  "ratatui",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
 ]
 
 [[package]]

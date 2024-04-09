@@ -1,21 +1,22 @@
 use crate::{
-    command::Command,
     event_pool::{Event, EventPool},
     tui::Tui,
 };
+use httpretty::command::Command;
+
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io::Stdout;
 use tokio::sync::mpsc;
 
-pub struct Httpretty {
+pub struct App {
     event_pool: EventPool,
     terminal: Terminal<CrosstermBackend<Stdout>>,
     should_quit: bool,
     tui: Tui,
 }
 
-impl Httpretty {
+impl App {
     pub fn new() -> anyhow::Result<Self> {
         let terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
         Ok(Self {
@@ -34,6 +35,7 @@ impl Httpretty {
         startup()?;
 
         loop {
+            tracing::debug!("lol");
             if let Some(event) = self.event_pool.next().await {
                 match event {
                     Event::Tick => command_tx.send(Command::Tick)?,
@@ -53,10 +55,6 @@ impl Httpretty {
             }
 
             while let Ok(command) = command_rx.try_recv() {
-                if command != Command::Tick && command != Command::Render {
-                    tracing::debug!("{command:?}");
-                }
-
                 match command {
                     Command::Tick => {}
                     Command::Render => {
@@ -70,10 +68,8 @@ impl Httpretty {
                         })?;
                     }
                     Command::Quit => self.should_quit = true,
-                    Command::Error(e) => {
-                        tracing::error!("{e:?}");
-                    }
                     Command::SelectSchema(_) => self.tui.handle_command(command),
+                    Command::Error(_) => {}
                 }
             }
 

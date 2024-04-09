@@ -1,13 +1,12 @@
+use crate::components::Component;
+use httpretty::command::Command;
+
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::Rect,
     style::{Style, Stylize},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
-
-use crate::command::Command;
-
-use super::Component;
 
 #[derive(Debug, Default)]
 pub struct Input {

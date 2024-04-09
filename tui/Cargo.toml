@@ -1,0 +1,17 @@
+[package]
+name = "tui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+httpretty.workspace = true
+config.workspace = true
+anyhow.workspace = true
+crossterm.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+futures = "0.3.30"
+ratatui = { version = "0.26.1", features = ["all-widgets", "crossterm"] }
+tracing-subscriber = { version = "0.3.18" }
+tracing-appender = "0.2.3"

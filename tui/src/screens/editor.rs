@@ -1,13 +1,10 @@
+use crate::components::{input::Input, Component};
+use httpretty::{command::Command, schema::types::Schema};
+
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     Frame,
-};
-
-use crate::{
-    command::Command,
-    schema::types::Schema,
-    tui::components::{Component, Input},
 };
 
 pub enum Focus {

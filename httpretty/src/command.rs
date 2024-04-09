@@ -1,4 +1,4 @@
-use crate::schema::types::Schema;
+use crate::schema::Schema;
 
 #[derive(Debug, PartialEq)]
 pub enum Command {

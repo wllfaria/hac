@@ -1,4 +1,8 @@
-use std::ops::Add;
+use crate::components::{input::Input, Component};
+use httpretty::{
+    command::Command,
+    schema::{schema, types::Schema},
+};
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
@@ -7,14 +11,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Cell, Row, Table, TableState},
     Frame,
 };
-
-use crate::{
-    command::Command,
-    schema::{schema, types::Schema},
-    tui::components::Component,
-};
-
-use super::components::Input;
+use std::ops::Add;
 
 #[derive(Debug)]
 struct DashboardLayout {
@@ -104,7 +101,6 @@ impl Component for Dashboard {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self))]
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         let KeyEvent { code, .. } = key_event;
 

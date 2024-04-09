@@ -1,8 +1,9 @@
 use crate::{
-    command::Command,
+    components::Component,
     event_pool::Event,
-    tui::{components::Component, dashboard::Dashboard, editor::Editor},
+    screens::{dashboard::Dashboard, editor::Editor},
 };
+use httpretty::command::Command;
 
 use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;

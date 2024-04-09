@@ -1,12 +1,11 @@
-mod input;
+pub mod input;
 
-pub use input::Input;
+use crate::event_pool::Event;
+use httpretty::command::Command;
 
 use crossterm::event::{KeyEvent, MouseEvent};
 use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;
-
-use crate::{command::Command, event_pool::Event};
 
 pub trait Component {
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> anyhow::Result<()>;
