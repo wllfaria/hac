@@ -67,6 +67,7 @@ impl App {
                     Command::Quit => self.should_quit = true,
                     Command::SelectSchema(_) => self.tui.handle_command(command),
                     Command::Error(_) => {}
+                    _ => {}
                 }
             }
 
@@ -82,12 +83,20 @@ impl App {
 
 fn startup() -> anyhow::Result<()> {
     crossterm::terminal::enable_raw_mode()?;
-    crossterm::execute!(std::io::stdout(), crossterm::terminal::EnterAlternateScreen)?;
+    crossterm::execute!(
+        std::io::stdout(),
+        crossterm::terminal::EnterAlternateScreen,
+        crossterm::event::EnableMouseCapture
+    )?;
     Ok(())
 }
 
 fn shutdown() -> anyhow::Result<()> {
     crossterm::terminal::disable_raw_mode()?;
-    crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen)?;
+    crossterm::execute!(
+        std::io::stdout(),
+        crossterm::terminal::LeaveAlternateScreen,
+        crossterm::event::DisableMouseCapture
+    )?;
     Ok(())
 }

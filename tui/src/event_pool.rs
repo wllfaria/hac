@@ -1,4 +1,4 @@
-use crossterm::event::{Event as CrosstermEvent, KeyEventKind};
+use crossterm::event::{Event as CrosstermEvent, KeyEventKind, MouseEventKind};
 use futures::{FutureExt, StreamExt};
 use tokio::task::JoinHandle;
 
@@ -58,7 +58,11 @@ impl EventPool {
                                     _event_tx.send(Event::Key(key_event)).unwrap();
                                 }
                             }
-                            Some(Ok(CrosstermEvent::Mouse(mouse_event))) => _event_tx.send(Event::Mouse(mouse_event)).unwrap(),
+                            Some(Ok(CrosstermEvent::Mouse(mouse_event))) => {
+                                if let MouseEventKind::Down(_) = mouse_event.kind {
+                                    _event_tx.send(Event::Mouse(mouse_event)).unwrap();
+                                }
+                            }
                             Some(Err(_)) => {}
                             Some(_) => {}
                             None => {}

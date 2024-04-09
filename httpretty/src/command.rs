@@ -1,4 +1,4 @@
-use crate::schema::Schema;
+use crate::schema::{types::Request, Schema};
 
 #[derive(Debug, PartialEq)]
 pub enum Command {
@@ -6,5 +6,6 @@ pub enum Command {
     Tick,
     Render,
     SelectSchema(Schema),
+    SelectRequest(Request),
     Error(String),
 }

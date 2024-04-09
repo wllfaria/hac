@@ -23,7 +23,7 @@ pub struct Request {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Directory {
     pub name: String,
-    pub requests: Vec<Request>,
+    pub requests: Vec<RequestKind>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]

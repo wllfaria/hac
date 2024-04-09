@@ -1,5 +1,4 @@
 pub mod input;
-pub mod sidebar;
 
 use crate::event_pool::Event;
 use httpretty::command::Command;

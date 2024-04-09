@@ -10,20 +10,12 @@ use ratatui::{
 
 #[derive(Debug, Default)]
 pub struct Input {
-    text: String,
+    value: String,
     focus: bool,
     placeholder: &'static str,
 }
 
 impl Input {
-    pub fn with_focus(self) -> Self {
-        Self {
-            text: self.text,
-            focus: true,
-            placeholder: self.placeholder,
-        }
-    }
-
     pub fn focus(&mut self) {
         self.focus = true;
     }
@@ -32,9 +24,13 @@ impl Input {
         self.focus = false;
     }
 
+    pub fn set_value(&mut self, value: String) {
+        self.value = value
+    }
+
     pub fn placeholder(self, placeholder: &'static str) -> Self {
         Self {
-            text: self.text,
+            value: self.value,
             focus: self.focus,
             placeholder,
         }
@@ -43,10 +39,10 @@ impl Input {
 
 impl Component for Input {
     fn draw(&mut self, frame: &mut ratatui::prelude::Frame, area: Rect) -> anyhow::Result<()> {
-        let text = if self.text.is_empty() {
+        let text = if self.value.is_empty() {
             self.placeholder.blue().dim()
         } else {
-            self.text.as_str().white()
+            self.value.as_str().white()
         };
 
         let mut borders = Block::new()
@@ -61,7 +57,7 @@ impl Component for Input {
         frame.render_widget(Paragraph::new(text).block(borders), area);
 
         if self.focus {
-            frame.set_cursor(area.x + 1 + self.text.len() as u16, area.y + 1);
+            frame.set_cursor(area.x + 1 + self.value.len() as u16, area.y + 1);
         }
 
         Ok(())
@@ -71,9 +67,9 @@ impl Component for Input {
         let KeyEvent { code, .. } = key_event;
 
         match code {
-            KeyCode::Char(c) => self.text.push(c),
+            KeyCode::Char(c) => self.value.push(c),
             KeyCode::Backspace => {
-                self.text.pop();
+                self.value.pop();
             }
             _ => {}
         };
