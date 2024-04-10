@@ -15,10 +15,12 @@ use ratatui::{
     Frame,
 };
 
+use super::request_builder::RequestBuilder;
+
 pub struct EditorLayout {
     url: Rect,
     sidebar: Rect,
-    _editor: Rect,
+    request_builder: Rect,
     _preview: Rect,
 }
 
@@ -28,6 +30,7 @@ pub struct Editor {
     layout: EditorLayout,
     schema: Option<Rc<RefCell<Schema>>>,
     active_request: Option<Request>,
+    request_builder: RequestBuilder,
 }
 
 impl Editor {
@@ -39,6 +42,7 @@ impl Editor {
             layout,
             schema: None,
             active_request: None,
+            request_builder: RequestBuilder::default(),
         }
     }
 
@@ -58,7 +62,8 @@ impl Component for Editor {
     fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
         self.url.draw(frame, self.layout.url)?;
         self.sidebar.draw(frame, self.layout.sidebar)?;
-
+        self.request_builder
+            .draw(frame, self.layout.request_builder)?;
         Ok(())
     }
 
@@ -111,7 +116,7 @@ fn build_layout(area: Rect) -> EditorLayout {
     EditorLayout {
         sidebar: container[0],
         url: right_pane[0],
-        _editor: editor[0],
+        request_builder: editor[0],
         _preview: editor[1],
     }
 }

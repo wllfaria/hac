@@ -1,7 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
-
 use crate::components::Component;
-use crossterm::event::MouseEvent;
 use httpretty::{
     command::Command,
     schema::{
@@ -10,6 +7,7 @@ use httpretty::{
     },
 };
 
+use crossterm::event::MouseEvent;
 use ratatui::{
     layout::Rect,
     style::{Style, Stylize},
@@ -17,6 +15,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Paragraph},
     Frame,
 };
+use std::{cell::RefCell, rc::Rc};
 
 enum ItemKind {
     Request(Item),
