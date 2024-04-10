@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     components::{input::Input, Component},
@@ -26,7 +26,7 @@ pub struct Editor {
     url: Input,
     sidebar: Sidebar,
     layout: EditorLayout,
-    schema: Option<Rc<Schema>>,
+    schema: Option<Rc<RefCell<Schema>>>,
     active_request: Option<Request>,
 }
 
@@ -43,7 +43,7 @@ impl Editor {
     }
 
     pub fn set_schema(&mut self, schema: Schema) {
-        let schema = Rc::new(schema);
+        let schema = Rc::new(RefCell::new(schema));
         self.sidebar.set_schema(Rc::clone(&schema));
         self.schema = Some(schema);
     }

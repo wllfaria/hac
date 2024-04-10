@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 use crate::components::Component;
 use crossterm::event::MouseEvent;
@@ -50,6 +50,7 @@ pub struct RenderLine {
 pub struct Sidebar {
     state: Option<SidebarState>,
     rendered_lines: Vec<RenderLine>,
+    schema: Option<Rc<RefCell<Schema>>>,
 }
 
 impl From<&mut Item> for Request {
@@ -88,10 +89,9 @@ impl From<Vec<RequestKind>> for SidebarState {
 }
 
 impl Sidebar {
-    pub fn set_schema(&mut self, schema: Rc<Schema>) {
-        for i in schema.as_ref().requests.iter() {}
-
-        self.state = schema.requests.map(Into::into);
+    pub fn set_schema(&mut self, schema: Rc<RefCell<Schema>>) {
+        self.schema = Some(Rc::clone(&schema));
+        self.state = schema.borrow().clone().requests.map(Into::into);
     }
 }
 
