@@ -2,7 +2,11 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     components::{input::Input, Component},
-    screens::editor::sidebar::Sidebar,
+    screens::editor::{
+        layout::{build_layout, EditorLayout},
+        request_builder::RequestBuilder,
+        sidebar::Sidebar,
+    },
 };
 use httpretty::{
     command::Command,
@@ -10,19 +14,7 @@ use httpretty::{
 };
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
-    Frame,
-};
-
-use super::request_builder::RequestBuilder;
-
-pub struct EditorLayout {
-    url: Rect,
-    sidebar: Rect,
-    request_builder: Rect,
-    _preview: Rect,
-}
+use ratatui::{layout::Rect, Frame};
 
 pub struct Editor {
     url: Input,
@@ -94,29 +86,5 @@ impl Component for Editor {
             }
         }
         Ok(None)
-    }
-}
-
-fn build_layout(area: Rect) -> EditorLayout {
-    let container = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(30), Constraint::Fill(1)])
-        .split(area);
-
-    let right_pane = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Fill(1)])
-        .split(container[1]);
-
-    let editor = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(right_pane[1]);
-
-    EditorLayout {
-        sidebar: container[0],
-        url: right_pane[0],
-        request_builder: editor[0],
-        _preview: editor[1],
     }
 }

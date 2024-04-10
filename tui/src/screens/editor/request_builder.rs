@@ -2,7 +2,7 @@ use crate::components::Component;
 
 use ratatui::{
     layout::Rect,
-    style::{Color, Style},
+    style::{Color, Style, Stylize},
     symbols,
     widgets::{Block, BorderType, Borders, Tabs},
     Frame,
@@ -80,6 +80,7 @@ fn make_tab_selector(curr_tab: BuilderTabs) -> Tabs<'static> {
         Block::default()
             .title(curr_tab.to_string())
             .borders(Borders::ALL)
+            .border_style(Style::default().gray().dim())
             .border_type(BorderType::Rounded),
     )
     .highlight_style(Style::default().fg(Color::Rgb(255, 0, 0)))
