@@ -12,6 +12,9 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Paragraph},
     Frame,
 };
+use tokio::sync::mpsc::UnboundedSender;
+
+use super::editor::EditorActions;
 
 enum ItemKind {
     Request(Item),
@@ -36,14 +39,15 @@ pub struct SidebarState {
 
 #[derive(Debug, Clone)]
 pub struct RenderLine {
-    level: usize,
-    name: String,
-    line: Line<'static>,
+    pub level: usize,
+    pub name: String,
+    pub line: Line<'static>,
 }
 
 pub struct Sidebar {
     state: SidebarState,
     rendered_lines: Vec<RenderLine>,
+    action_sender: UnboundedSender<EditorActions>,
 }
 
 impl From<&RequestKind> for ItemKind {
@@ -85,9 +89,10 @@ impl From<Schema> for SidebarState {
 }
 
 impl Sidebar {
-    pub fn new(state: SidebarState) -> Self {
+    pub fn new(state: SidebarState, action_sender: UnboundedSender<EditorActions>) -> Self {
         Self {
             state,
+            action_sender,
             rendered_lines: vec![],
         }
     }
@@ -118,10 +123,12 @@ impl Component for Sidebar {
                 .rendered_lines
                 .get_mut(mouse_event.row.saturating_sub(1) as usize)
             {
-                tracing::debug!("{line:?}");
                 match find_item(&mut self.state.requests, &line.name, line.level, 0) {
-                    (Some(dir), _) => dir.expanded = !dir.expanded,
-                    (_, Some(_)) => return Ok(None),
+                    (Some(dir), false) => dir.expanded = !dir.expanded,
+                    (_, true) => {
+                        self.action_sender
+                            .send(EditorActions::SelectRequest(line.clone()))?;
+                    }
                     _ => (),
                 }
             }
@@ -135,24 +142,23 @@ fn find_item<'a>(
     needle: &str,
     needle_level: usize,
     level: usize,
-) -> (Option<&'a mut Directory>, Option<&'a mut Item>) {
+) -> (Option<&'a mut Directory>, bool) {
     for item in items {
         match item {
             ItemKind::Dir(dir) => match (dir.name == needle, needle_level == level) {
-                (true, true) => return (Some(dir), None),
+                (true, true) => return (Some(dir), false),
                 (_, _) if level < needle_level => {
                     return find_item(&mut dir.requests, needle, needle_level, level + 1)
                 }
                 _ => continue,
             },
             ItemKind::Request(req) => match (req.name == needle, needle_level == level) {
-                (true, true) => return (None, Some(req)),
-                (_, _) if level < needle_level => continue,
+                (true, true) => return (None, true),
                 _ => continue,
             },
         };
     }
-    (None, None)
+    (None, false)
 }
 
 fn build_lines(lines: &mut Vec<RenderLine>, requests: &[ItemKind], level: usize) {

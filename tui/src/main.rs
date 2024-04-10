@@ -14,10 +14,7 @@ fn setup_tracing(
     let (writer, guard) = tracing_appender::non_blocking(appender);
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
         .with_max_level(tracing::Level::TRACE)
-        .with_file(true)
-        .with_line_number(true)
         .with_writer(writer)
-        .with_target(false)
         .with_ansi(false)
         .finish();
 
