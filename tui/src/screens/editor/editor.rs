@@ -1,5 +1,3 @@
-use std::{cell::RefCell, rc::Rc};
-
 use crate::{
     components::{input::Input, Component},
     screens::editor::{
@@ -8,10 +6,7 @@ use crate::{
         sidebar::Sidebar,
     },
 };
-use httpretty::{
-    command::Command,
-    schema::types::{Request, Schema},
-};
+use httpretty::{command::Command, schema::types::Schema};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{layout::Rect, Frame};
@@ -20,33 +15,20 @@ pub struct Editor {
     url: Input,
     sidebar: Sidebar,
     layout: EditorLayout,
-    schema: Option<Rc<RefCell<Schema>>>,
-    active_request: Option<Request>,
+    _schema: Schema,
     request_builder: RequestBuilder,
 }
 
 impl Editor {
-    pub fn new(area: Rect) -> Self {
+    pub fn new(area: Rect, schema: Schema) -> Self {
         let layout = build_layout(area);
         Self {
             url: Input::default(),
-            sidebar: Sidebar::default(),
+            sidebar: Sidebar::new(schema.clone().into()),
             layout,
-            schema: None,
-            active_request: None,
+            _schema: schema,
             request_builder: RequestBuilder::default(),
         }
-    }
-
-    pub fn set_schema(&mut self, schema: Schema) {
-        let schema = Rc::new(RefCell::new(schema));
-        self.sidebar.set_schema(Rc::clone(&schema));
-        self.schema = Some(schema);
-    }
-
-    fn update(&mut self, req: Request) {
-        self.url.set_value(req.uri.clone());
-        self.active_request = Some(req)
     }
 }
 
@@ -77,11 +59,7 @@ impl Component for Editor {
             if button == MouseButton::Left {
                 let click = Rect::new(mouse_event.column, mouse_event.row, 1, 1);
                 if click.intersects(self.layout.sidebar) {
-                    if let Some(Command::SelectRequest(req)) =
-                        self.sidebar.handle_mouse_event(mouse_event)?
-                    {
-                        self.update(req);
-                    }
+                    self.sidebar.handle_mouse_event(mouse_event)?;
                 }
             }
         }

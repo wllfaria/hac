@@ -6,7 +6,6 @@ use crate::{
 use httpretty::command::Command;
 
 use ratatui::{layout::Rect, Frame};
-use tokio::sync::mpsc::UnboundedSender;
 
 pub enum Screens {
     Editor,
@@ -15,33 +14,26 @@ pub enum Screens {
 
 pub struct Tui {
     cur_screen: Screens,
-    editor: Editor,
+    editor: Option<Editor>,
     dashboard: Dashboard,
+    area: Rect,
 }
 
 impl Tui {
     pub fn new(area: Rect) -> anyhow::Result<Self> {
         Ok(Self {
             cur_screen: Screens::Dashboard,
-            editor: Editor::new(area),
+            editor: None,
             dashboard: Dashboard::new(area)?,
+            area,
         })
     }
 
     pub fn draw(&mut self, frame: &mut Frame) -> anyhow::Result<()> {
         match &self.cur_screen {
-            Screens::Editor => self.editor.draw(frame, frame.size())?,
+            Screens::Editor => self.editor.as_mut().unwrap().draw(frame, frame.size())?,
             Screens::Dashboard => self.dashboard.draw(frame, frame.size())?,
         };
-
-        Ok(())
-    }
-
-    pub fn register_command_handlers(
-        &mut self,
-        sender: UnboundedSender<Command>,
-    ) -> anyhow::Result<()> {
-        self.editor.register_command_handler(sender.clone())?;
 
         Ok(())
     }
@@ -52,7 +44,7 @@ impl Tui {
 
     pub fn update(&mut self, event: Option<Event>) -> anyhow::Result<Option<Command>> {
         match self.cur_screen {
-            Screens::Editor => self.editor.handle_event(event),
+            Screens::Editor => self.editor.as_mut().unwrap().handle_event(event),
             Screens::Dashboard => self.dashboard.handle_event(event),
         }
     }
@@ -60,7 +52,7 @@ impl Tui {
     pub fn handle_command(&mut self, command: Command) {
         if let Command::SelectSchema(schema) = command {
             self.switch_screen(Screens::Editor);
-            self.editor.set_schema(schema);
+            self.editor = Some(Editor::new(self.area, schema));
         }
     }
 }

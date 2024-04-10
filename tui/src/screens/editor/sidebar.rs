@@ -1,10 +1,7 @@
 use crate::components::Component;
 use httpretty::{
     command::Command,
-    schema::{
-        types::{Request, RequestKind},
-        Schema,
-    },
+    schema::{types::RequestKind, Schema},
 };
 
 use crossterm::event::MouseEvent;
@@ -15,7 +12,6 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Paragraph},
     Frame,
 };
-use std::{cell::RefCell, rc::Rc};
 
 enum ItemKind {
     Request(Item),
@@ -45,21 +41,9 @@ pub struct RenderLine {
     line: Line<'static>,
 }
 
-#[derive(Default)]
 pub struct Sidebar {
-    state: Option<SidebarState>,
+    state: SidebarState,
     rendered_lines: Vec<RenderLine>,
-    schema: Option<Rc<RefCell<Schema>>>,
-}
-
-impl From<&mut Item> for Request {
-    fn from(value: &mut Item) -> Self {
-        Self {
-            name: value.name.clone(),
-            uri: value.uri.clone(),
-            method: value.method.clone(),
-        }
-    }
 }
 
 impl From<&RequestKind> for ItemKind {
@@ -87,19 +71,32 @@ impl From<Vec<RequestKind>> for SidebarState {
     }
 }
 
+impl From<Schema> for SidebarState {
+    fn from(value: Schema) -> Self {
+        Self {
+            requests: value
+                .requests
+                .unwrap_or_default()
+                .iter()
+                .map(Into::into)
+                .collect(),
+        }
+    }
+}
+
 impl Sidebar {
-    pub fn set_schema(&mut self, schema: Rc<RefCell<Schema>>) {
-        self.schema = Some(Rc::clone(&schema));
-        self.state = schema.borrow().clone().requests.map(Into::into);
+    pub fn new(state: SidebarState) -> Self {
+        Self {
+            state,
+            rendered_lines: vec![],
+        }
     }
 }
 
 impl Component for Sidebar {
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> anyhow::Result<()> {
         let mut lines = vec![];
-        if let Some(state) = &self.state {
-            build_lines(&mut lines, &state.requests, 0);
-        }
+        build_lines(&mut lines, &self.state.requests, 0);
         self.rendered_lines = lines.clone();
 
         let p = Paragraph::new(lines.iter().map(|l| l.line.clone()).collect::<Vec<Line>>()).block(
@@ -121,13 +118,11 @@ impl Component for Sidebar {
                 .rendered_lines
                 .get_mut(mouse_event.row.saturating_sub(1) as usize)
             {
-                if let Some(state) = &mut self.state {
-                    tracing::debug!("{line:?}");
-                    match find_item(&mut state.requests, &line.name, line.level, 0) {
-                        (Some(dir), _) => dir.expanded = !dir.expanded,
-                        (_, Some(req)) => return Ok(Some(Command::SelectRequest(req.into()))),
-                        _ => (),
-                    }
+                tracing::debug!("{line:?}");
+                match find_item(&mut self.state.requests, &line.name, line.level, 0) {
+                    (Some(dir), _) => dir.expanded = !dir.expanded,
+                    (_, Some(_)) => return Ok(None),
+                    _ => (),
                 }
             }
         }

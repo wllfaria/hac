@@ -24,10 +24,6 @@ impl Input {
         self.focus = false;
     }
 
-    pub fn set_value(&mut self, value: String) {
-        self.value = value
-    }
-
     pub fn placeholder(self, placeholder: &'static str) -> Self {
         Self {
             value: self.value,
