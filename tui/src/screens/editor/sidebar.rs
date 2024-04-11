@@ -100,8 +100,7 @@ impl Sidebar {
 
 impl Component for Sidebar {
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> anyhow::Result<()> {
-        let mut lines = vec![];
-        build_lines(&mut lines, &self.state.requests, 0);
+        let lines = build_lines(&self.state.requests, 0);
         self.rendered_lines = lines.clone();
 
         let p = Paragraph::new(lines.iter().map(|l| l.line.clone()).collect::<Vec<Line>>()).block(
@@ -161,29 +160,33 @@ fn find_item<'a>(
     (None, false)
 }
 
-fn build_lines(lines: &mut Vec<RenderLine>, requests: &[ItemKind], level: usize) {
-    for item in requests.iter() {
-        match item {
+fn build_lines(requests: &[ItemKind], level: usize) -> Vec<RenderLine> {
+    requests
+        .iter()
+        .flat_map(|item| match item {
             ItemKind::Dir(dir) => {
                 let gap = " ".repeat(level * 2);
                 let chevron = if dir.expanded { "v" } else { ">" };
-                lines.push(RenderLine {
+                let line = vec![RenderLine {
                     level,
                     name: dir.name.clone(),
-                    line: format!("{}{} {}", gap, chevron, dir.name.clone()).into(),
-                });
-                if dir.expanded {
-                    build_lines(lines, &dir.requests, level + 1)
-                }
+                    line: format!("{}{} {}", gap, chevron, dir.name).into(),
+                }];
+                let nested_lines = if dir.expanded {
+                    build_lines(&dir.requests, level + 1)
+                } else {
+                    vec![]
+                };
+                line.into_iter().chain(nested_lines).collect::<Vec<_>>()
             }
             ItemKind::Request(req) => {
                 let gap = " ".repeat(level * 2);
-                lines.push(RenderLine {
+                vec![RenderLine {
                     level,
                     name: req.name.clone(),
                     line: format!("{}{}", gap, req.name.clone()).into(),
-                });
+                }]
             }
-        }
-    }
+        })
+        .collect()
 }
