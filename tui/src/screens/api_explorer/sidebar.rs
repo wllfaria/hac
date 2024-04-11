@@ -14,7 +14,7 @@ use ratatui::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 
-use super::editor::EditorActions;
+use super::api_explorer::ApiExplorerActions;
 
 enum ItemKind {
     Request(Item),
@@ -47,7 +47,7 @@ pub struct RenderLine {
 pub struct Sidebar {
     state: SidebarState,
     rendered_lines: Vec<RenderLine>,
-    action_sender: UnboundedSender<EditorActions>,
+    action_sender: UnboundedSender<ApiExplorerActions>,
 }
 
 impl From<&RequestKind> for ItemKind {
@@ -89,7 +89,7 @@ impl From<Schema> for SidebarState {
 }
 
 impl Sidebar {
-    pub fn new(state: SidebarState, action_sender: UnboundedSender<EditorActions>) -> Self {
+    pub fn new(state: SidebarState, action_sender: UnboundedSender<ApiExplorerActions>) -> Self {
         Self {
             state,
             action_sender,
@@ -126,7 +126,7 @@ impl Component for Sidebar {
                     (Some(dir), false) => dir.expanded = !dir.expanded,
                     (_, true) => {
                         self.action_sender
-                            .send(EditorActions::SelectRequest(line.clone()))?;
+                            .send(ApiExplorerActions::SelectRequest(line.clone()))?;
                     }
                     _ => (),
                 }

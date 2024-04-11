@@ -1,7 +1,7 @@
 use crate::{
     components::Component,
     event_pool::Event,
-    screens::{dashboard::Dashboard, editor::Editor},
+    screens::{api_explorer::ApiExplorer, dashboard::Dashboard},
 };
 use httpretty::command::Command;
 
@@ -14,7 +14,7 @@ pub enum Screens {
 
 pub struct Tui {
     cur_screen: Screens,
-    editor: Option<Editor>,
+    editor: Option<ApiExplorer>,
     dashboard: Dashboard,
     area: Rect,
 }
@@ -52,7 +52,7 @@ impl Tui {
     pub fn handle_command(&mut self, command: Command) {
         if let Command::SelectSchema(schema) = command {
             self.switch_screen(Screens::Editor);
-            self.editor = Some(Editor::new(self.area, schema));
+            self.editor = Some(ApiExplorer::new(self.area, schema));
         }
     }
 }

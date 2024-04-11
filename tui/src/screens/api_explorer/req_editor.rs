@@ -10,71 +10,71 @@ use ratatui::{
 use std::fmt::Display;
 
 #[derive(Default)]
-enum BuilderTabs {
+enum ReqEditorTabs {
     #[default]
     Request,
     Headers,
     Cookies,
 }
 
-impl From<&BuilderTabs> for usize {
-    fn from(value: &BuilderTabs) -> Self {
+impl From<&ReqEditorTabs> for usize {
+    fn from(value: &ReqEditorTabs) -> Self {
         match value {
-            BuilderTabs::Request => 0,
-            BuilderTabs::Headers => 1,
-            BuilderTabs::Cookies => 2,
+            ReqEditorTabs::Request => 0,
+            ReqEditorTabs::Headers => 1,
+            ReqEditorTabs::Cookies => 2,
         }
     }
 }
 
-impl Display for BuilderTabs {
+impl Display for ReqEditorTabs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BuilderTabs::Request => f.write_str("Request"),
-            BuilderTabs::Headers => f.write_str("Headers"),
-            BuilderTabs::Cookies => f.write_str("Cookied"),
+            ReqEditorTabs::Request => f.write_str("Request"),
+            ReqEditorTabs::Headers => f.write_str("Headers"),
+            ReqEditorTabs::Cookies => f.write_str("Cookied"),
         }
     }
 }
 
-impl AsRef<BuilderTabs> for BuilderTabs {
-    fn as_ref(&self) -> &BuilderTabs {
+impl AsRef<ReqEditorTabs> for ReqEditorTabs {
+    fn as_ref(&self) -> &ReqEditorTabs {
         self
     }
 }
 
-pub struct RequestBuilder {
-    curr_tab: BuilderTabs,
+pub struct ReqEditor {
+    curr_tab: ReqEditorTabs,
     tab_selector: Tabs<'static>,
 }
 
-impl Default for RequestBuilder {
+impl Default for ReqEditor {
     fn default() -> Self {
         Self {
-            curr_tab: BuilderTabs::default(),
-            tab_selector: make_tab_selector(BuilderTabs::default()),
+            curr_tab: ReqEditorTabs::default(),
+            tab_selector: make_tab_selector(ReqEditorTabs::default()),
         }
     }
 }
 
-impl Component for RequestBuilder {
+impl Component for ReqEditor {
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> anyhow::Result<()> {
         frame.render_widget(&self.tab_selector, area);
         match self.curr_tab {
             // TODO: we should actually render the proper components
-            BuilderTabs::Request => (),
-            BuilderTabs::Headers => (),
-            BuilderTabs::Cookies => (),
+            ReqEditorTabs::Request => (),
+            ReqEditorTabs::Headers => (),
+            ReqEditorTabs::Cookies => (),
         }
         Ok(())
     }
 }
 
-fn make_tab_selector(curr_tab: BuilderTabs) -> Tabs<'static> {
+fn make_tab_selector(curr_tab: ReqEditorTabs) -> Tabs<'static> {
     Tabs::new([
-        BuilderTabs::Request.to_string(),
-        BuilderTabs::Headers.to_string(),
-        BuilderTabs::Cookies.to_string(),
+        ReqEditorTabs::Request.to_string(),
+        ReqEditorTabs::Headers.to_string(),
+        ReqEditorTabs::Cookies.to_string(),
     ])
     .block(
         Block::default()

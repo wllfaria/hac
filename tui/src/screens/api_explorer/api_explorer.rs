@@ -1,8 +1,8 @@
 use crate::{
     components::{input::Input, Component},
-    screens::editor::{
+    screens::api_explorer::{
         layout::{build_layout, EditorLayout},
-        request_builder::RequestBuilder,
+        req_editor::ReqEditor,
         sidebar::Sidebar,
     },
 };
@@ -15,35 +15,37 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use super::sidebar::RenderLine;
+use super::{req_builder::ReqBuilder, sidebar::RenderLine};
 
 #[derive(Debug)]
-pub enum EditorActions {
+pub enum ApiExplorerActions {
     SelectRequest(RenderLine),
 }
 
-pub struct Editor {
+pub struct ApiExplorer {
     url: Input,
     sidebar: Sidebar,
     layout: EditorLayout,
     schema: Schema,
-    request_builder: RequestBuilder,
+    req_editor: ReqEditor,
+    req_builder: ReqBuilder,
     selected_request: Option<Request>,
-    action_rx: UnboundedReceiver<EditorActions>,
+    action_rx: UnboundedReceiver<ApiExplorerActions>,
 }
 
-impl Editor {
+impl ApiExplorer {
     pub fn new(area: Rect, schema: Schema) -> Self {
         let layout = build_layout(area);
-        let (action_tx, action_rx) = tokio::sync::mpsc::unbounded_channel::<EditorActions>();
+        let (action_tx, action_rx) = tokio::sync::mpsc::unbounded_channel::<ApiExplorerActions>();
 
         Self {
             url: Input::default(),
             sidebar: Sidebar::new(schema.clone().into(), action_tx.clone()),
+            req_builder: ReqBuilder::new(layout.req_builder),
             layout,
             schema,
             selected_request: None,
-            request_builder: RequestBuilder::default(),
+            req_editor: ReqEditor::default(),
             action_rx,
         }
     }
@@ -75,18 +77,17 @@ fn find_request_on_schema(
     })
 }
 
-impl Component for Editor {
+impl Component for ApiExplorer {
     #[tracing::instrument(level = tracing::Level::TRACE, skip_all, target = "editor")]
     fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
-        self.url.draw(frame, self.layout.url)?;
+        self.req_builder.draw(frame, self.layout.req_builder)?;
         self.sidebar.draw(frame, self.layout.sidebar)?;
-        self.request_builder
-            .draw(frame, self.layout.request_builder)?;
+        self.req_editor.draw(frame, self.layout.req_editor)?;
 
         while let Ok(action) = self.action_rx.try_recv() {
             tracing::debug!("handling user action {action:?}");
             match action {
-                EditorActions::SelectRequest(line) => self.update(line),
+                ApiExplorerActions::SelectRequest(line) => self.update(line),
             }
         }
 

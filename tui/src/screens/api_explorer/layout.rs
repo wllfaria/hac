@@ -1,9 +1,9 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
 pub struct EditorLayout {
-    pub url: Rect,
     pub sidebar: Rect,
-    pub request_builder: Rect,
+    pub req_builder: Rect,
+    pub req_editor: Rect,
     pub _request_preview: Rect,
 }
 
@@ -32,8 +32,8 @@ pub fn build_layout(area: Rect) -> EditorLayout {
 
     EditorLayout {
         sidebar,
-        url,
-        request_builder,
+        req_builder: url,
+        req_editor: request_builder,
         _request_preview: request_preview,
     }
 }
