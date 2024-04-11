@@ -49,7 +49,12 @@ impl Editor {
     }
 
     fn update(&mut self, line: RenderLine) {
-        if let Some(req) = find_request_on_schema(self.schema.requests.as_ref().unwrap(), line, 0) {
+        if let Some(req) = self
+            .schema
+            .requests
+            .as_ref()
+            .and_then(|requests| find_request_on_schema(requests, &line, 0))
+        {
             self.url.set_value(req.uri.clone());
             self.selected_request = Some(req)
         }
@@ -57,22 +62,17 @@ impl Editor {
 }
 
 fn find_request_on_schema(
-    requests: &Vec<RequestKind>,
-    line: RenderLine,
+    requests: &[RequestKind],
+    line: &RenderLine,
     level: usize,
 ) -> Option<Request> {
-    for req in requests {
-        match req {
-            RequestKind::Directory(dir) => {
-                return find_request_on_schema(&dir.requests, line, level + 1)
-            }
-            RequestKind::Single(req) => match (req.name == line.name, line.level == level) {
-                (true, true) => return Some(req.clone()),
-                _ => continue,
-            },
+    requests.iter().find_map(|req| match req {
+        RequestKind::Directory(dir) => find_request_on_schema(&dir.requests, line, level + 1),
+        RequestKind::Single(req) if req.name == line.name && line.level == level => {
+            Some(req.clone())
         }
-    }
-    None
+        _ => None,
+    })
 }
 
 impl Component for Editor {
@@ -83,36 +83,28 @@ impl Component for Editor {
         self.request_builder
             .draw(frame, self.layout.request_builder)?;
 
-        if let Ok(action) = self.action_rx.try_recv() {
+        while let Ok(action) = self.action_rx.try_recv() {
             tracing::debug!("handling user action {action:?}");
             match action {
                 EditorActions::SelectRequest(line) => self.update(line),
             }
-        };
+        }
 
         Ok(())
     }
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
-        let KeyEvent {
-            code, modifiers, ..
-        } = key_event;
-
-        let command = match (code, modifiers) {
-            (KeyCode::Char('q'), KeyModifiers::CONTROL) => Some(Command::Quit),
-            _ => None,
-        };
-
-        Ok(command)
+        match (key_event.code, key_event.modifiers) {
+            (KeyCode::Char('q'), KeyModifiers::CONTROL) => Ok(Some(Command::Quit)),
+            _ => Ok(None),
+        }
     }
 
     fn handle_mouse_event(&mut self, mouse_event: MouseEvent) -> anyhow::Result<Option<Command>> {
-        if let MouseEventKind::Down(button) = mouse_event.kind {
-            if button == MouseButton::Left {
-                let click = Rect::new(mouse_event.column, mouse_event.row, 1, 1);
-                if click.intersects(self.layout.sidebar) {
-                    self.sidebar.handle_mouse_event(mouse_event)?;
-                }
+        if let MouseEventKind::Down(MouseButton::Left) = mouse_event.kind {
+            let click = Rect::new(mouse_event.column, mouse_event.row, 1, 1);
+            if click.intersects(self.layout.sidebar) {
+                self.sidebar.handle_mouse_event(mouse_event)?;
             }
         }
         Ok(None)
