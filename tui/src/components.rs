@@ -1,4 +1,5 @@
-pub mod input;
+pub mod api_explorer;
+pub mod dashboard;
 
 use crate::event_pool::Event;
 use httpretty::command::Command;

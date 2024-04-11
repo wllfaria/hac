@@ -1,7 +1,6 @@
 mod app;
 mod components;
 mod event_pool;
-mod screens;
 mod tui;
 
 use std::path::PathBuf;

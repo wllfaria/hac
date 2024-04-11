@@ -1,4 +1,4 @@
-use crate::components::{input::Input, Component};
+use crate::components::Component;
 
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -16,14 +16,12 @@ struct ReqBuilderLayout {
 
 #[derive(Debug)]
 pub struct ReqBuilder {
-    url_input: Input,
     layout: ReqBuilderLayout,
 }
 
 impl ReqBuilder {
     pub fn new(area: Rect) -> Self {
         Self {
-            url_input: Input::default(),
             layout: build_layout(area),
         }
     }
@@ -39,7 +37,6 @@ impl Component for ReqBuilder {
         );
 
         frame.render_widget(b.clone(), self.layout.method_selector);
-        self.url_input.draw(frame, self.layout.url_input)?;
         frame.render_widget(b, self.layout.request_button);
 
         Ok(())

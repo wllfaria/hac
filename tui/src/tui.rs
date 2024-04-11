@@ -1,7 +1,7 @@
 use crate::{
     components::Component,
+    components::{api_explorer::ApiExplorer, dashboard::Dashboard},
     event_pool::Event,
-    screens::{api_explorer::ApiExplorer, dashboard::Dashboard},
 };
 use httpretty::command::Command;
 

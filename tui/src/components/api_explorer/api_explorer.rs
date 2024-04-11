@@ -1,10 +1,10 @@
 use crate::{
-    components::{input::Input, Component},
-    screens::api_explorer::{
+    components::api_explorer::{
         layout::{build_layout, EditorLayout},
         req_editor::ReqEditor,
         sidebar::Sidebar,
     },
+    components::Component,
 };
 use httpretty::{
     command::Command,
@@ -23,7 +23,6 @@ pub enum ApiExplorerActions {
 }
 
 pub struct ApiExplorer {
-    url: Input,
     sidebar: Sidebar,
     layout: EditorLayout,
     schema: Schema,
@@ -39,7 +38,6 @@ impl ApiExplorer {
         let (action_tx, action_rx) = tokio::sync::mpsc::unbounded_channel::<ApiExplorerActions>();
 
         Self {
-            url: Input::default(),
             sidebar: Sidebar::new(schema.clone().into(), action_tx.clone()),
             req_builder: ReqBuilder::new(layout.req_builder),
             layout,
@@ -57,7 +55,6 @@ impl ApiExplorer {
             .as_ref()
             .and_then(|requests| find_request_on_schema(requests, &line, 0))
         {
-            self.url.set_value(req.uri.clone());
             self.selected_request = Some(req)
         }
     }

@@ -47,10 +47,6 @@ impl App {
                             }
                         })?;
                     }
-                    Event::Key(KeyEvent {
-                        code: KeyCode::Char('q'),
-                        ..
-                    }) => command_tx.send(Command::Quit)?,
                     _ => {}
                 };
 
