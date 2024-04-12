@@ -6,6 +6,8 @@ edition = "2021"
 [dependencies]
 httpretty.workspace = true
 config.workspace = true
+colors.workspace = true
+
 anyhow.workspace = true
 crossterm.workspace = true
 tokio.workspace = true

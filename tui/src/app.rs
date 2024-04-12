@@ -4,23 +4,22 @@ use crate::{
 };
 use httpretty::command::Command;
 
-use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io::Stdout;
 use tokio::sync::mpsc;
 
-pub struct App {
+pub struct App<'a> {
     event_pool: EventPool,
     terminal: Terminal<CrosstermBackend<Stdout>>,
     should_quit: bool,
-    tui: Tui,
+    tui: Tui<'a>,
 }
 
-impl App {
-    pub fn new() -> anyhow::Result<Self> {
+impl<'a> App<'a> {
+    pub fn new(colors: &'a colors::Colors) -> anyhow::Result<Self> {
         let terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
         Ok(Self {
-            tui: Tui::new(terminal.size()?)?,
+            tui: Tui::new(terminal.size()?, colors)?,
             event_pool: EventPool::new(30f64, 60f64),
             should_quit: false,
             terminal,

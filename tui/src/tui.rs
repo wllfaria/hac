@@ -12,19 +12,19 @@ pub enum Screens {
     Dashboard,
 }
 
-pub struct Tui {
+pub struct Tui<'a> {
     cur_screen: Screens,
     editor: Option<ApiExplorer>,
-    dashboard: Dashboard,
+    dashboard: Dashboard<'a>,
     area: Rect,
 }
 
-impl Tui {
-    pub fn new(area: Rect) -> anyhow::Result<Self> {
+impl<'a> Tui<'a> {
+    pub fn new(area: Rect, colors: &'a colors::Colors) -> anyhow::Result<Self> {
         Ok(Self {
             cur_screen: Screens::Dashboard,
             editor: None,
-            dashboard: Dashboard::new(area)?,
+            dashboard: Dashboard::new(area, colors)?,
             area,
         })
     }

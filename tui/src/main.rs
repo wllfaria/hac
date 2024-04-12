@@ -25,9 +25,10 @@ fn setup_tracing(
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let data_dir = config::setup_data_dir()?;
+    let colors = colors::Colors::default();
     let _guard = setup_tracing(&data_dir)?;
 
-    let mut app = app::App::new()?;
+    let mut app = app::App::new(&colors)?;
     app.run().await?;
 
     Ok(())
