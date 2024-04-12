@@ -9,7 +9,7 @@ use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;
 
 pub trait Component {
-    fn draw(&mut self, frame: &mut Frame, area: Rect) -> anyhow::Result<()>;
+    fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()>;
 
     fn handle_event(&mut self, event: Option<Event>) -> anyhow::Result<Option<Command>> {
         let action = match event {
@@ -20,6 +20,9 @@ pub trait Component {
 
         Ok(action)
     }
+
+    #[allow(unused_variables)]
+    fn resize(&mut self, new_size: Rect) {}
 
     #[allow(unused_variables)]
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {

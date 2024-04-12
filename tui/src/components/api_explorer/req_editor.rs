@@ -58,8 +58,8 @@ impl Default for ReqEditor {
 }
 
 impl Component for ReqEditor {
-    fn draw(&mut self, frame: &mut Frame, area: Rect) -> anyhow::Result<()> {
-        frame.render_widget(&self.tab_selector, area);
+    fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
+        frame.render_widget(&self.tab_selector, size);
         match self.curr_tab {
             // TODO: we should actually render the proper components
             ReqEditorTabs::Request => (),

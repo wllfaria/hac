@@ -33,8 +33,8 @@ pub struct ApiExplorer {
 }
 
 impl ApiExplorer {
-    pub fn new(area: Rect, schema: Schema) -> Self {
-        let layout = build_layout(area);
+    pub fn new(size: Rect, schema: Schema) -> Self {
+        let layout = build_layout(size);
         let (action_tx, action_rx) = tokio::sync::mpsc::unbounded_channel::<ApiExplorerActions>();
 
         Self {
@@ -89,6 +89,13 @@ impl Component for ApiExplorer {
         }
 
         Ok(())
+    }
+
+    fn resize(&mut self, new_size: Rect) {
+        self.layout = build_layout(new_size);
+        self.req_editor.resize(new_size);
+        self.req_builder.resize(new_size);
+        self.sidebar.resize(new_size);
     }
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {

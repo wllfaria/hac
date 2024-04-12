@@ -99,7 +99,7 @@ impl Sidebar {
 }
 
 impl Component for Sidebar {
-    fn draw(&mut self, frame: &mut Frame, area: Rect) -> anyhow::Result<()> {
+    fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         let lines = build_lines(&self.state.requests, 0);
         self.rendered_lines = lines.clone();
 
@@ -111,7 +111,7 @@ impl Component for Sidebar {
                 .border_type(BorderType::Rounded),
         );
 
-        frame.render_widget(p, area);
+        frame.render_widget(p, size);
 
         Ok(())
     }

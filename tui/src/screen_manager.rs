@@ -12,21 +12,25 @@ pub enum Screens {
     Dashboard,
 }
 
-pub struct Tui<'a> {
+pub struct ScreenManager<'a> {
     cur_screen: Screens,
     editor: Option<ApiExplorer>,
     dashboard: Dashboard<'a>,
-    area: Rect,
+    size: Rect,
 }
 
-impl<'a> Tui<'a> {
-    pub fn new(area: Rect, colors: &'a colors::Colors) -> anyhow::Result<Self> {
+impl<'a> ScreenManager<'a> {
+    pub fn new(size: Rect, colors: &'a colors::Colors) -> anyhow::Result<Self> {
         Ok(Self {
             cur_screen: Screens::Dashboard,
             editor: None,
-            dashboard: Dashboard::new(area, colors)?,
-            area,
+            dashboard: Dashboard::new(size, colors)?,
+            size,
         })
+    }
+
+    fn switch_screen(&mut self, screen: Screens) {
+        self.cur_screen = screen;
     }
 
     pub fn draw(&mut self, frame: &mut Frame) -> anyhow::Result<()> {
@@ -38,8 +42,13 @@ impl<'a> Tui<'a> {
         Ok(())
     }
 
-    fn switch_screen(&mut self, screen: Screens) {
-        self.cur_screen = screen;
+    pub fn resize(&mut self, new_size: Rect) {
+        self.size = new_size;
+        self.dashboard.resize(new_size);
+
+        if let Some(e) = self.editor.as_mut() {
+            e.resize(new_size)
+        }
     }
 
     pub fn update(&mut self, event: Option<Event>) -> anyhow::Result<Option<Command>> {
@@ -52,7 +61,7 @@ impl<'a> Tui<'a> {
     pub fn handle_command(&mut self, command: Command) {
         if let Command::SelectSchema(schema) = command {
             self.switch_screen(Screens::Editor);
-            self.editor = Some(ApiExplorer::new(self.area, schema));
+            self.editor = Some(ApiExplorer::new(self.size, schema));
         }
     }
 }

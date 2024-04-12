@@ -11,7 +11,6 @@ pub struct Colors {
 #[derive(Debug)]
 pub struct PrimaryColors {
     pub foreground: Color,
-    pub background: Color,
 }
 
 #[derive(Debug)]
@@ -45,9 +44,9 @@ impl Default for Colors {
             normal: Default::default(),
             bright: Default::default(),
             cursor_line: Color::Rgb {
-                r: 0x19,
-                g: 0x1D,
-                b: 0x21,
+                r: 0xE1,
+                g: 0xC5,
+                b: 0x8D,
             },
         }
     }
@@ -60,11 +59,6 @@ impl Default for PrimaryColors {
                 r: 0xCE,
                 g: 0xCE,
                 b: 0xCE,
-            },
-            background: Color::Rgb {
-                r: 25,
-                g: 29,
-                b: 33,
             },
         }
     }

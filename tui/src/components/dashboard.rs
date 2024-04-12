@@ -33,7 +33,7 @@ pub struct Dashboard<'a> {
 }
 
 impl<'a> Dashboard<'a> {
-    pub fn new(area: Rect, colors: &'a colors::Colors) -> anyhow::Result<Self> {
+    pub fn new(size: Rect, colors: &'a colors::Colors) -> anyhow::Result<Self> {
         let schemas = schema::get_schemas()?;
         let mut state = ListState::default();
         schemas.is_empty().not().then(|| state.select(Some(0)));
@@ -41,7 +41,7 @@ impl<'a> Dashboard<'a> {
         Ok(Self {
             state,
             colors,
-            layout: build_layout(area),
+            layout: build_layout(size),
             schemas,
         })
     }
@@ -56,11 +56,7 @@ impl<'a> Dashboard<'a> {
             .map(|s| s.info.name.clone())
             .collect::<List>()
             .style(Style::default().fg(self.colors.normal.white.into()))
-            .highlight_style(
-                Style::default()
-                    .fg(self.colors.normal.white.into())
-                    .bg(self.colors.cursor_line.into()),
-            )
+            .highlight_style(Style::default().fg(self.colors.cursor_line.into()))
             .highlight_symbol("->")
             .highlight_spacing(HighlightSpacing::WhenSelected)
             .block(
@@ -68,7 +64,11 @@ impl<'a> Dashboard<'a> {
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
                     .border_style(Style::default().fg(self.colors.normal.green.into()))
-                    .title(Title::default().position(Position::Top).content("APIs"))
+                    .title(
+                        Title::default()
+                            .position(Position::Top)
+                            .content("Collections"),
+                    )
                     .title(
                         Title::default()
                             .position(Position::Bottom)
@@ -96,6 +96,10 @@ impl Component for Dashboard<'_> {
         Ok(())
     }
 
+    fn resize(&mut self, new_size: Rect) {
+        self.layout = build_layout(new_size);
+    }
+
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         let KeyEvent { code, .. } = key_event;
 
@@ -117,11 +121,11 @@ impl Component for Dashboard<'_> {
     }
 }
 
-fn build_layout(area: Rect) -> DashboardLayout {
+fn build_layout(size: Rect) -> DashboardLayout {
     let [top, help_pane] = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Fill(1), Constraint::Length(1)])
-        .areas(area);
+        .areas(size);
 
     let [schemas_pane, preview_pane] = Layout::default()
         .direction(Direction::Horizontal)

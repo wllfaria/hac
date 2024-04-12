@@ -7,18 +7,18 @@ pub struct EditorLayout {
     pub _request_preview: Rect,
 }
 
-pub fn build_layout(area: Rect) -> EditorLayout {
+pub fn build_layout(size: Rect) -> EditorLayout {
     let [sidebar, right_pane] = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Length(30), Constraint::Fill(1)])
-        .areas(area);
+        .areas(size);
 
     let [url, request_builder] = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(3), Constraint::Fill(1)])
         .areas(right_pane);
 
-    let [request_builder, request_preview] = if area.width < 80 {
+    let [request_builder, request_preview] = if size.width < 80 {
         Layout::default()
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .direction(Direction::Vertical)

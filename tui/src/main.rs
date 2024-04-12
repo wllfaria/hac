@@ -1,7 +1,7 @@
 mod app;
 mod components;
 mod event_pool;
-mod tui;
+mod screen_manager;
 
 use std::path::PathBuf;
 
@@ -25,9 +25,9 @@ fn setup_tracing(
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let data_dir = config::setup_data_dir()?;
-    let colors = colors::Colors::default();
     let _guard = setup_tracing(&data_dir)?;
 
+    let colors = colors::Colors::default();
     let mut app = app::App::new(&colors)?;
     app.run().await?;
 

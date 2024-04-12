@@ -20,9 +20,9 @@ pub struct ReqBuilder {
 }
 
 impl ReqBuilder {
-    pub fn new(area: Rect) -> Self {
+    pub fn new(size: Rect) -> Self {
         Self {
-            layout: build_layout(area),
+            layout: build_layout(size),
         }
     }
 }
@@ -41,9 +41,13 @@ impl Component for ReqBuilder {
 
         Ok(())
     }
+
+    fn resize(&mut self, new_size: Rect) {
+        self.layout = build_layout(new_size);
+    }
 }
 
-fn build_layout(area: Rect) -> ReqBuilderLayout {
+fn build_layout(size: Rect) -> ReqBuilderLayout {
     let [method_selector, url_input, request_button] = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -51,7 +55,7 @@ fn build_layout(area: Rect) -> ReqBuilderLayout {
             Constraint::Fill(1),
             Constraint::Length(10),
         ])
-        .areas(area);
+        .areas(size);
 
     ReqBuilderLayout {
         method_selector,

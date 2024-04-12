@@ -1,11 +1,13 @@
 use crossterm::event::{Event as CrosstermEvent, KeyEventKind, MouseEventKind};
 use futures::{FutureExt, StreamExt};
+use ratatui::layout::Rect;
 use tokio::task::JoinHandle;
 
 #[derive(Debug, Clone)]
 pub enum Event {
     Key(crossterm::event::KeyEvent),
     Mouse(crossterm::event::MouseEvent),
+    Resize(Rect),
     Init,
     Tick,
     Render,
@@ -63,6 +65,7 @@ impl EventPool {
                                     _event_tx.send(Event::Mouse(mouse_event)).unwrap();
                                 }
                             }
+                            Some(Ok(CrosstermEvent::Resize(width, height))) => _event_tx.send(Event::Resize(Rect::new(0, 0, width, height))).unwrap(),
                             Some(Err(_)) => {}
                             Some(_) => {}
                             None => {}
