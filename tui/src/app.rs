@@ -75,20 +75,12 @@ impl<'a> App<'a> {
 
 fn startup() -> anyhow::Result<()> {
     crossterm::terminal::enable_raw_mode()?;
-    crossterm::execute!(
-        std::io::stdout(),
-        crossterm::terminal::EnterAlternateScreen,
-        crossterm::event::EnableMouseCapture
-    )?;
+    crossterm::execute!(std::io::stdout(), crossterm::terminal::EnterAlternateScreen,)?;
     Ok(())
 }
 
 fn shutdown() -> anyhow::Result<()> {
     crossterm::terminal::disable_raw_mode()?;
-    crossterm::execute!(
-        std::io::stdout(),
-        crossterm::terminal::LeaveAlternateScreen,
-        crossterm::event::DisableMouseCapture
-    )?;
+    crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen,)?;
     Ok(())
 }

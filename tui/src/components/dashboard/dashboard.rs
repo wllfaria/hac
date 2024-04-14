@@ -1,4 +1,11 @@
-use crate::components::Component;
+use crate::components::{
+    confirm_popup::ConfirmPopup,
+    dashboard::{
+        new_collection_form::{FormFocus, FormState},
+        schema_list::{SchemaList, SchemaListState},
+    },
+    Component,
+};
 use httpretty::{
     command::Command,
     schema::{schema, types::Schema},
@@ -6,22 +13,14 @@ use httpretty::{
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Style, Stylize},
     text::Line,
-    widgets::{
-        block::{Position, Title},
-        Block, BorderType, Borders, Clear, HighlightSpacing, List, ListState, Padding, Paragraph,
-        Widget, Wrap,
-    },
+    widgets::{Block, Borders, Clear, Padding, Paragraph, Widget, Wrap},
     Frame,
 };
 use std::ops::Not;
-
-use super::{
-    new_collection_form::{FormFocus, FormState, NewCollectionForm},
-    schema_list::{SchemaList, SchemaListState},
-};
+use tui_big_text::{BigText, PixelSize};
 
 #[derive(Debug)]
 struct DashboardLayout {
@@ -29,19 +28,22 @@ struct DashboardLayout {
     help_pane: Rect,
     help_popup: Rect,
     title_pane: Rect,
+    confirm_popup: Rect,
 }
 
 #[derive(Debug)]
 pub struct Dashboard<'a> {
     layout: DashboardLayout,
     schemas: Vec<Schema>,
-    list_state: ListState,
+    list: SchemaList<'a>,
+    list_state: SchemaListState,
     form_state: FormState,
     colors: &'a colors::Colors,
     show_list_keymaps: bool,
     show_filter: bool,
     filter: String,
     pane_focus: PaneFocus,
+    prompt_delete_current: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -52,8 +54,9 @@ enum PaneFocus {
 
 impl<'a> Dashboard<'a> {
     pub fn new(size: Rect, colors: &'a colors::Colors) -> anyhow::Result<Self> {
-        let schemas = schema::get_schemas()?;
-        let mut list_state = ListState::default();
+        let mut schemas = schema::get_schemas()?;
+        schemas.sort_by_key(|k| k.info.name.clone());
+        let mut list_state = SchemaListState::new(schemas.clone());
         schemas.is_empty().not().then(|| list_state.select(Some(0)));
 
         Ok(Dashboard {
@@ -62,29 +65,47 @@ impl<'a> Dashboard<'a> {
             colors,
             layout: build_layout(size),
             schemas,
+            list: SchemaList::new(colors),
             show_list_keymaps: false,
             filter: String::new(),
             show_filter: false,
             pane_focus: PaneFocus::List,
+            prompt_delete_current: false,
         })
     }
 
-    fn filter_list(&mut self, key_event: KeyEvent) {
+    fn filter_list(&mut self) {
+        self.list_state.set_items(
+            self.schemas
+                .clone()
+                .into_iter()
+                .filter(|s| s.info.name.contains(&self.filter))
+                .collect(),
+        );
+    }
+
+    fn handle_filter_key_event(&mut self, key_event: KeyEvent) {
         match (key_event.code, key_event.modifiers) {
             (KeyCode::Char('c'), KeyModifiers::CONTROL) | (KeyCode::Esc, _) => {
                 self.show_filter = false;
                 self.filter = String::new();
+                self.filter_list();
             }
             (KeyCode::Backspace, _) => {
                 if self.filter.is_empty() {
                     self.show_filter = false;
                 }
                 self.filter.pop();
+                self.filter_list();
             }
             (KeyCode::Enter, _) => {
                 self.show_filter = false;
+                self.filter_list();
             }
-            (KeyCode::Char(c), _) => self.filter.push(c),
+            (KeyCode::Char(c), _) => {
+                self.filter.push(c);
+                self.filter_list();
+            }
             _ => {}
         }
     }
@@ -104,14 +125,26 @@ impl<'a> Dashboard<'a> {
                     })
                     .map(|schema| Command::SelectSchema(schema.clone())));
             }
+            KeyCode::Char('d') => self.prompt_delete_current = true,
             KeyCode::Char('n') => {
                 self.form_state.is_focused = true;
                 self.pane_focus = PaneFocus::Form;
             }
-            KeyCode::Char('k') => self
+            KeyCode::Char('h') => self
                 .list_state
                 .select(self.list_state.selected().map(|i| i.saturating_sub(1))),
-            KeyCode::Char('j') => self.list_state.select(
+            KeyCode::Char('j') => self.list_state.select(self.list_state.selected().map(|i| {
+                usize::min(
+                    self.schemas.len() - 1,
+                    i + self.list.items_per_row(&self.layout.schemas_pane),
+                )
+            })),
+            KeyCode::Char('k') => self.list_state.select(
+                self.list_state
+                    .selected()
+                    .map(|i| i.saturating_sub(self.list.items_per_row(&self.layout.schemas_pane))),
+            ),
+            KeyCode::Char('l') => self.list_state.select(
                 self.list_state
                     .selected()
                     .map(|i| usize::min(self.schemas.len() - 1, i + 1)),
@@ -152,47 +185,17 @@ impl<'a> Dashboard<'a> {
         Ok(None)
     }
 
-    fn build_schema_list(&self) -> List<'static> {
-        let position = self
-            .list_state
-            .selected()
-            .map(|v| v + 1)
-            .unwrap_or_default();
-        let position =
-            format!("[{position} of {}]", self.schemas.len()).fg(self.colors.bright.black);
-
-        let border_color = if self.pane_focus.eq(&PaneFocus::List) {
-            self.colors.normal.green
-        } else {
-            self.colors.bright.black
-        };
-
-        self.schemas
-            .iter()
-            .filter(|s| s.info.name.to_lowercase().contains(&self.filter))
-            .map(|s| s.info.name.clone())
-            .collect::<List>()
-            .style(Style::default().fg(self.colors.normal.white.into()))
-            .highlight_style(Style::default().fg(self.colors.cursor_line.into()))
-            .highlight_symbol("-> ")
-            .highlight_spacing(HighlightSpacing::WhenSelected)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded)
-                    .border_style(Style::default().fg(border_color.into()))
-                    .title(
-                        Title::default()
-                            .position(Position::Top)
-                            .content("Collections"),
-                    )
-                    .title(
-                        Title::default()
-                            .position(Position::Bottom)
-                            .alignment(Alignment::Right)
-                            .content(position),
-                    ),
-            )
+    fn handle_confirm_popup_key_event(&mut self, key_event: KeyEvent) {
+        match key_event.code {
+            KeyCode::Char('y') => {
+                // TODO: actually delete the schema
+                self.prompt_delete_current = false;
+            }
+            KeyCode::Char('n') => {
+                self.prompt_delete_current = false;
+            }
+            _ => {}
+        }
     }
 
     fn build_hint_text(&self) -> Line<'static> {
@@ -250,13 +253,18 @@ impl<'a> Dashboard<'a> {
 
 impl Component for Dashboard<'_> {
     fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
-        // let list = self.build_schema_list();
-        // let form = NewCollectionForm::new(self.colors);
-        let list = SchemaList::default();
-        let mut state = SchemaListState::new(&self.schemas);
+        let title = BigText::builder()
+            .pixel_size(PixelSize::Quadrant)
+            .style(Style::default().fg(self.colors.normal.magenta.into()))
+            .lines(vec![" Select a collection".into()])
+            .build()?;
 
-        // frame.render_stateful_widget(form, self.layout.form_pane, &mut self.form_state);
-        frame.render_stateful_widget(list, self.layout.schemas_pane, &mut state);
+        frame.render_widget(title, self.layout.title_pane);
+        frame.render_stateful_widget(
+            self.list.clone(),
+            self.layout.schemas_pane,
+            &mut self.list_state,
+        );
 
         if self.show_filter {
             let filter_input = self.build_filter_input();
@@ -270,6 +278,28 @@ impl Component for Dashboard<'_> {
             Clear.render(self.layout.help_popup, frame.buffer_mut());
             let list_keymaps_popup = self.build_help_popup();
             list_keymaps_popup.render(self.layout.help_popup, frame.buffer_mut());
+        }
+
+        if self.prompt_delete_current {
+            let selected_index = self
+                .list_state
+                .selected()
+                .expect("attempted to open confirm popup without an item selected");
+            let selected_item_name = &self
+                .schemas
+                .get(selected_index)
+                .expect("should never be able to have an out of bounds selection")
+                .info
+                .name;
+
+            let confirm_popup = ConfirmPopup::new(
+                format!(
+                    "You really want to delete collection {}?",
+                    selected_item_name
+                ),
+                self.colors,
+            );
+            confirm_popup.render(self.layout.confirm_popup, frame.buffer_mut());
         }
 
         Ok(())
@@ -286,7 +316,12 @@ impl Component for Dashboard<'_> {
         }
 
         if self.show_filter {
-            self.filter_list(key_event);
+            self.handle_filter_key_event(key_event);
+            return Ok(None);
+        }
+
+        if self.prompt_delete_current {
+            self.handle_confirm_popup_key_event(key_event);
             return Ok(None);
         }
 
@@ -303,17 +338,23 @@ fn build_layout(size: Rect) -> DashboardLayout {
         .constraints([Constraint::Fill(1), Constraint::Length(1)])
         .areas(size);
 
-    let [title_pane, schemas_pane] = Layout::default()
+    let [_, title_pane, schemas_pane] = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Fill(1)])
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(5),
+            Constraint::Fill(1),
+        ])
         .areas(top);
 
     let help_popup = Rect::new(size.width / 4, size.height / 2 - 5, size.width / 2, 10);
+    let confirm_popup = Rect::new(size.width / 4, size.height / 2 - 4, size.width / 2, 8);
 
     DashboardLayout {
         schemas_pane,
         help_pane,
         title_pane,
         help_popup,
+        confirm_popup,
     }
 }

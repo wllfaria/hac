@@ -1,73 +1,164 @@
+use std::{collections::VecDeque, ops::Add};
+
 use httpretty::schema::Schema;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Flex, Layout, Rect},
-    text::Line,
-    widgets::{Block, BorderType, Borders, Paragraph, StatefulWidget, Widget},
+    style::{Style, Stylize},
+    widgets::{
+        Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+        StatefulWidget, Widget,
+    },
 };
 
-pub struct SchemaListState<'a> {
+#[derive(Debug)]
+pub struct SchemaListState {
     selected: Option<usize>,
-    items: &'a [Schema],
+    items: Vec<Schema>,
+    scroll: usize,
 }
 
-impl<'a> SchemaListState<'a> {
-    pub fn new(items: &'a [Schema]) -> Self {
+impl SchemaListState {
+    pub fn new(items: Vec<Schema>) -> Self {
         SchemaListState {
             selected: None,
             items,
+            scroll: 0,
         }
+    }
+
+    pub fn select(&mut self, index: Option<usize>) {
+        self.selected = index;
+    }
+
+    pub fn selected(&self) -> Option<usize> {
+        self.selected
+    }
+
+    pub fn set_items(&mut self, items: Vec<Schema>) {
+        self.items = items;
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Clone)]
 pub struct SchemaList<'a> {
-    phantom: std::marker::PhantomData<&'a ()>,
+    colors: &'a colors::Colors,
+    min_col_width: u16,
+    row_height: u16,
 }
 
 impl<'a> SchemaList<'a> {
-    fn build_layout(&self, size: &Rect) -> (u16, Vec<Rect>) {
-        let col_width = 40;
-        let items_no_spacing = col_width / size.width;
-        let items_per_row = items_no_spacing * size.width;
+    pub fn new(colors: &'a colors::Colors) -> Self {
+        SchemaList {
+            colors,
+            min_col_width: 30,
+            row_height: 4,
+        }
+    }
 
-        let row_height = 4;
-        let total_rows = size.height / row_height;
-        let items_per_row = size.width / col_width;
-        let total_items = total_rows * items_per_row;
+    pub fn items_per_row(&self, size: &Rect) -> usize {
+        (size.width.saturating_sub(1) / self.min_col_width).into()
+    }
 
-        let items = (0..total_rows)
+    pub fn total_rows(&self, size: &Rect) -> usize {
+        (size.height / self.row_height).into()
+    }
+
+    fn build_layout(&self, size: &Rect) -> VecDeque<Rect> {
+        let total_rows = self.total_rows(size);
+        let items_per_row = self.items_per_row(size);
+
+        (0..total_rows)
             .flat_map(|row| {
-                let l = Layout::default()
-                    .direction(Direction::Horizontal)
-                    .areas(*size);
                 Layout::default()
                     .direction(Direction::Horizontal)
-                    .constraints([Constraint::Fill(1)])
-                    .flex(Flex::SpaceBetween)
-                    .constraints((0..items_per_row).map(j))
-                    .split(*row)
+                    .flex(Flex::SpaceAround)
+                    .constraints((0..items_per_row).map(|_| Constraint::Min(self.min_col_width)))
+                    .split(Rect::new(
+                        size.x,
+                        size.y + (self.row_height * row as u16),
+                        size.width,
+                        self.row_height,
+                    ))
+                    .to_vec()
             })
-            .collect::<Vec<_>>();
+            .collect::<VecDeque<_>>()
+    }
 
-        (total_items, items)
+    fn build_card(&self, state: &SchemaListState, schema: &Schema, index: usize) -> Paragraph<'_> {
+        let lines = vec![
+            schema
+                .info
+                .name
+                .clone()
+                .fg(self.colors.normal.yellow)
+                .into(),
+            schema
+                .info
+                .description
+                .clone()
+                .unwrap_or_default()
+                .fg(self.colors.normal.white)
+                .into(),
+        ];
+
+        let border_color = if state
+            .selected
+            .is_some_and(|selected| selected.eq(&(index + state.scroll)))
+        {
+            self.colors.normal.green
+        } else {
+            self.colors.bright.black
+        };
+
+        Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(border_color.into())),
+        )
     }
 }
 
-impl<'a> StatefulWidget for SchemaList<'a> {
-    type State = SchemaListState<'a>;
+impl StatefulWidget for SchemaList<'_> {
+    type State = SchemaListState;
 
     fn render(self, size: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let (total_items, items) = self.build_layout(&size);
+        let list_size = Rect::new(size.x, size.y, size.width.saturating_sub(1), size.height);
+        let scrollbar_size = Rect::new(size.width.saturating_sub(1), size.y, 1, size.height);
+        let mut rects = self.build_layout(&list_size);
 
-        items.into_iter().for_each(|item| {
-            Paragraph::new(Line::from("lol"))
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_type(BorderType::Rounded),
-                )
-                .render(item, buf)
-        });
+        let mut scrollbar_state =
+            ScrollbarState::new(state.items.len() / self.items_per_row(&size))
+                .position(state.scroll);
+
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓"));
+
+        let items_on_display = self.items_per_row(&size) * self.total_rows(&size);
+        if let Some(index) = state.selected {
+            index
+                .gt(&items_on_display.saturating_sub(1).add(state.scroll))
+                .then(|| state.scroll += self.items_per_row(&size));
+
+            state.scroll.gt(&0).then(|| {
+                index
+                    .saturating_sub(state.scroll)
+                    .eq(&0)
+                    .then(|| state.scroll = state.scroll.saturating_sub(self.items_per_row(&size)));
+            });
+        };
+
+        state
+            .items
+            .iter()
+            .skip(state.scroll)
+            .take(rects.len())
+            .enumerate()
+            .map(|(i, schema)| self.build_card(state, schema, i))
+            .for_each(|card| card.render(rects.pop_front().unwrap(), buf));
+
+        scrollbar.render(scrollbar_size, buf, &mut scrollbar_state);
     }
 }
