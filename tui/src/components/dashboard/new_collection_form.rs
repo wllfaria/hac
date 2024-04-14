@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Style, Stylize},
     text::Line,
-    widgets::{Block, BorderType, Borders, Paragraph, StatefulWidget, Widget},
+    widgets::{block::Title, Block, BorderType, Borders, Paragraph, StatefulWidget, Widget},
 };
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -22,10 +22,10 @@ struct FormLayout {
 
 #[derive(Debug, Default)]
 pub struct FormState {
-    name: String,
-    description: String,
-    focused_field: FormFocus,
-    is_focused: bool,
+    pub name: String,
+    pub description: String,
+    pub focused_field: FormFocus,
+    pub is_focused: bool,
 }
 
 #[derive(Debug)]
@@ -47,7 +47,7 @@ impl<'a> NewCollectionForm<'a> {
         };
         let [name_input, desc_input] = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(3), Constraint::Length(3)])
+            .constraints([Constraint::Length(4), Constraint::Length(3)])
             .areas(size);
 
         let [name_input_title, name_input] = Layout::default()
@@ -83,11 +83,23 @@ impl StatefulWidget for NewCollectionForm<'_> {
     fn render(self, size: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let layout = self.build_layout(size);
 
-        let name_input_title = Paragraph::new(Line::from("Name".fg(self.colors.normal.white)));
-        let name_input = Paragraph::new(Line::from("".fg(self.colors.normal.white))).block(
+        let name_input_title = Paragraph::new(Line::from("Name".fg(self.colors.normal.yellow)));
+        let name_input =
+            Paragraph::new(Line::from(state.name.clone().fg(self.colors.normal.white))).block(
+                Block::default()
+                    .borders(Borders::BOTTOM)
+                    .border_style(self.get_field_border(state, &FormFocus::Name)),
+            );
+
+        let desc_input_title =
+            Paragraph::new(Line::from("Description".fg(self.colors.normal.yellow)));
+        let desc_input = Paragraph::new(Line::from(
+            state.description.clone().fg(self.colors.normal.white),
+        ))
+        .block(
             Block::default()
                 .borders(Borders::BOTTOM)
-                .border_style(self.get_field_border(state, &FormFocus::Name)),
+                .border_style(self.get_field_border(state, &FormFocus::Description)),
         );
 
         let block_border = if state.is_focused {
@@ -97,12 +109,17 @@ impl StatefulWidget for NewCollectionForm<'_> {
         };
 
         let full_block = Block::default()
+            .title(Title::default().content("New Collection"))
+            .title_style(Style::default().fg(self.colors.normal.white.into()))
             .borders(Borders::ALL)
             .border_style(block_border)
             .border_type(BorderType::Rounded);
 
         full_block.render(size, buf);
+
         name_input_title.render(layout.name_input_title, buf);
         name_input.render(layout.name_input, buf);
+        desc_input_title.render(layout.desc_input_title, buf);
+        desc_input.render(layout.desc_input, buf);
     }
 }

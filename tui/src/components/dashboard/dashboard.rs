@@ -18,15 +18,17 @@ use ratatui::{
 };
 use std::ops::Not;
 
-use super::new_collection_form::{FormFocus, FormState, NewCollectionForm};
+use super::{
+    new_collection_form::{FormFocus, FormState, NewCollectionForm},
+    schema_list::{SchemaList, SchemaListState},
+};
 
 #[derive(Debug)]
 struct DashboardLayout {
     schemas_pane: Rect,
-    preview_pane: Rect,
     help_pane: Rect,
     help_popup: Rect,
-    form_pane: Rect,
+    title_pane: Rect,
 }
 
 #[derive(Debug)]
@@ -102,7 +104,10 @@ impl<'a> Dashboard<'a> {
                     })
                     .map(|schema| Command::SelectSchema(schema.clone())));
             }
-            KeyCode::Char('n') => self.pane_focus = PaneFocus::Form,
+            KeyCode::Char('n') => {
+                self.form_state.is_focused = true;
+                self.pane_focus = PaneFocus::Form;
+            }
             KeyCode::Char('k') => self
                 .list_state
                 .select(self.list_state.selected().map(|i| i.saturating_sub(1))),
@@ -121,8 +126,27 @@ impl<'a> Dashboard<'a> {
 
     fn handle_form_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         match (key_event.code, key_event.modifiers) {
-            (KeyCode::Char('c'), KeyModifiers::CONTROL) => self.pane_focus = PaneFocus::List,
-            (KeyCode::Char('n'), KeyModifiers::CONTROL) => self.pane_focus = PaneFocus::List,
+            (KeyCode::Char('c'), KeyModifiers::CONTROL)
+            | (KeyCode::Char('n'), KeyModifiers::CONTROL) => {
+                self.form_state.is_focused = false;
+                self.pane_focus = PaneFocus::List;
+            }
+            (KeyCode::Tab, _) => match self.form_state.focused_field {
+                FormFocus::Name => self.form_state.focused_field = FormFocus::Description,
+                FormFocus::Description => self.form_state.focused_field = FormFocus::Name,
+            },
+            (KeyCode::Char(c), _) => match self.form_state.focused_field {
+                FormFocus::Name => self.form_state.name.push(c),
+                FormFocus::Description => self.form_state.description.push(c),
+            },
+            (KeyCode::Backspace, _) => match self.form_state.focused_field {
+                FormFocus::Name => {
+                    self.form_state.name.pop();
+                }
+                FormFocus::Description => {
+                    self.form_state.description.pop();
+                }
+            },
             _ => {}
         }
         Ok(None)
@@ -226,11 +250,13 @@ impl<'a> Dashboard<'a> {
 
 impl Component for Dashboard<'_> {
     fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
-        let list = self.build_schema_list();
-        let form = NewCollectionForm::new(self.colors);
+        // let list = self.build_schema_list();
+        // let form = NewCollectionForm::new(self.colors);
+        let list = SchemaList::default();
+        let mut state = SchemaListState::new(&self.schemas);
 
-        frame.render_stateful_widget(form, self.layout.form_pane, &mut self.form_state);
-        frame.render_stateful_widget(list, self.layout.schemas_pane, &mut self.list_state);
+        // frame.render_stateful_widget(form, self.layout.form_pane, &mut self.form_state);
+        frame.render_stateful_widget(list, self.layout.schemas_pane, &mut state);
 
         if self.show_filter {
             let filter_input = self.build_filter_input();
@@ -277,23 +303,17 @@ fn build_layout(size: Rect) -> DashboardLayout {
         .constraints([Constraint::Fill(1), Constraint::Length(1)])
         .areas(size);
 
-    let [schemas_pane, right_side] = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Fill(1), Constraint::Fill(3)])
-        .areas(top);
-
-    let [form_pane, preview_pane] = Layout::default()
+    let [title_pane, schemas_pane] = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Fill(2), Constraint::Fill(1)])
-        .areas(right_side);
+        .constraints([Constraint::Length(1), Constraint::Fill(1)])
+        .areas(top);
 
     let help_popup = Rect::new(size.width / 4, size.height / 2 - 5, size.width / 2, 10);
 
     DashboardLayout {
         schemas_pane,
-        form_pane,
-        preview_pane,
         help_pane,
+        title_pane,
         help_popup,
     }
 }
