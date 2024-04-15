@@ -133,6 +133,7 @@ impl StatefulWidget for SchemaList<'_> {
                 .position(state.scroll);
 
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .style(Style::default().fg(self.colors.normal.magenta.into()))
             .begin_symbol(Some("↑"))
             .end_symbol(Some("↓"));
 

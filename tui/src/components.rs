@@ -1,6 +1,7 @@
 pub mod api_explorer;
 mod confirm_popup;
 pub mod dashboard;
+mod input;
 
 use crate::event_pool::Event;
 use httpretty::command::Command;

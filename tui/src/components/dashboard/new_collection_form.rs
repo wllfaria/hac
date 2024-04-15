@@ -1,23 +1,27 @@
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Style, Stylize},
+    layout::{Constraint, Direction, Flex, Layout, Rect},
+    style::{Style, Styled, Stylize},
     text::Line,
-    widgets::{block::Title, Block, BorderType, Borders, Paragraph, StatefulWidget, Widget},
+    widgets::{block::Title, Block, BorderType, Borders, Clear, Paragraph, StatefulWidget, Widget},
 };
+
+use crate::components::input::Input;
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub enum FormFocus {
     #[default]
     Name,
     Description,
+    Confirm,
+    Cancel,
 }
 
 struct FormLayout {
     name_input: Rect,
     desc_input: Rect,
-    name_input_title: Rect,
-    desc_input_title: Rect,
+    confirm_button: Rect,
+    cancel_button: Rect,
 }
 
 #[derive(Debug, Default)]
@@ -25,7 +29,14 @@ pub struct FormState {
     pub name: String,
     pub description: String,
     pub focused_field: FormFocus,
-    pub is_focused: bool,
+}
+
+impl FormState {
+    pub fn reset(&mut self) {
+        self.name = String::default();
+        self.description = String::default();
+        self.focused_field = FormFocus::Name;
+    }
 }
 
 #[derive(Debug)]
@@ -38,41 +49,38 @@ impl<'a> NewCollectionForm<'a> {
         NewCollectionForm { colors }
     }
 
-    fn build_layout(&self, size: Rect) -> FormLayout {
+    fn build_layout(&self, size: &Rect) -> FormLayout {
         let size = Rect {
             x: size.x + 2,
             y: size.y + 2,
             width: size.width.saturating_sub(4),
-            height: size.height.saturating_sub(4),
+            height: size.height.saturating_sub(2),
         };
-        let [name_input, desc_input] = Layout::default()
+        let [name_input, desc_input, _, buttons] = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(4), Constraint::Length(3)])
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(1),
+                Constraint::Length(3),
+            ])
             .areas(size);
 
-        let [name_input_title, name_input] = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(1), Constraint::Length(2)])
-            .areas(name_input);
-
-        let [desc_input_title, desc_input] = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(1), Constraint::Length(2)])
-            .areas(desc_input);
+        let [confirm_button, _, cancel_button] = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Length(10),
+                Constraint::Length(1),
+                Constraint::Length(10),
+            ])
+            .flex(Flex::Center)
+            .areas(buttons);
 
         FormLayout {
-            name_input_title,
             name_input,
-            desc_input_title,
             desc_input,
-        }
-    }
-
-    fn get_field_border(&self, state: &FormState, field: &FormFocus) -> Style {
-        if state.is_focused && state.focused_field.eq(field) {
-            Style::default().fg(self.colors.normal.green.into())
-        } else {
-            Style::default().fg(self.colors.bright.black.into())
+            confirm_button,
+            cancel_button,
         }
     }
 }
@@ -81,45 +89,63 @@ impl StatefulWidget for NewCollectionForm<'_> {
     type State = FormState;
 
     fn render(self, size: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let layout = self.build_layout(size);
+        let layout = self.build_layout(&size);
+        Clear.render(size, buf);
 
-        let name_input_title = Paragraph::new(Line::from("Name".fg(self.colors.normal.yellow)));
-        let name_input =
-            Paragraph::new(Line::from(state.name.clone().fg(self.colors.normal.white))).block(
-                Block::default()
-                    .borders(Borders::BOTTOM)
-                    .border_style(self.get_field_border(state, &FormFocus::Name)),
-            );
+        let mut name_input =
+            Input::new(self.colors, "Name".into()).placeholder("My awesome API".into());
 
-        let desc_input_title =
-            Paragraph::new(Line::from("Description".fg(self.colors.normal.yellow)));
-        let desc_input = Paragraph::new(Line::from(
-            state.description.clone().fg(self.colors.normal.white),
-        ))
-        .block(
+        let mut desc_input =
+            Input::new(self.colors, "Description".into()).placeholder("Request testing".into());
+
+        match state.focused_field {
+            FormFocus::Name => name_input.focus(),
+            FormFocus::Description => desc_input.focus(),
+            _ => {}
+        };
+
+        let cancel_text = if state.focused_field.eq(&FormFocus::Cancel) {
+            "Cancel"
+                .fg(self.colors.normal.white)
+                .bg(self.colors.normal.red.into())
+        } else {
+            "Cancel".fg(self.colors.normal.white)
+        };
+
+        let cancel_button = Paragraph::new(Line::from(cancel_text).centered()).block(
             Block::default()
-                .borders(Borders::BOTTOM)
-                .border_style(self.get_field_border(state, &FormFocus::Description)),
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(self.colors.bright.red.into()))
+                .border_type(BorderType::Rounded),
         );
 
-        let block_border = if state.is_focused {
-            Style::default().fg(self.colors.normal.green.into())
+        let confirm_text = if state.focused_field.eq(&FormFocus::Confirm) {
+            "Create"
+                .fg(self.colors.normal.white)
+                .bg(self.colors.normal.magenta.into())
         } else {
-            Style::default().fg(self.colors.bright.black.into())
+            "Create".fg(self.colors.normal.white)
         };
+
+        let confirm_button = Paragraph::new(Line::from(confirm_text).centered()).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(self.colors.bright.magenta.into()))
+                .border_type(BorderType::Rounded),
+        );
 
         let full_block = Block::default()
             .title(Title::default().content("New Collection"))
             .title_style(Style::default().fg(self.colors.normal.white.into()))
             .borders(Borders::ALL)
-            .border_style(block_border)
-            .border_type(BorderType::Rounded);
+            .border_style(Style::default().fg(self.colors.bright.black.into()))
+            .border_type(BorderType::Rounded)
+            .style(Style::default().bg(self.colors.normal.black.into()));
 
         full_block.render(size, buf);
-
-        name_input_title.render(layout.name_input_title, buf);
-        name_input.render(layout.name_input, buf);
-        desc_input_title.render(layout.desc_input_title, buf);
-        desc_input.render(layout.desc_input, buf);
+        name_input.render(layout.name_input, buf, &mut state.name);
+        desc_input.render(layout.desc_input, buf, &mut state.description);
+        cancel_button.render(layout.cancel_button, buf);
+        confirm_button.render(layout.confirm_button, buf);
     }
 }

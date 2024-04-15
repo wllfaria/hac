@@ -16,11 +16,13 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Style, Stylize},
     text::Line,
-    widgets::{Block, Borders, Clear, Padding, Paragraph, Widget, Wrap},
+    widgets::{Block, Borders, Clear, Padding, Paragraph, StatefulWidget, Widget, Wrap},
     Frame,
 };
 use std::ops::Not;
 use tui_big_text::{BigText, PixelSize};
+
+use super::new_collection_form::NewCollectionForm;
 
 #[derive(Debug)]
 struct DashboardLayout {
@@ -29,6 +31,7 @@ struct DashboardLayout {
     help_popup: Rect,
     title_pane: Rect,
     confirm_popup: Rect,
+    form_popup: Rect,
 }
 
 #[derive(Debug)]
@@ -126,8 +129,7 @@ impl<'a> Dashboard<'a> {
                     .map(|schema| Command::SelectSchema(schema.clone())));
             }
             KeyCode::Char('d') => self.prompt_delete_current = true,
-            KeyCode::Char('n') => {
-                self.form_state.is_focused = true;
+            KeyCode::Char('n') | KeyCode::Char('c') => {
                 self.pane_focus = PaneFocus::Form;
             }
             KeyCode::Char('h') => self
@@ -159,18 +161,25 @@ impl<'a> Dashboard<'a> {
 
     fn handle_form_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         match (key_event.code, key_event.modifiers) {
-            (KeyCode::Char('c'), KeyModifiers::CONTROL)
-            | (KeyCode::Char('n'), KeyModifiers::CONTROL) => {
-                self.form_state.is_focused = false;
-                self.pane_focus = PaneFocus::List;
-            }
             (KeyCode::Tab, _) => match self.form_state.focused_field {
                 FormFocus::Name => self.form_state.focused_field = FormFocus::Description,
-                FormFocus::Description => self.form_state.focused_field = FormFocus::Name,
+                FormFocus::Description => self.form_state.focused_field = FormFocus::Confirm,
+                FormFocus::Confirm => self.form_state.focused_field = FormFocus::Cancel,
+                FormFocus::Cancel => self.form_state.focused_field = FormFocus::Name,
             },
             (KeyCode::Char(c), _) => match self.form_state.focused_field {
                 FormFocus::Name => self.form_state.name.push(c),
                 FormFocus::Description => self.form_state.description.push(c),
+                _ => {}
+            },
+            (KeyCode::Enter, _) => match self.form_state.focused_field {
+                // TODO: async create the new schema
+                FormFocus::Confirm => todo!(),
+                FormFocus::Cancel => {
+                    self.pane_focus = PaneFocus::List;
+                    self.form_state.reset();
+                }
+                _ => {}
             },
             (KeyCode::Backspace, _) => match self.form_state.focused_field {
                 FormFocus::Name => {
@@ -179,6 +188,7 @@ impl<'a> Dashboard<'a> {
                 FormFocus::Description => {
                     self.form_state.description.pop();
                 }
+                _ => {}
             },
             _ => {}
         }
@@ -207,32 +217,44 @@ impl<'a> Dashboard<'a> {
     fn build_help_popup(&self) -> Paragraph<'_> {
         let lines = vec![
             Line::from(vec![
-                "k/<up>".fg(self.colors.normal.red),
-                "   - select item above".into(),
+                "h/<left>".fg(self.colors.normal.magenta),
+                "    - select left item".into(),
             ]),
             Line::from(vec![
-                "j/<down>".fg(self.colors.normal.red),
-                " - select item below".into(),
+                "j/<down>".fg(self.colors.normal.magenta),
+                "    - select item below".into(),
             ]),
             Line::from(vec![
-                "n".fg(self.colors.normal.red),
-                "        - creates a new collection".into(),
+                "k/<up>".fg(self.colors.normal.magenta),
+                "      - select item above".into(),
             ]),
             Line::from(vec![
-                "?".fg(self.colors.normal.red),
-                "        - toggle this help window".into(),
+                "l/<right>".fg(self.colors.normal.magenta),
+                "   - select right item".into(),
             ]),
             Line::from(vec![
-                "enter".fg(self.colors.normal.red),
-                "    - select item under cursor".into(),
+                "n/c".fg(self.colors.normal.magenta),
+                "         - creates a new collection".into(),
             ]),
             Line::from(vec![
-                "/".fg(self.colors.normal.red),
-                "        - enter filter mode".into(),
+                "d".fg(self.colors.normal.magenta),
+                "           - deletes the selected collection".into(),
             ]),
             Line::from(vec![
-                "q".fg(self.colors.normal.red),
-                "        - quits the application".into(),
+                "?".fg(self.colors.normal.magenta),
+                "           - toggle this help window".into(),
+            ]),
+            Line::from(vec![
+                "enter".fg(self.colors.normal.magenta),
+                "       - select item under cursor".into(),
+            ]),
+            Line::from(vec![
+                "/".fg(self.colors.normal.magenta),
+                "           - enter filter mode".into(),
+            ]),
+            Line::from(vec![
+                "q".fg(self.colors.normal.magenta),
+                "           - quits the application".into(),
             ]),
         ];
         Paragraph::new(lines).wrap(Wrap { trim: true }).block(
@@ -265,6 +287,15 @@ impl Component for Dashboard<'_> {
             self.layout.schemas_pane,
             &mut self.list_state,
         );
+
+        if self.pane_focus.eq(&PaneFocus::Form) {
+            let form = NewCollectionForm::new(self.colors);
+            form.render(
+                self.layout.form_popup,
+                frame.buffer_mut(),
+                &mut self.form_state,
+            );
+        }
 
         if self.show_filter {
             let filter_input = self.build_filter_input();
@@ -347,8 +378,9 @@ fn build_layout(size: Rect) -> DashboardLayout {
         ])
         .areas(top);
 
-    let help_popup = Rect::new(size.width / 4, size.height / 2 - 5, size.width / 2, 10);
+    let help_popup = Rect::new(size.width / 4, size.height / 2 - 7, size.width / 2, 14);
     let confirm_popup = Rect::new(size.width / 4, size.height / 2 - 4, size.width / 2, 8);
+    let form_popup = Rect::new(size.width / 4, size.height / 2 - 7, size.width / 2, 14);
 
     DashboardLayout {
         schemas_pane,
@@ -356,5 +388,6 @@ fn build_layout(size: Rect) -> DashboardLayout {
         title_pane,
         help_popup,
         confirm_popup,
+        form_popup,
     }
 }
