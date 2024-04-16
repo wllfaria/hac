@@ -5,6 +5,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Padding, Paragraph, Widget, Wrap},
 };
 
+#[derive(Debug, PartialEq)]
 pub struct ErrorPopupLayout {
     message_pane: Rect,
     confirmation_pane: Rect,
@@ -49,6 +50,14 @@ impl<'a> ErrorPopup<'a> {
             confirmation_pane,
         }
     }
+
+    fn build_container(&self) -> Block<'_> {
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(self.colors.bright.black.into()))
+            .padding(Padding::new(2, 2, 1, 1))
+            .bg(self.colors.normal.black.into())
+    }
 }
 
 impl Widget for ErrorPopup<'_> {
@@ -59,15 +68,65 @@ impl Widget for ErrorPopup<'_> {
         Clear.render(size, buf);
         let layout = self.layout(&size);
         let (message, confirmation) = self.build_popup();
-
-        let full_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(self.colors.bright.black.into()))
-            .padding(Padding::new(2, 2, 1, 1))
-            .bg(self.colors.normal.black.into());
+        let full_block = self.build_container();
 
         full_block.render(size, buf);
         message.render(layout.message_pane, buf);
         confirmation.render(layout.confirmation_pane, buf);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_with_correct_message() {
+        let colors = colors::Colors::default();
+        let popup = ErrorPopup::new("my error message".into(), &colors);
+
+        let (message, confirmation) = popup.build_popup();
+
+        assert_eq!(
+            message,
+            Paragraph::new("my error message".fg(colors.normal.red)).wrap(Wrap { trim: true })
+        );
+
+        assert_eq!(
+            confirmation,
+            Paragraph::new("(O)k".fg(colors.normal.green).to_centered_line())
+                .wrap(Wrap { trim: true })
+        );
+    }
+
+    #[test]
+    fn test_build_layout_correctly() {
+        let colors = colors::Colors::default();
+        let popup = ErrorPopup::new("my error message".into(), &colors);
+        let rect = Rect::new(0, 0, 10, 10);
+        let expected = ErrorPopupLayout {
+            message_pane: Rect::new(2, 2, 6, 5),
+            confirmation_pane: Rect::new(2, 7, 6, 1),
+        };
+
+        let layout = popup.layout(&rect);
+
+        assert_eq!(layout, expected);
+    }
+
+    #[test]
+    fn test_build_container_correctly() {
+        let colors = colors::Colors::default();
+        let popup = ErrorPopup::new("my error message".into(), &colors);
+
+        let expected = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(colors.bright.black.into()))
+            .padding(Padding::new(2, 2, 1, 1))
+            .bg(colors.normal.black.into());
+
+        let block = popup.build_container();
+
+        assert_eq!(expected, block);
     }
 }
