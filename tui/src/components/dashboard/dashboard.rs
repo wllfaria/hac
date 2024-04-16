@@ -1,7 +1,7 @@
 use crate::components::{
     confirm_popup::ConfirmPopup,
     dashboard::{
-        new_collection_form::{FormFocus, FormState},
+        new_collection_form::{FormFocus, FormState, NewCollectionForm},
         schema_list::{SchemaList, SchemaListState},
     },
     Component,
@@ -21,8 +21,6 @@ use ratatui::{
 };
 use std::ops::Not;
 use tui_big_text::{BigText, PixelSize};
-
-use super::new_collection_form::NewCollectionForm;
 
 #[derive(Debug)]
 struct DashboardLayout {

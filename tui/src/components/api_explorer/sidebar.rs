@@ -29,8 +29,8 @@ struct Directory {
 
 struct Item {
     name: String,
-    method: String,
-    uri: String,
+    _method: String,
+    _uri: String,
 }
 
 pub struct SidebarState {
@@ -55,8 +55,8 @@ impl From<&RequestKind> for ItemKind {
         match value {
             RequestKind::Single(req) => Self::Request(Item {
                 name: req.name.clone(),
-                uri: req.uri.clone(),
-                method: req.method.clone(),
+                _uri: req.uri.clone(),
+                _method: req.method.clone(),
             }),
             RequestKind::Directory(dir) => Self::Dir(Directory {
                 expanded: false,

@@ -10,7 +10,7 @@ use ratatui::{
 #[derive(Debug)]
 struct ReqBuilderLayout {
     method_selector: Rect,
-    url_input: Rect,
+    _url_input: Rect,
     request_button: Rect,
 }
 
@@ -59,7 +59,7 @@ fn build_layout(size: Rect) -> ReqBuilderLayout {
 
     ReqBuilderLayout {
         method_selector,
-        url_input,
+        _url_input: url_input,
         request_button,
     }
 }

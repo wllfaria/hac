@@ -29,8 +29,6 @@ impl<'a> ConfirmPopup<'a> {
         ];
         Paragraph::new(lines).wrap(Wrap { trim: true }).block(
             Block::default()
-                .title("Help")
-                .title_style(Style::default().fg(self.colors.normal.white.into()))
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(self.colors.bright.black.into()))
                 .padding(Padding::new(2, 2, 1, 1))
