@@ -47,3 +47,35 @@ impl Widget for ConfirmPopup<'_> {
         popup.render(size, buf);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_with_correct_message() {
+        let colors = colors::Colors::default();
+        let popup = ConfirmPopup::new("my confirmation message".into(), &colors);
+        let lines = vec![
+            "my confirmation message".fg(colors.normal.yellow).into(),
+            "".into(),
+            Line::from(vec![
+                "(y)es".fg(colors.normal.green),
+                " ".into(),
+                "(n)o".fg(colors.normal.red),
+            ])
+            .centered(),
+        ];
+        let expected = Paragraph::new(lines).wrap(Wrap { trim: true }).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(colors.bright.black.into()))
+                .padding(Padding::new(2, 2, 1, 1))
+                .bg(colors.normal.black.into()),
+        );
+
+        let content = popup.build_popup();
+
+        assert_eq!(expected, content);
+    }
+}
