@@ -101,7 +101,7 @@ impl Sidebar {
 impl Component for Sidebar {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         let lines = build_lines(&self.state.requests, 0);
-        self.rendered_lines = lines.clone();
+        self.rendered_lines.clone_from(&lines);
 
         let p = Paragraph::new(lines.iter().map(|l| l.line.clone()).collect::<Vec<Line>>()).block(
             Block::default()

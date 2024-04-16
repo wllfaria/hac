@@ -6,6 +6,7 @@ use crate::{
 use httpretty::command::Command;
 
 use ratatui::{layout::Rect, Frame};
+use tokio::sync::mpsc::UnboundedSender;
 
 pub enum Screens {
     Editor,
@@ -33,24 +34,6 @@ impl<'a> ScreenManager<'a> {
         self.cur_screen = screen;
     }
 
-    pub fn draw(&mut self, frame: &mut Frame) -> anyhow::Result<()> {
-        match &self.cur_screen {
-            Screens::Editor => self.editor.as_mut().unwrap().draw(frame, frame.size())?,
-            Screens::Dashboard => self.dashboard.draw(frame, frame.size())?,
-        };
-
-        Ok(())
-    }
-
-    pub fn resize(&mut self, new_size: Rect) {
-        self.size = new_size;
-        self.dashboard.resize(new_size);
-
-        if let Some(e) = self.editor.as_mut() {
-            e.resize(new_size)
-        }
-    }
-
     pub fn update(&mut self, event: Option<Event>) -> anyhow::Result<Option<Command>> {
         match self.cur_screen {
             Screens::Editor => self.editor.as_mut().unwrap().handle_event(event),
@@ -59,9 +42,40 @@ impl<'a> ScreenManager<'a> {
     }
 
     pub fn handle_command(&mut self, command: Command) {
-        if let Command::SelectSchema(schema) = command {
-            self.switch_screen(Screens::Editor);
-            self.editor = Some(ApiExplorer::new(self.size, schema));
+        match command {
+            Command::SelectSchema(schema) | Command::CreateSchema(schema) => {
+                self.switch_screen(Screens::Editor);
+                self.editor = Some(ApiExplorer::new(self.size, schema));
+            }
+            Command::Error(msg) => {
+                self.dashboard.display_error(msg);
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Component for ScreenManager<'_> {
+    fn draw(&mut self, frame: &mut Frame, _size: Rect) -> anyhow::Result<()> {
+        match &self.cur_screen {
+            Screens::Editor => self.editor.as_mut().unwrap().draw(frame, frame.size())?,
+            Screens::Dashboard => self.dashboard.draw(frame, frame.size())?,
+        };
+
+        Ok(())
+    }
+
+    fn register_command_handler(&mut self, sender: UnboundedSender<Command>) -> anyhow::Result<()> {
+        self.dashboard.register_command_handler(sender.clone())?;
+        Ok(())
+    }
+
+    fn resize(&mut self, new_size: Rect) {
+        self.size = new_size;
+        self.dashboard.resize(new_size);
+
+        if let Some(e) = self.editor.as_mut() {
+            e.resize(new_size)
         }
     }
 }

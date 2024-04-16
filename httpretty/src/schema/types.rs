@@ -1,9 +1,13 @@
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Schema {
     pub info: Info,
     pub requests: Option<Vec<RequestKind>>,
+    #[serde(skip)]
+    pub path: PathBuf,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]

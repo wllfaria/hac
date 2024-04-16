@@ -145,6 +145,7 @@ impl StatefulWidget for SchemaList<'_> {
 
             state.scroll.gt(&0).then(|| {
                 index
+                    .add(1)
                     .saturating_sub(state.scroll)
                     .eq(&0)
                     .then(|| state.scroll = state.scroll.saturating_sub(self.items_per_row(&size)));

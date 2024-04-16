@@ -5,4 +5,5 @@ pub enum Command {
     Quit,
     SelectSchema(Schema),
     Error(String),
+    CreateSchema(Schema),
 }

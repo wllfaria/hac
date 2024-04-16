@@ -8,5 +8,6 @@ config.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
 serde.workspace = true
+tokio.workspace = true
 
 serde_json = "1.0.115"

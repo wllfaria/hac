@@ -1,4 +1,5 @@
 use crate::{
+    components::Component,
     event_pool::{Event, EventPool},
     screen_manager::ScreenManager,
 };
@@ -32,6 +33,9 @@ impl<'a> App<'a> {
 
         startup()?;
 
+        self.screen_manager
+            .register_command_handler(command_tx.clone())?;
+
         loop {
             if let Some(event) = self.event_pool.next().await {
                 match event {
@@ -39,7 +43,7 @@ impl<'a> App<'a> {
                     Event::Resize(new_size) => self.screen_manager.resize(new_size),
                     Event::Render => {
                         self.terminal.draw(|f| {
-                            let result = self.screen_manager.draw(f);
+                            let result = self.screen_manager.draw(f, f.size());
                             if let Err(e) = result {
                                 command_tx
                                     .send(Command::Error(format!("Failed to draw: {:?}", e)))
@@ -59,7 +63,8 @@ impl<'a> App<'a> {
                 match command {
                     Command::Quit => self.should_quit = true,
                     Command::SelectSchema(_) => self.screen_manager.handle_command(command),
-                    _ => {}
+                    Command::CreateSchema(_) => self.screen_manager.handle_command(command),
+                    Command::Error(_) => self.screen_manager.handle_command(command),
                 }
             }
 

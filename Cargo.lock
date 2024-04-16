@@ -437,6 +437,7 @@ dependencies = [
  "config",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
 ]
 

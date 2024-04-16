@@ -4,6 +4,7 @@ use crate::components::{
         new_collection_form::{FormFocus, FormState, NewCollectionForm},
         schema_list::{SchemaList, SchemaListState},
     },
+    error_popup::ErrorPopup,
     Component,
 };
 use httpretty::{
@@ -20,6 +21,7 @@ use ratatui::{
     Frame,
 };
 use std::ops::Not;
+use tokio::sync::mpsc::UnboundedSender;
 use tui_big_text::{BigText, PixelSize};
 
 #[derive(Debug)]
@@ -30,6 +32,7 @@ struct DashboardLayout {
     title_pane: Rect,
     confirm_popup: Rect,
     form_popup: Rect,
+    error_popup: Rect,
 }
 
 #[derive(Debug)]
@@ -45,6 +48,9 @@ pub struct Dashboard<'a> {
     filter: String,
     pane_focus: PaneFocus,
     prompt_delete_current: bool,
+    sender: Option<UnboundedSender<Command>>,
+    show_error_popup: bool,
+    error_message: String,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -72,7 +78,17 @@ impl<'a> Dashboard<'a> {
             show_filter: false,
             pane_focus: PaneFocus::List,
             prompt_delete_current: false,
+            sender: None,
+            show_error_popup: false,
+            error_message: String::default(),
         })
+    }
+
+    pub fn display_error(&mut self, message: String) {
+        self.show_error_popup = true;
+        self.error_message = message;
+        self.prompt_delete_current = false;
+        self.pane_focus = PaneFocus::List;
     }
 
     fn filter_list(&mut self) {
@@ -130,24 +146,34 @@ impl<'a> Dashboard<'a> {
             KeyCode::Char('n') | KeyCode::Char('c') => {
                 self.pane_focus = PaneFocus::Form;
             }
-            KeyCode::Char('h') => self
-                .list_state
-                .select(self.list_state.selected().map(|i| i.saturating_sub(1))),
-            KeyCode::Char('j') => self.list_state.select(self.list_state.selected().map(|i| {
-                usize::min(
-                    self.schemas.len() - 1,
-                    i + self.list.items_per_row(&self.layout.schemas_pane),
-                )
-            })),
+            KeyCode::Char('h') => self.list_state.select(
+                self.list_state
+                    .selected()
+                    .map(|i| i.saturating_sub(1))
+                    .or(Some(0)),
+            ),
+            KeyCode::Char('j') => self.list_state.select(
+                self.list_state
+                    .selected()
+                    .map(|i| {
+                        usize::min(
+                            self.schemas.len() - 1,
+                            i + self.list.items_per_row(&self.layout.schemas_pane),
+                        )
+                    })
+                    .or(Some(0)),
+            ),
             KeyCode::Char('k') => self.list_state.select(
                 self.list_state
                     .selected()
-                    .map(|i| i.saturating_sub(self.list.items_per_row(&self.layout.schemas_pane))),
+                    .map(|i| i.saturating_sub(self.list.items_per_row(&self.layout.schemas_pane)))
+                    .or(Some(0)),
             ),
             KeyCode::Char('l') => self.list_state.select(
                 self.list_state
                     .selected()
-                    .map(|i| usize::min(self.schemas.len() - 1, i + 1)),
+                    .map(|i| usize::min(self.schemas.len() - 1, i + 1))
+                    .or(Some(0)),
             ),
             KeyCode::Char('?') => self.show_list_keymaps = true,
             KeyCode::Char('/') => self.show_filter = true,
@@ -171,8 +197,32 @@ impl<'a> Dashboard<'a> {
                 _ => {}
             },
             (KeyCode::Enter, _) => match self.form_state.focused_field {
-                // TODO: async create the new schema
-                FormFocus::Confirm => todo!(),
+                FormFocus::Confirm => {
+                    let name = self.form_state.name.clone();
+                    let description = self.form_state.description.clone();
+
+                    let sender_copy = self
+                        .sender
+                        .clone()
+                        .expect("should always have a sender at this point");
+
+                    tokio::spawn(async move {
+                        match httpretty::fs::create_schema(name, description).await {
+                            Ok(schema) => {
+                                if sender_copy.send(Command::CreateSchema(schema)).is_err() {
+                                    tracing::error!("failed to send command through channel");
+                                    std::process::abort();
+                                }
+                            }
+                            Err(e) => {
+                                if sender_copy.send(Command::Error(e.to_string())).is_err() {
+                                    tracing::error!("failed to send error command through channel");
+                                    std::process::abort();
+                                }
+                            }
+                        }
+                    });
+                }
                 FormFocus::Cancel => {
                     self.pane_focus = PaneFocus::List;
                     self.form_state.reset();
@@ -193,10 +243,30 @@ impl<'a> Dashboard<'a> {
         Ok(None)
     }
 
-    fn handle_confirm_popup_key_event(&mut self, key_event: KeyEvent) {
+    #[tracing::instrument(skip_all)]
+    fn handle_confirm_popup_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<()> {
         match key_event.code {
             KeyCode::Char('y') => {
-                // TODO: actually delete the schema
+                let selected = self
+                    .list_state
+                    .selected()
+                    .expect("deleting when nothing is selected should never happen");
+                let schema = self
+                    .schemas
+                    .get(selected)
+                    .expect("should never attempt to delete a non existing item");
+                let path = schema.path.clone();
+
+                tokio::spawn(async move {
+                    tracing::debug!("attempting to delete schema: {:?}", path);
+                    httpretty::fs::delete_schema(&path)
+                        .await
+                        .expect("failed to delete schema from filesystem");
+                });
+
+                self.schemas.remove(selected);
+                self.list_state.set_items(self.schemas.clone());
+                self.list_state.select(None);
                 self.prompt_delete_current = false;
             }
             KeyCode::Char('n') => {
@@ -204,6 +274,19 @@ impl<'a> Dashboard<'a> {
             }
             _ => {}
         }
+
+        Ok(())
+    }
+
+    fn handle_error_popup_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<()> {
+        match key_event.code {
+            KeyCode::Char('o') | KeyCode::Esc | KeyCode::Enter => {
+                self.show_error_popup = false;
+            }
+            _ => {}
+        };
+
+        Ok(())
     }
 
     fn build_hint_text(&self) -> Line<'static> {
@@ -286,6 +369,11 @@ impl Component for Dashboard<'_> {
             &mut self.list_state,
         );
 
+        if self.show_error_popup {
+            let popup = ErrorPopup::new(self.error_message.clone(), self.colors);
+            popup.render(self.layout.error_popup, frame.buffer_mut());
+        }
+
         if self.pane_focus.eq(&PaneFocus::Form) {
             let form = NewCollectionForm::new(self.colors);
             form.render(
@@ -350,7 +438,12 @@ impl Component for Dashboard<'_> {
         }
 
         if self.prompt_delete_current {
-            self.handle_confirm_popup_key_event(key_event);
+            self.handle_confirm_popup_key_event(key_event)?;
+            return Ok(None);
+        }
+
+        if self.show_error_popup {
+            self.handle_error_popup_key_event(key_event)?;
             return Ok(None);
         }
 
@@ -358,6 +451,11 @@ impl Component for Dashboard<'_> {
             PaneFocus::List => self.handle_list_key_event(key_event),
             PaneFocus::Form => self.handle_form_key_event(key_event),
         }
+    }
+
+    fn register_command_handler(&mut self, sender: UnboundedSender<Command>) -> anyhow::Result<()> {
+        self.sender = Some(sender.clone());
+        Ok(())
     }
 }
 
@@ -379,6 +477,7 @@ fn build_layout(size: Rect) -> DashboardLayout {
     let help_popup = Rect::new(size.width / 4, size.height / 2 - 7, size.width / 2, 14);
     let confirm_popup = Rect::new(size.width / 4, size.height / 2 - 4, size.width / 2, 8);
     let form_popup = Rect::new(size.width / 4, size.height / 2 - 7, size.width / 2, 14);
+    let error_popup = Rect::new(size.width / 4, size.height / 2 - 10, size.width / 2, 20);
 
     DashboardLayout {
         schemas_pane,
@@ -387,5 +486,6 @@ fn build_layout(size: Rect) -> DashboardLayout {
         help_popup,
         confirm_popup,
         form_popup,
+        error_popup,
     }
 }
