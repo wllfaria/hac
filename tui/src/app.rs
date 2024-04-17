@@ -54,7 +54,7 @@ impl<'a> App<'a> {
                     _ => {}
                 };
 
-                if let Some(command) = self.screen_manager.update(Some(event.clone()))? {
+                if let Some(command) = self.screen_manager.handle_event(Some(event.clone()))? {
                     command_tx.send(command).expect("failed to send")
                 }
             }

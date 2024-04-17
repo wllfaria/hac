@@ -164,7 +164,7 @@ impl<'a> Dashboard<'a> {
                             .selected()
                             .map(|i| {
                                 usize::min(
-                                    self.schemas.len() - 1,
+                                    self.list_state.items.len() - 1,
                                     i + self.list.items_per_row(&self.layout.schemas_pane),
                                 )
                             })
@@ -189,14 +189,13 @@ impl<'a> Dashboard<'a> {
                     self.list_state.select(
                         self.list_state
                             .selected()
-                            .map(|i| usize::min(self.schemas.len() - 1, i + 1))
+                            .map(|i| usize::min(self.list_state.items.len() - 1, i + 1))
                             .or(Some(0)),
                     );
                 }
             }
             KeyCode::Char('?') => self.pane_focus = PaneFocus::Help,
             KeyCode::Char('/') => self.pane_focus = PaneFocus::Filter,
-            KeyCode::Char('q') => return Ok(Some(Command::Quit)),
             _ => {}
         };
         Ok(None)
