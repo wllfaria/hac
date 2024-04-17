@@ -41,7 +41,7 @@ pub fn create_from_form(name: String, description: String) -> anyhow::Result<Sch
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_millis();
-        format!("Unknown Collection {}", now)
+        format!("Unnamed Collection {}", now)
     } else {
         name
     };

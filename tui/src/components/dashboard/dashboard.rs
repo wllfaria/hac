@@ -721,4 +721,81 @@ mod tests {
 
         assert_eq!(dashboard.list_state.selected(), Some(0));
     }
+
+    #[test]
+    fn test_creating_new_schema() {
+        let size = Rect::new(0, 0, 80, 24);
+        let colors = colors::Colors::default();
+        let (_guard, path) = setup_temp_schemas(3);
+        let schemas = schema::schema::get_schemas(path).unwrap();
+
+        let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+
+        feed_keys(
+            &mut dashboard,
+            &[KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE)],
+        );
+
+        assert_eq!(dashboard.pane_focus, PaneFocus::Form);
+
+        feed_keys(
+            &mut dashboard,
+            &[
+                // going to the cancel button, and closing the form, typing something to ensure
+                // state reset
+                KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+            ],
+        );
+
+        assert_eq!(dashboard.pane_focus, PaneFocus::List);
+
+        feed_keys(
+            &mut dashboard,
+            &[KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE)],
+        );
+
+        assert_eq!(dashboard.pane_focus, PaneFocus::Form);
+
+        feed_keys(
+            &mut dashboard,
+            &[
+                // filling in the name field
+                KeyEvent::new(KeyCode::Char('H'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE),
+            ],
+        );
+
+        assert_eq!(dashboard.form_state.name, "Hello");
+
+        feed_keys(
+            &mut dashboard,
+            &[
+                // filling in the description
+                KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('W'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('w'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE),
+            ],
+        );
+
+        assert_eq!(dashboard.form_state.name, "Hello");
+        assert_eq!(dashboard.form_state.description, "World");
+    }
 }
