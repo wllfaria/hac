@@ -3,7 +3,7 @@ use crate::{
     components::{api_explorer::ApiExplorer, dashboard::Dashboard},
     event_pool::Event,
 };
-use httpretty::command::Command;
+use httpretty::{command::Command, schema::schema};
 
 use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;
@@ -22,10 +22,12 @@ pub struct ScreenManager<'a> {
 
 impl<'a> ScreenManager<'a> {
     pub fn new(size: Rect, colors: &'a colors::Colors) -> anyhow::Result<Self> {
+        let mut schemas = schema::get_schemas_from_config()?;
+        schemas.sort_by_key(|k| k.info.name.clone());
         Ok(Self {
             cur_screen: Screens::Dashboard,
             editor: None,
-            dashboard: Dashboard::new(size, colors)?,
+            dashboard: Dashboard::new(size, colors, schemas)?,
             size,
         })
     }

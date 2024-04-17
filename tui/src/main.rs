@@ -1,7 +1,4 @@
-mod app;
-mod components;
-mod event_pool;
-mod screen_manager;
+use tui::app;
 
 use std::path::PathBuf;
 

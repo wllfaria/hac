@@ -1,4 +1,7 @@
-use std::time::{self, UNIX_EPOCH};
+use std::{
+    path::Path,
+    time::{self, UNIX_EPOCH},
+};
 
 use super::{
     errors::SchemaError,
@@ -6,15 +9,23 @@ use super::{
 };
 
 #[tracing::instrument(err)]
-pub fn get_schemas() -> anyhow::Result<Vec<Schema>> {
+pub fn get_schemas_from_config() -> anyhow::Result<Vec<Schema>> {
     let schemas_dir = config::get_schemas_dir()?;
+    get_schemas(schemas_dir)
+}
+
+#[tracing::instrument(skip(schemas_dir), err)]
+pub fn get_schemas<T>(schemas_dir: T) -> anyhow::Result<Vec<Schema>>
+where
+    T: AsRef<Path>,
+{
     let items = std::fs::read_dir(&schemas_dir)?;
 
     let mut collections = vec![];
 
     for item in items.into_iter().flatten() {
         let file_name = item.file_name();
-        let schema_name = schemas_dir.join(file_name);
+        let schema_name = schemas_dir.as_ref().join(file_name);
         let file = std::fs::read_to_string(&schema_name)?;
         let mut schema: Schema = serde_json::from_str(&file)?;
         schema.path = schema_name;

@@ -14,7 +14,7 @@ use ratatui::{
 #[derive(Debug)]
 pub struct SchemaListState {
     selected: Option<usize>,
-    items: Vec<Schema>,
+    pub(super) items: Vec<Schema>,
     scroll: usize,
 }
 

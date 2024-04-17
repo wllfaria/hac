@@ -2,9 +2,9 @@ use directories::ProjectDirs;
 use std::path::PathBuf;
 
 fn get_data_dir() -> anyhow::Result<PathBuf> {
-    let directory = if let Ok(s) = std::env::var("HTTPRETTY_DATA") {
+    let directory = if let Ok(s) = std::env::var("REQTUI_DATA") {
         PathBuf::from(s)
-    } else if let Some(proj_dirs) = ProjectDirs::from("com", "httpretty", "httpretty") {
+    } else if let Some(proj_dirs) = ProjectDirs::from("com", "reqtui", "reqtui") {
         proj_dirs.data_local_dir().to_path_buf()
     } else {
         anyhow::bail!("data directory not found");
@@ -24,7 +24,7 @@ pub fn setup_data_dir() -> anyhow::Result<PathBuf> {
 }
 
 pub fn get_logfile() -> &'static str {
-    "httpretty.log"
+    "reqtui.log"
 }
 
 #[tracing::instrument(err)]

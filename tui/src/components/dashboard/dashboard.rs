@@ -7,10 +7,7 @@ use crate::components::{
     error_popup::ErrorPopup,
     Component,
 };
-use httpretty::{
-    command::Command,
-    schema::{schema, types::Schema},
-};
+use httpretty::{command::Command, schema::types::Schema};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
@@ -20,11 +17,11 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Padding, Paragraph, StatefulWidget, Widget, Wrap},
     Frame,
 };
-use std::ops::Not;
+use std::ops::{Div, Not};
 use tokio::sync::mpsc::UnboundedSender;
 use tui_big_text::{BigText, PixelSize};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct DashboardLayout {
     schemas_pane: Rect,
     help_pane: Rect,
@@ -60,9 +57,11 @@ enum PaneFocus {
 }
 
 impl<'a> Dashboard<'a> {
-    pub fn new(size: Rect, colors: &'a colors::Colors) -> anyhow::Result<Self> {
-        let mut schemas = schema::get_schemas()?;
-        schemas.sort_by_key(|k| k.info.name.clone());
+    pub fn new(
+        size: Rect,
+        colors: &'a colors::Colors,
+        schemas: Vec<Schema>,
+    ) -> anyhow::Result<Self> {
         let mut list_state = SchemaListState::new(schemas.clone());
         schemas.is_empty().not().then(|| list_state.select(Some(0)));
 
@@ -150,7 +149,7 @@ impl<'a> Dashboard<'a> {
                 self.list_state
                     .selected()
                     .map(|i| i.saturating_sub(1))
-                    .or(Some(0)),
+                    .or(None),
             ),
             KeyCode::Char('j') => self.list_state.select(
                 self.list_state
@@ -161,19 +160,19 @@ impl<'a> Dashboard<'a> {
                             i + self.list.items_per_row(&self.layout.schemas_pane),
                         )
                     })
-                    .or(Some(0)),
+                    .or(None),
             ),
             KeyCode::Char('k') => self.list_state.select(
                 self.list_state
                     .selected()
                     .map(|i| i.saturating_sub(self.list.items_per_row(&self.layout.schemas_pane)))
-                    .or(Some(0)),
+                    .or(None),
             ),
             KeyCode::Char('l') => self.list_state.select(
                 self.list_state
                     .selected()
                     .map(|i| usize::min(self.schemas.len() - 1, i + 1))
-                    .or(Some(0)),
+                    .or(None),
             ),
             KeyCode::Char('?') => self.show_list_keymaps = true,
             KeyCode::Char('/') => self.show_filter = true,
@@ -474,10 +473,30 @@ fn build_layout(size: Rect) -> DashboardLayout {
         ])
         .areas(top);
 
-    let help_popup = Rect::new(size.width / 4, size.height / 2 - 7, size.width / 2, 14);
-    let confirm_popup = Rect::new(size.width / 4, size.height / 2 - 4, size.width / 2, 8);
-    let form_popup = Rect::new(size.width / 4, size.height / 2 - 7, size.width / 2, 14);
-    let error_popup = Rect::new(size.width / 4, size.height / 2 - 10, size.width / 2, 20);
+    let help_popup = Rect::new(
+        size.width / 4,
+        size.height.div(2).saturating_sub(7),
+        size.width / 2,
+        14,
+    );
+    let confirm_popup = Rect::new(
+        size.width / 4,
+        size.height.div(2).saturating_sub(4),
+        size.width / 2,
+        8,
+    );
+    let form_popup = Rect::new(
+        size.width / 4,
+        size.height.div(2).saturating_sub(7),
+        size.width / 2,
+        14,
+    );
+    let error_popup = Rect::new(
+        size.width / 4,
+        size.height.div(2).saturating_sub(10),
+        size.width / 2,
+        20,
+    );
 
     DashboardLayout {
         schemas_pane,
@@ -487,5 +506,219 @@ fn build_layout(size: Rect) -> DashboardLayout {
         confirm_popup,
         form_popup,
         error_popup,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use httpretty::schema;
+    use std::{
+        fs::{create_dir, File},
+        io::Write,
+    };
+    use tempfile::{tempdir, TempDir};
+
+    use super::*;
+
+    fn setup_temp_schemas(amount: usize) -> (TempDir, String) {
+        let tmp_data_dir = tempdir().expect("Failed to create temp data dir");
+
+        let tmp_dir = tmp_data_dir.path().join("schemas");
+        create_dir(&tmp_dir).expect("Failed to create schemas directory");
+
+        for i in 0..amount {
+            let file_path = tmp_dir.join(format!("test_schema_{}.json", i));
+            let mut tmp_file = File::create(&file_path).expect("Failed to create file");
+
+            write!(
+            tmp_file,
+            r#"{{"info": {{ "name": "test_collection_{}", "description": "test_description_{}" }}}}"#,
+            i, i
+        ).expect("Failed to write to file");
+
+            tmp_file.flush().expect("Failed to flush file");
+        }
+
+        (tmp_data_dir, tmp_dir.to_string_lossy().to_string())
+    }
+
+    fn feed_keys(dashboard: &mut Dashboard, events: &[KeyEvent]) {
+        for event in events {
+            _ = dashboard.handle_key_event(*event);
+        }
+    }
+
+    #[test]
+    fn test_build_layout() {
+        let size = Rect::new(0, 0, 80, 24);
+        let expected = DashboardLayout {
+            schemas_pane: Rect::new(0, 6, 80, 17),
+            help_pane: Rect::new(0, 23, 80, 1),
+            title_pane: Rect::new(0, 1, 80, 5),
+            help_popup: Rect::new(20, 5, 40, 14),
+            confirm_popup: Rect::new(20, 8, 40, 8),
+            form_popup: Rect::new(20, 5, 40, 14),
+            error_popup: Rect::new(20, 2, 40, 20),
+        };
+
+        let layout = build_layout(size);
+
+        assert_eq!(layout, expected);
+    }
+
+    #[test]
+    fn test_open_close_help() {
+        let size = Rect::new(0, 0, 80, 24);
+        let colors = colors::Colors::default();
+        let (_guard, path) = setup_temp_schemas(1);
+        let schemas = schema::schema::get_schemas(path).unwrap();
+
+        let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+
+        assert_eq!(dashboard.schemas.len(), 1);
+        assert_eq!(dashboard.list_state.selected(), Some(0));
+
+        assert!(!dashboard.show_list_keymaps);
+
+        feed_keys(
+            &mut dashboard,
+            &[KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE)],
+        );
+
+        assert!(dashboard.show_list_keymaps);
+
+        feed_keys(
+            &mut dashboard,
+            &[KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE)],
+        );
+
+        assert!(!dashboard.show_list_keymaps);
+    }
+
+    #[test]
+    fn test_moving_without_any_schemas() {
+        let size = Rect::new(0, 0, 80, 24);
+        let colors = colors::Colors::default();
+        let mut dashboard = Dashboard::new(size, &colors, vec![]).unwrap();
+
+        assert!(dashboard.schemas.is_empty());
+        assert_eq!(dashboard.list_state.selected(), None);
+
+        feed_keys(
+            &mut dashboard,
+            &[
+                KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE),
+            ],
+        );
+
+        assert!(dashboard.schemas.is_empty());
+        assert_eq!(dashboard.list_state.selected(), None);
+    }
+
+    #[test]
+    fn test_filtering_list() {
+        let size = Rect::new(0, 0, 80, 24);
+        let colors = colors::Colors::default();
+        let (_guard, path) = setup_temp_schemas(10);
+        let schemas = schema::schema::get_schemas(path).unwrap();
+
+        let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+
+        assert_eq!(dashboard.schemas.len(), 10);
+        assert_eq!(dashboard.list_state.selected(), Some(0));
+
+        feed_keys(
+            &mut dashboard,
+            &[
+                // enter filtering - search for non-existing item
+                KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('3'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('3'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('3'), KeyModifiers::NONE),
+            ],
+        );
+
+        assert!(dashboard.show_filter);
+        assert_eq!(dashboard.list_state.items.len(), 0);
+
+        feed_keys(
+            &mut dashboard,
+            &[
+                // erase until filtering is cancelled
+                KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE),
+            ],
+        );
+
+        assert!(!dashboard.show_filter);
+        assert_eq!(dashboard.list_state.items.len(), 10);
+
+        feed_keys(
+            &mut dashboard,
+            &[
+                // enter filtering again and cancel with hotkey
+                KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
+            ],
+        );
+
+        assert!(!dashboard.show_filter);
+        assert_eq!(dashboard.list_state.items.len(), 10);
+
+        feed_keys(
+            &mut dashboard,
+            &[
+                // enter filtering again and actually filter the list
+                KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('3'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+            ],
+        );
+
+        assert!(!dashboard.show_filter);
+        assert_eq!(dashboard.list_state.items.len(), 1);
+    }
+
+    #[test]
+    fn test_moving_out_of_bounds() {
+        let size = Rect::new(0, 0, 80, 24);
+        let colors = colors::Colors::default();
+        let (_guard, path) = setup_temp_schemas(3);
+        let schemas = schema::schema::get_schemas(path).unwrap();
+
+        let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+
+        feed_keys(
+            &mut dashboard,
+            &[
+                // moving down until end is reached, twice more
+                KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE),
+            ],
+        );
+
+        assert_eq!(dashboard.list_state.selected(), Some(2));
+
+        feed_keys(
+            &mut dashboard,
+            &[
+                // moving right until beginning is reached, twice more
+                KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE),
+            ],
+        );
+
+        assert_eq!(dashboard.list_state.selected(), Some(0));
     }
 }
