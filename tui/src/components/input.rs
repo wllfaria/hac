@@ -70,3 +70,86 @@ impl StatefulWidget for Input<'_> {
         input.render(size, buf);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_input_with_placeholder_unfocused() {
+        let colors = colors::Colors::default();
+        let input = Input::new(&colors, "my input".into()).placeholder("my placeholder".into());
+        let expected = Paragraph::new(vec!["my placeholder".into()])
+            .block(
+                Block::default()
+                    .title("my input".to_string())
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .border_style(Style::default().fg(colors.bright.black.into())),
+            )
+            .style(Style::default().fg(colors.normal.blue.into()));
+
+        let result = input.build_input("".into());
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_build_input_with_placeholder_focused() {
+        let colors = colors::Colors::default();
+        let mut input = Input::new(&colors, "my input".into()).placeholder("my placeholder".into());
+        let expected = Paragraph::new(vec!["my placeholder".into()])
+            .block(
+                Block::default()
+                    .title("my input".to_string())
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .border_style(Style::default().fg(colors.normal.green.into())),
+            )
+            .style(Style::default().fg(colors.normal.blue.into()));
+
+        input.focus();
+        let result = input.build_input("".into());
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_build_input_with_value_unfocused() {
+        let colors = colors::Colors::default();
+        let input = Input::new(&colors, "my input".into()).placeholder("my placeholder".into());
+        let expected = Paragraph::new(vec!["my value".into()])
+            .block(
+                Block::default()
+                    .title("my input".to_string())
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .border_style(Style::default().fg(colors.bright.black.into())),
+            )
+            .style(Style::default().fg(colors.normal.white.into()));
+
+        let result = input.build_input("my value".into());
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_build_input_with_value_focused() {
+        let colors = colors::Colors::default();
+        let mut input = Input::new(&colors, "my input".into()).placeholder("my placeholder".into());
+        let expected = Paragraph::new(vec!["my value".into()])
+            .block(
+                Block::default()
+                    .title("my input".to_string())
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .border_style(Style::default().fg(colors.normal.green.into())),
+            )
+            .style(Style::default().fg(colors.normal.white.into()));
+
+        input.focus();
+        let result = input.build_input("my value".into());
+
+        assert_eq!(expected, result);
+    }
+}
