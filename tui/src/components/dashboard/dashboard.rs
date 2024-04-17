@@ -40,13 +40,9 @@ pub struct Dashboard<'a> {
     list_state: SchemaListState,
     form_state: FormState,
     colors: &'a colors::Colors,
-    show_list_keymaps: bool,
-    show_filter: bool,
     filter: String,
     pane_focus: PaneFocus,
-    prompt_delete_current: bool,
     sender: Option<UnboundedSender<Command>>,
-    show_error_popup: bool,
     error_message: String,
 }
 
@@ -54,6 +50,10 @@ pub struct Dashboard<'a> {
 enum PaneFocus {
     List,
     Form,
+    Error,
+    Prompt,
+    Help,
+    Filter,
 }
 
 impl<'a> Dashboard<'a> {
@@ -72,22 +72,17 @@ impl<'a> Dashboard<'a> {
             layout: build_layout(size),
             schemas,
             list: SchemaList::new(colors),
-            show_list_keymaps: false,
             filter: String::new(),
-            show_filter: false,
-            pane_focus: PaneFocus::List,
-            prompt_delete_current: false,
             sender: None,
-            show_error_popup: false,
             error_message: String::default(),
+
+            pane_focus: PaneFocus::List,
         })
     }
 
     pub fn display_error(&mut self, message: String) {
-        self.show_error_popup = true;
+        self.pane_focus = PaneFocus::Error;
         self.error_message = message;
-        self.prompt_delete_current = false;
-        self.pane_focus = PaneFocus::List;
     }
 
     fn filter_list(&mut self) {
@@ -100,22 +95,22 @@ impl<'a> Dashboard<'a> {
         );
     }
 
-    fn handle_filter_key_event(&mut self, key_event: KeyEvent) {
+    fn handle_filter_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         match (key_event.code, key_event.modifiers) {
             (KeyCode::Char('c'), KeyModifiers::CONTROL) | (KeyCode::Esc, _) => {
-                self.show_filter = false;
+                self.pane_focus = PaneFocus::List;
                 self.filter = String::new();
                 self.filter_list();
             }
             (KeyCode::Backspace, _) => {
                 if self.filter.is_empty() {
-                    self.show_filter = false;
+                    self.pane_focus = PaneFocus::List;
                 }
                 self.filter.pop();
                 self.filter_list();
             }
             (KeyCode::Enter, _) => {
-                self.show_filter = false;
+                self.pane_focus = PaneFocus::List;
                 self.filter_list();
             }
             (KeyCode::Char(c), _) => {
@@ -123,7 +118,9 @@ impl<'a> Dashboard<'a> {
                 self.filter_list();
             }
             _ => {}
-        }
+        };
+
+        Ok(None)
     }
 
     fn handle_list_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
@@ -141,7 +138,7 @@ impl<'a> Dashboard<'a> {
                     })
                     .map(|schema| Command::SelectSchema(schema.clone())));
             }
-            KeyCode::Char('d') => self.prompt_delete_current = true,
+            KeyCode::Char('d') => self.pane_focus = PaneFocus::Prompt,
             KeyCode::Char('n') | KeyCode::Char('c') => {
                 self.pane_focus = PaneFocus::Form;
             }
@@ -174,8 +171,8 @@ impl<'a> Dashboard<'a> {
                     .map(|i| usize::min(self.schemas.len() - 1, i + 1))
                     .or(None),
             ),
-            KeyCode::Char('?') => self.show_list_keymaps = true,
-            KeyCode::Char('/') => self.show_filter = true,
+            KeyCode::Char('?') => self.pane_focus = PaneFocus::Help,
+            KeyCode::Char('/') => self.pane_focus = PaneFocus::Filter,
             KeyCode::Char('q') => return Ok(Some(Command::Quit)),
             _ => {}
         };
@@ -243,7 +240,10 @@ impl<'a> Dashboard<'a> {
     }
 
     #[tracing::instrument(skip_all)]
-    fn handle_confirm_popup_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<()> {
+    fn handle_confirm_popup_key_event(
+        &mut self,
+        key_event: KeyEvent,
+    ) -> anyhow::Result<Option<Command>> {
         match key_event.code {
             KeyCode::Char('y') => {
                 let selected = self
@@ -266,26 +266,29 @@ impl<'a> Dashboard<'a> {
                 self.schemas.remove(selected);
                 self.list_state.set_items(self.schemas.clone());
                 self.list_state.select(None);
-                self.prompt_delete_current = false;
+                self.pane_focus = PaneFocus::List;
             }
             KeyCode::Char('n') => {
-                self.prompt_delete_current = false;
-            }
-            _ => {}
-        }
-
-        Ok(())
-    }
-
-    fn handle_error_popup_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<()> {
-        match key_event.code {
-            KeyCode::Char('o') | KeyCode::Esc | KeyCode::Enter => {
-                self.show_error_popup = false;
+                self.pane_focus = PaneFocus::List;
             }
             _ => {}
         };
 
-        Ok(())
+        Ok(None)
+    }
+
+    fn handle_error_popup_key_event(
+        &mut self,
+        key_event: KeyEvent,
+    ) -> anyhow::Result<Option<Command>> {
+        match key_event.code {
+            KeyCode::Char('o') | KeyCode::Esc | KeyCode::Enter => {
+                self.pane_focus = PaneFocus::List;
+            }
+            _ => {}
+        };
+
+        Ok(None)
     }
 
     fn build_hint_text(&self) -> Line<'static> {
@@ -368,12 +371,12 @@ impl Component for Dashboard<'_> {
             &mut self.list_state,
         );
 
-        if self.show_error_popup {
+        if self.pane_focus == PaneFocus::Error {
             let popup = ErrorPopup::new(self.error_message.clone(), self.colors);
             popup.render(self.layout.error_popup, frame.buffer_mut());
         }
 
-        if self.pane_focus.eq(&PaneFocus::Form) {
+        if self.pane_focus == PaneFocus::Form {
             let form = NewCollectionForm::new(self.colors);
             form.render(
                 self.layout.form_popup,
@@ -382,7 +385,7 @@ impl Component for Dashboard<'_> {
             );
         }
 
-        if self.show_filter {
+        if self.pane_focus == PaneFocus::Filter {
             let filter_input = self.build_filter_input();
             frame.render_widget(filter_input, self.layout.help_pane);
         } else {
@@ -390,13 +393,13 @@ impl Component for Dashboard<'_> {
             frame.render_widget(hint_text, self.layout.help_pane);
         }
 
-        if self.show_list_keymaps {
+        if self.pane_focus == PaneFocus::Help {
             Clear.render(self.layout.help_popup, frame.buffer_mut());
             let list_keymaps_popup = self.build_help_popup();
             list_keymaps_popup.render(self.layout.help_popup, frame.buffer_mut());
         }
 
-        if self.prompt_delete_current {
+        if self.pane_focus == PaneFocus::Prompt {
             let selected_index = self
                 .list_state
                 .selected()
@@ -426,29 +429,16 @@ impl Component for Dashboard<'_> {
     }
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
-        if self.show_list_keymaps {
-            self.show_list_keymaps = false;
-            return Ok(None);
-        }
-
-        if self.show_filter {
-            self.handle_filter_key_event(key_event);
-            return Ok(None);
-        }
-
-        if self.prompt_delete_current {
-            self.handle_confirm_popup_key_event(key_event)?;
-            return Ok(None);
-        }
-
-        if self.show_error_popup {
-            self.handle_error_popup_key_event(key_event)?;
-            return Ok(None);
-        }
-
         match self.pane_focus {
             PaneFocus::List => self.handle_list_key_event(key_event),
             PaneFocus::Form => self.handle_form_key_event(key_event),
+            PaneFocus::Error => self.handle_error_popup_key_event(key_event),
+            PaneFocus::Prompt => self.handle_confirm_popup_key_event(key_event),
+            PaneFocus::Filter => self.handle_filter_key_event(key_event),
+            PaneFocus::Help => {
+                self.pane_focus = PaneFocus::List;
+                Ok(None)
+            }
         }
     }
 
@@ -578,21 +568,21 @@ mod tests {
         assert_eq!(dashboard.schemas.len(), 1);
         assert_eq!(dashboard.list_state.selected(), Some(0));
 
-        assert!(!dashboard.show_list_keymaps);
+        assert_eq!(dashboard.pane_focus, PaneFocus::List);
 
         feed_keys(
             &mut dashboard,
             &[KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE)],
         );
 
-        assert!(dashboard.show_list_keymaps);
+        assert_eq!(dashboard.pane_focus, PaneFocus::Help);
 
         feed_keys(
             &mut dashboard,
             &[KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE)],
         );
 
-        assert!(!dashboard.show_list_keymaps);
+        assert_eq!(dashboard.pane_focus, PaneFocus::List);
     }
 
     #[test]
@@ -641,7 +631,7 @@ mod tests {
             ],
         );
 
-        assert!(dashboard.show_filter);
+        assert_eq!(dashboard.pane_focus, PaneFocus::Filter);
         assert_eq!(dashboard.list_state.items.len(), 0);
 
         feed_keys(
@@ -655,7 +645,7 @@ mod tests {
             ],
         );
 
-        assert!(!dashboard.show_filter);
+        assert_eq!(dashboard.pane_focus, PaneFocus::List);
         assert_eq!(dashboard.list_state.items.len(), 10);
 
         feed_keys(
@@ -667,7 +657,7 @@ mod tests {
             ],
         );
 
-        assert!(!dashboard.show_filter);
+        assert_eq!(dashboard.pane_focus, PaneFocus::List);
         assert_eq!(dashboard.list_state.items.len(), 10);
 
         feed_keys(
@@ -680,7 +670,7 @@ mod tests {
             ],
         );
 
-        assert!(!dashboard.show_filter);
+        assert_eq!(dashboard.pane_focus, PaneFocus::List);
         assert_eq!(dashboard.list_state.items.len(), 1);
     }
 
