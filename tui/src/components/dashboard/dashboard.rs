@@ -11,7 +11,7 @@ use httpretty::{command::Command, schema::types::Schema};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
     style::{Style, Stylize},
     text::Line,
     widgets::{Block, Borders, Clear, Padding, Paragraph, StatefulWidget, Widget, Wrap},
@@ -93,6 +93,7 @@ impl<'a> Dashboard<'a> {
                 .filter(|s| s.info.name.contains(&self.filter))
                 .collect(),
         );
+        self.list_state.select(None);
     }
 
     fn handle_filter_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
@@ -138,39 +139,61 @@ impl<'a> Dashboard<'a> {
                     })
                     .map(|schema| Command::SelectSchema(schema.clone())));
             }
-            KeyCode::Char('d') => self.pane_focus = PaneFocus::Prompt,
+            KeyCode::Char('d') => {
+                if self.list_state.selected().is_some() {
+                    self.pane_focus = PaneFocus::Prompt;
+                }
+            }
             KeyCode::Char('n') | KeyCode::Char('c') => {
                 self.pane_focus = PaneFocus::Form;
             }
-            KeyCode::Char('h') => self.list_state.select(
-                self.list_state
-                    .selected()
-                    .map(|i| i.saturating_sub(1))
-                    .or(None),
-            ),
-            KeyCode::Char('j') => self.list_state.select(
-                self.list_state
-                    .selected()
-                    .map(|i| {
-                        usize::min(
-                            self.schemas.len() - 1,
-                            i + self.list.items_per_row(&self.layout.schemas_pane),
-                        )
-                    })
-                    .or(None),
-            ),
-            KeyCode::Char('k') => self.list_state.select(
-                self.list_state
-                    .selected()
-                    .map(|i| i.saturating_sub(self.list.items_per_row(&self.layout.schemas_pane)))
-                    .or(None),
-            ),
-            KeyCode::Char('l') => self.list_state.select(
-                self.list_state
-                    .selected()
-                    .map(|i| usize::min(self.schemas.len() - 1, i + 1))
-                    .or(None),
-            ),
+            KeyCode::Char('h') => {
+                if !self.list_state.items.is_empty() {
+                    self.list_state.select(
+                        self.list_state
+                            .selected()
+                            .map(|i| i.saturating_sub(1))
+                            .or(Some(0)),
+                    );
+                }
+            }
+            KeyCode::Char('j') => {
+                if !self.list_state.items.is_empty() {
+                    self.list_state.select(
+                        self.list_state
+                            .selected()
+                            .map(|i| {
+                                usize::min(
+                                    self.schemas.len() - 1,
+                                    i + self.list.items_per_row(&self.layout.schemas_pane),
+                                )
+                            })
+                            .or(Some(0)),
+                    );
+                }
+            }
+            KeyCode::Char('k') => {
+                if !self.list_state.items.is_empty() {
+                    self.list_state.select(
+                        self.list_state
+                            .selected()
+                            .map(|i| {
+                                i.saturating_sub(self.list.items_per_row(&self.layout.schemas_pane))
+                            })
+                            .or(Some(0)),
+                    );
+                }
+            }
+            KeyCode::Char('l') => {
+                if !self.list_state.items.is_empty() {
+                    self.list_state.select(
+                        self.list_state
+                            .selected()
+                            .map(|i| usize::min(self.schemas.len() - 1, i + 1))
+                            .or(Some(0)),
+                    );
+                }
+            }
             KeyCode::Char('?') => self.pane_focus = PaneFocus::Help,
             KeyCode::Char('/') => self.pane_focus = PaneFocus::Filter,
             KeyCode::Char('q') => return Ok(Some(Command::Quit)),
@@ -354,22 +377,84 @@ impl<'a> Dashboard<'a> {
     fn build_filter_input(&self) -> Line<'_> {
         Line::from(format!("/{}", self.filter))
     }
+
+    fn build_title(&self) -> anyhow::Result<BigText<'_>> {
+        let title = BigText::builder()
+            .pixel_size(PixelSize::Quadrant)
+            .style(Style::default().fg(self.colors.normal.magenta.into()))
+            .lines(vec!["Select a collection".into()])
+            .alignment(Alignment::Center)
+            .build()?;
+
+        Ok(title)
+    }
+
+    fn build_no_matches_text(&self, size: Rect) -> anyhow::Result<(Rect, BigText<'_>)> {
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Fill(1),
+                Constraint::Length(8),
+                Constraint::Fill(1),
+            ])
+            .split(size)[1];
+
+        let no_matches = BigText::builder()
+            .pixel_size(PixelSize::Quadrant)
+            .style(Style::default().fg(self.colors.bright.black.into()))
+            .lines(vec!["No matches".into()])
+            .alignment(Alignment::Center)
+            .build()?;
+
+        Ok((layout, no_matches))
+    }
+
+    fn build_empty_message(&self, size: Rect) -> anyhow::Result<(Rect, BigText<'_>)> {
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .flex(Flex::Center)
+            .constraints([
+                Constraint::Fill(1),
+                Constraint::Length(8),
+                Constraint::Fill(1),
+            ])
+            .split(size)[1];
+
+        let empty_message = BigText::builder()
+            .pixel_size(PixelSize::Quadrant)
+            .style(Style::default().fg(self.colors.bright.black.into()))
+            .lines(vec!["No schemas".into()])
+            .alignment(Alignment::Center)
+            .build()?;
+
+        Ok((layout, empty_message))
+    }
 }
 
 impl Component for Dashboard<'_> {
     fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
-        let title = BigText::builder()
-            .pixel_size(PixelSize::Quadrant)
-            .style(Style::default().fg(self.colors.normal.magenta.into()))
-            .lines(vec![" Select a collection".into()])
-            .build()?;
+        let title = self.build_title()?;
 
         frame.render_widget(title, self.layout.title_pane);
-        frame.render_stateful_widget(
-            self.list.clone(),
-            self.layout.schemas_pane,
-            &mut self.list_state,
-        );
+
+        match (self.schemas.is_empty(), self.list_state.items.is_empty()) {
+            (false, false) => {
+                frame.render_stateful_widget(
+                    self.list.clone(),
+                    self.layout.schemas_pane,
+                    &mut self.list_state,
+                );
+            }
+            (false, true) => {
+                let (layout, no_matches) = self.build_no_matches_text(self.layout.schemas_pane)?;
+                frame.render_widget(no_matches, layout);
+            }
+            (true, true) => {
+                let (layout, no_schemas) = self.build_empty_message(self.layout.schemas_pane)?;
+                frame.render_widget(no_schemas, layout);
+            }
+            (true, false) => unreachable!(),
+        }
 
         if self.pane_focus == PaneFocus::Error {
             let popup = ErrorPopup::new(self.error_message.clone(), self.colors);
@@ -586,7 +671,7 @@ mod tests {
     }
 
     #[test]
-    fn test_moving_without_any_schemas() {
+    fn test_actions_without_any_schemas() {
         let size = Rect::new(0, 0, 80, 24);
         let colors = colors::Colors::default();
         let mut dashboard = Dashboard::new(size, &colors, vec![]).unwrap();
@@ -597,6 +682,7 @@ mod tests {
         feed_keys(
             &mut dashboard,
             &[
+                KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE),
                 KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE),
                 KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE),
                 KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE),
@@ -654,6 +740,8 @@ mod tests {
                 // enter filtering again and cancel with hotkey
                 KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
                 KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
+                KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
             ],
         );
 
@@ -787,5 +875,29 @@ mod tests {
 
         assert_eq!(dashboard.form_state.name, "Hello");
         assert_eq!(dashboard.form_state.description, "World");
+    }
+
+    #[test]
+    fn test_prompt_delete_schema() {
+        let size = Rect::new(0, 0, 80, 24);
+        let colors = colors::Colors::default();
+        let (_guard, path) = setup_temp_schemas(3);
+        let schemas = schema::schema::get_schemas(path).unwrap();
+
+        let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+
+        feed_keys(
+            &mut dashboard,
+            &[KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE)],
+        );
+
+        assert_eq!(dashboard.pane_focus, PaneFocus::Prompt);
+
+        feed_keys(
+            &mut dashboard,
+            &[KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE)],
+        );
+
+        assert_eq!(dashboard.pane_focus, PaneFocus::List);
     }
 }
