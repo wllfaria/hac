@@ -1,4 +1,4 @@
-use crossterm::event::{Event as CrosstermEvent, KeyEventKind, MouseEventKind};
+use crossterm::event::{Event as CrosstermEvent, KeyEventKind};
 use futures::{FutureExt, StreamExt};
 use ratatui::layout::Rect;
 use tokio::task::JoinHandle;
@@ -45,7 +45,9 @@ impl EventPool {
             let mut tick_interval = tokio::time::interval(tick_delay);
             let mut render_interval = tokio::time::interval(render_delay);
 
-            _event_tx.send(Event::Init).unwrap();
+            _event_tx
+                .send(Event::Init)
+                .expect("failed to send event through channel");
 
             loop {
                 let tick_delay = tick_interval.tick();
@@ -57,15 +59,12 @@ impl EventPool {
                         match maybe_event {
                             Some(Ok(CrosstermEvent::Key(key_event))) => {
                                 if key_event.kind == KeyEventKind::Press {
-                                    _event_tx.send(Event::Key(key_event)).unwrap();
+                                    _event_tx.send(Event::Key(key_event)).expect("failed to send event through channel");
                                 }
                             }
-                            Some(Ok(CrosstermEvent::Mouse(mouse_event))) => {
-                                if let MouseEventKind::Down(_) = mouse_event.kind {
-                                    _event_tx.send(Event::Mouse(mouse_event)).unwrap();
-                                }
-                            }
-                            Some(Ok(CrosstermEvent::Resize(width, height))) => _event_tx.send(Event::Resize(Rect::new(0, 0, width, height))).unwrap(),
+                            Some(Ok(CrosstermEvent::Resize(width, height))) => _event_tx
+                                .send(Event::Resize(Rect::new(0, 0, width, height)))
+                                .expect("failed to send event through channel"),
                             Some(Err(_)) => {}
                             Some(_) => {}
                             None => {}

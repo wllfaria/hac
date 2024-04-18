@@ -128,7 +128,8 @@ impl<'a> Dashboard<'a> {
         match key_event.code {
             KeyCode::Enter => {
                 return Ok(self
-                    .schemas
+                    .list_state
+                    .items
                     .is_empty()
                     .not()
                     .then(|| {
@@ -137,7 +138,10 @@ impl<'a> Dashboard<'a> {
                             .and_then(|i| self.schemas.get(i))
                             .expect("user should never be allowed to select a non existing schema")
                     })
-                    .map(|schema| Command::SelectSchema(schema.clone())));
+                    .map(|schema| {
+                        tracing::debug!("selected schema: {}", schema.info.name);
+                        Command::SelectSchema(schema.clone())
+                    }));
             }
             KeyCode::Char('d') => {
                 if self.list_state.selected().is_some() {

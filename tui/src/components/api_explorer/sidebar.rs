@@ -1,40 +1,32 @@
-use crate::components::Component;
-use httpretty::{
-    command::Command,
-    schema::{types::RequestKind, Schema},
-};
+use httpretty::schema::types::RequestKind;
 
-use crossterm::event::MouseEvent;
 use ratatui::{
+    buffer::Buffer,
     layout::Rect,
     style::{Style, Stylize},
     text::Line,
-    widgets::{Block, BorderType, Borders, Paragraph},
-    Frame,
+    widgets::{Block, BorderType, Borders, Paragraph, StatefulWidget, Widget},
 };
-use tokio::sync::mpsc::UnboundedSender;
+use std::collections::HashMap;
 
-use super::api_explorer::ApiExplorerActions;
-
-enum ItemKind {
-    Request(Item),
-    Dir(Directory),
+pub struct SidebarState<'a> {
+    requests: Option<&'a [RequestKind]>,
+    selected_request: Option<&'a str>,
+    dirs_expanded: &'a mut HashMap<String, bool>,
 }
 
-struct Directory {
-    pub expanded: bool,
-    pub name: String,
-    pub requests: Vec<ItemKind>,
-}
-
-struct Item {
-    name: String,
-    _method: String,
-    _uri: String,
-}
-
-pub struct SidebarState {
-    requests: Vec<ItemKind>,
+impl<'a> SidebarState<'a> {
+    pub fn new(
+        requests: Option<&'a [RequestKind]>,
+        selected_request: Option<&'a str>,
+        dirs_expanded: &'a mut HashMap<String, bool>,
+    ) -> Self {
+        SidebarState {
+            requests,
+            selected_request,
+            dirs_expanded,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -44,147 +36,123 @@ pub struct RenderLine {
     pub line: Line<'static>,
 }
 
-pub struct Sidebar {
-    state: SidebarState,
-    rendered_lines: Vec<RenderLine>,
-    action_sender: UnboundedSender<ApiExplorerActions>,
+pub struct Sidebar<'a> {
+    colors: &'a colors::Colors,
 }
 
-impl From<&RequestKind> for ItemKind {
-    fn from(value: &RequestKind) -> Self {
-        match value {
-            RequestKind::Single(req) => Self::Request(Item {
-                name: req.name.clone(),
-                _uri: req.uri.clone(),
-                _method: req.method.clone(),
-            }),
-            RequestKind::Directory(dir) => Self::Dir(Directory {
-                expanded: false,
-                name: dir.name.clone(),
-                requests: dir.requests.iter().map(Into::into).collect(),
-            }),
-        }
+impl<'a> Sidebar<'a> {
+    pub fn new(colors: &'a colors::Colors) -> Self {
+        Self { colors }
     }
-}
 
-impl From<Vec<RequestKind>> for SidebarState {
-    fn from(value: Vec<RequestKind>) -> Self {
-        Self {
-            requests: value.iter().map(Into::into).collect(),
-        }
-    }
-}
-
-impl From<Schema> for SidebarState {
-    fn from(value: Schema) -> Self {
-        Self {
-            requests: value
-                .requests
-                .unwrap_or_default()
-                .iter()
-                .map(Into::into)
-                .collect(),
-        }
-    }
-}
-
-impl Sidebar {
-    pub fn new(state: SidebarState, action_sender: UnboundedSender<ApiExplorerActions>) -> Self {
-        Self {
-            state,
-            action_sender,
-            rendered_lines: vec![],
-        }
-    }
-}
-
-impl Component for Sidebar {
-    fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
-        let lines = build_lines(&self.state.requests, 0);
-        self.rendered_lines.clone_from(&lines);
-
-        let p = Paragraph::new(lines.iter().map(|l| l.line.clone()).collect::<Vec<Line>>()).block(
+    fn build_sidebar(&self, lines: &[RenderLine]) -> Paragraph<'_> {
+        Paragraph::new(lines.iter().map(|l| l.line.clone()).collect::<Vec<Line>>()).block(
             Block::default()
                 .borders(Borders::ALL)
                 .title("Requests")
                 .border_style(Style::default().gray().dim())
                 .border_type(BorderType::Rounded),
+        )
+    }
+}
+
+impl<'a> StatefulWidget for Sidebar<'a> {
+    type State = SidebarState<'a>;
+
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+        let lines = build_lines(
+            state.requests,
+            0,
+            state.selected_request,
+            state.dirs_expanded,
+            self.colors,
         );
+        let requests = self.build_sidebar(&lines);
 
-        frame.render_widget(p, size);
-
-        Ok(())
-    }
-
-    fn handle_mouse_event(&mut self, mouse_event: MouseEvent) -> anyhow::Result<Option<Command>> {
-        if mouse_event.row.gt(&0) {
-            if let Some(line) = self
-                .rendered_lines
-                .get_mut(mouse_event.row.saturating_sub(1) as usize)
-            {
-                match find_item(&mut self.state.requests, &line.name, line.level, 0) {
-                    (Some(dir), false) => dir.expanded = !dir.expanded,
-                    (_, true) => {
-                        self.action_sender
-                            .send(ApiExplorerActions::SelectRequest(line.clone()))?;
-                    }
-                    _ => (),
-                }
-            }
-        }
-        Ok(None)
+        requests.render(area, buf);
     }
 }
 
-fn find_item<'a>(
-    items: &'a mut [ItemKind],
-    needle: &str,
-    needle_level: usize,
+// fn find_item<'a>(
+//     items: &'a mut [ItemKind],
+//     needle: &str,
+//     needle_level: usize,
+//     level: usize,
+// ) -> (Option<&'a mut Directory>, bool) {
+//     for item in items {
+//         match item {
+//             ItemKind::Dir(dir) => match (dir.name == needle, needle_level == level) {
+//                 (true, true) => return (Some(dir), false),
+//                 (_, _) if level < needle_level => {
+//                     return find_item(&mut dir.requests, needle, needle_level, level + 1)
+//                 }
+//                 _ => continue,
+//             },
+//             ItemKind::Request(req) => match (req.name == needle, needle_level == level) {
+//                 (true, true) => return (None, true),
+//                 _ => continue,
+//             },
+//         };
+//     }
+//     (None, false)
+// }
+
+fn build_lines(
+    requests: Option<&[RequestKind]>,
     level: usize,
-) -> (Option<&'a mut Directory>, bool) {
-    for item in items {
-        match item {
-            ItemKind::Dir(dir) => match (dir.name == needle, needle_level == level) {
-                (true, true) => return (Some(dir), false),
-                (_, _) if level < needle_level => {
-                    return find_item(&mut dir.requests, needle, needle_level, level + 1)
-                }
-                _ => continue,
-            },
-            ItemKind::Request(req) => match (req.name == needle, needle_level == level) {
-                (true, true) => return (None, true),
-                _ => continue,
-            },
-        };
-    }
-    (None, false)
-}
-
-fn build_lines(requests: &[ItemKind], level: usize) -> Vec<RenderLine> {
+    selected_request: Option<&str>,
+    dirs_expanded: &mut HashMap<String, bool>,
+    colors: &colors::Colors,
+) -> Vec<RenderLine> {
     requests
+        .unwrap_or_default()
         .iter()
         .flat_map(|item| match item {
-            ItemKind::Dir(dir) => {
+            RequestKind::Nested(dir) => {
+                let item_id = format!("{}{}", level, dir.name);
+                let expanded = dirs_expanded.entry(item_id).or_insert(true);
+
+                let dir_fg = if *expanded {
+                    colors.normal.magenta
+                } else {
+                    colors.normal.yellow
+                };
+
                 let gap = " ".repeat(level * 2);
-                let chevron = if dir.expanded { "v" } else { ">" };
+                let chevron = if *expanded { "v" } else { ">" };
                 let line = vec![RenderLine {
                     level,
                     name: dir.name.clone(),
-                    line: format!("{}{} {}", gap, chevron, dir.name).into(),
+                    line: format!("{}{} {}", gap, chevron, dir.name)
+                        .bold()
+                        .fg(dir_fg)
+                        .into(),
                 }];
-                let nested_lines = if dir.expanded {
-                    build_lines(&dir.requests, level + 1)
+                let nested_lines = if *expanded {
+                    build_lines(
+                        Some(&dir.requests),
+                        level + 1,
+                        selected_request,
+                        dirs_expanded,
+                        colors,
+                    )
                 } else {
                     vec![]
                 };
                 line.into_iter().chain(nested_lines).collect::<Vec<_>>()
             }
-            ItemKind::Request(req) => {
+            RequestKind::Single(req) => {
                 let gap = " ".repeat(level * 2);
+                let item_id = format!("{}{}", level, req.name);
+                let req_fg = if selected_request.is_some_and(|name| name == item_id) {
+                    colors.normal.magenta
+                } else {
+                    colors.normal.white
+                };
                 vec![RenderLine {
                     level,
                     name: req.name.clone(),
-                    line: format!("{}{}", gap, req.name.clone()).into(),
+                    line: format!("{}{}", gap, req.name.clone()).fg(req_fg).into(),
                 }]
             }
         })

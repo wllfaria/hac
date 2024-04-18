@@ -8,7 +8,7 @@ pub mod terminal_too_small;
 use crate::event_pool::Event;
 use httpretty::command::Command;
 
-use crossterm::event::{KeyEvent, MouseEvent};
+use crossterm::event::KeyEvent;
 use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -18,7 +18,6 @@ pub trait Component {
     fn handle_event(&mut self, event: Option<Event>) -> anyhow::Result<Option<Command>> {
         let action = match event {
             Some(Event::Key(key_event)) => self.handle_key_event(key_event)?,
-            Some(Event::Mouse(mouse_event)) => self.handle_mouse_event(mouse_event)?,
             _ => None,
         };
 
@@ -30,11 +29,6 @@ pub trait Component {
 
     #[allow(unused_variables)]
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
-        Ok(None)
-    }
-
-    #[allow(unused_variables)]
-    fn handle_mouse_event(&mut self, mouse_event: MouseEvent) -> anyhow::Result<Option<Command>> {
         Ok(None)
     }
 

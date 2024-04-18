@@ -14,7 +14,16 @@ pub struct Schema {
 #[serde(untagged)]
 pub enum RequestKind {
     Single(Request),
-    Directory(Directory),
+    Nested(Directory),
+}
+
+impl RequestKind {
+    pub fn get_name(&self) -> &str {
+        match self {
+            RequestKind::Single(req) => &req.name,
+            RequestKind::Nested(req) => &req.name,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]

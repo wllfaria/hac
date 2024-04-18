@@ -47,7 +47,7 @@ impl<'a> App<'a> {
                             if let Err(e) = result {
                                 command_tx
                                     .send(Command::Error(format!("Failed to draw: {:?}", e)))
-                                    .unwrap();
+                                    .expect("failed to send command through channel");
                             }
                         })?;
                     }
@@ -55,7 +55,9 @@ impl<'a> App<'a> {
                 };
 
                 if let Some(command) = self.screen_manager.handle_event(Some(event.clone()))? {
-                    command_tx.send(command).expect("failed to send")
+                    command_tx
+                        .send(command)
+                        .expect("failed to send command through channel")
                 }
             }
 

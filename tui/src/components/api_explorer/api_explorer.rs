@@ -1,117 +1,274 @@
-use crate::{
-    components::api_explorer::{
-        layout::{build_layout, EditorLayout},
+use crate::components::{
+    api_explorer::{
+        req_builder::ReqBuilder,
         req_editor::ReqEditor,
-        sidebar::Sidebar,
+        sidebar::{Sidebar, SidebarState},
     },
-    components::Component,
+    Component,
 };
+use crossterm::event::{KeyCode, KeyEvent};
 use httpretty::{
     command::Command,
-    schema::types::{Request, RequestKind, Schema},
+    schema::types::{RequestKind, Schema},
 };
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use ratatui::{layout::Rect, Frame};
-use tokio::sync::mpsc::UnboundedReceiver;
+use ratatui::{
+    layout::{Constraint, Direction, Layout, Rect},
+    widgets::StatefulWidget,
+    Frame,
+};
+use std::collections::HashMap;
 
-use super::{req_builder::ReqBuilder, sidebar::RenderLine};
+pub struct EditorLayout {
+    pub sidebar: Rect,
+    pub req_builder: Rect,
+    pub req_editor: Rect,
+    pub _request_preview: Rect,
+}
+
+enum VisitNode {
+    Next,
+    Prev,
+}
 
 #[derive(Debug)]
-pub enum ApiExplorerActions {
-    SelectRequest(RenderLine),
+enum PaneFocus {
+    Sidebar,
 }
 
-pub struct ApiExplorer {
-    sidebar: Sidebar,
+pub struct ApiExplorer<'a> {
     layout: EditorLayout,
     schema: Schema,
+
+    focus: PaneFocus,
+
+    selected_request: Option<String>,
+    dirs_expanded: HashMap<String, bool>,
+
     req_editor: ReqEditor,
     req_builder: ReqBuilder,
-    selected_request: Option<Request>,
-    action_rx: UnboundedReceiver<ApiExplorerActions>,
+    colors: &'a colors::Colors,
 }
 
-impl ApiExplorer {
-    pub fn new(size: Rect, schema: Schema) -> Self {
+impl<'a> ApiExplorer<'a> {
+    pub fn new(size: Rect, schema: Schema, colors: &'a colors::Colors) -> Self {
         let layout = build_layout(size);
-        let (action_tx, action_rx) = tokio::sync::mpsc::unbounded_channel::<ApiExplorerActions>();
+        let selected_request = schema.requests.as_ref().and_then(|requests| {
+            requests.first().map(|schema| match schema {
+                RequestKind::Single(req) => format!("{}{}", 0, req.name),
+                RequestKind::Nested(req) => format!("{}{}", 0, req.name),
+            })
+        });
 
         Self {
-            sidebar: Sidebar::new(schema.clone().into(), action_tx.clone()),
-            req_builder: ReqBuilder::new(layout.req_builder),
-            layout,
             schema,
-            selected_request: None,
+
+            selected_request,
+            dirs_expanded: HashMap::default(),
+
+            focus: PaneFocus::Sidebar,
+
+            req_builder: ReqBuilder::new(layout.req_builder),
             req_editor: ReqEditor::default(),
-            action_rx,
+
+            layout,
+            colors,
         }
     }
 
-    fn update(&mut self, line: RenderLine) {
-        if let Some(req) = self
-            .schema
-            .requests
-            .as_ref()
-            .and_then(|requests| find_request_on_schema(requests, &line, 0))
-        {
-            self.selected_request = Some(req)
+    fn handle_sidebar_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
+        match key_event.code {
+            KeyCode::Char('j') => {
+                if let Some(id) = &self.selected_request {
+                    let mut found = false;
+                    let mut visited = vec![];
+
+                    visit_node(
+                        id,
+                        self.schema.requests.as_ref().expect(
+                            "should never have a selected request without any requests on schema",
+                        ),
+                        0,
+                        &mut found,
+                        &mut visited,
+                        &VisitNode::Next,
+                        &self.dirs_expanded,
+                    );
+
+                    self.selected_request = visited.pop();
+                }
+            }
+            KeyCode::Char('k') => {
+                if let Some(id) = &self.selected_request {
+                    let mut found = false;
+                    let mut visited = vec![];
+
+                    visit_node(
+                        id,
+                        self.schema.requests.as_ref().expect(
+                            "should never have a selected request without any requests on schema",
+                        ),
+                        0,
+                        &mut found,
+                        &mut visited,
+                        &VisitNode::Prev,
+                        &self.dirs_expanded,
+                    );
+
+                    tracing::debug!("current: {id} found: {found} visited: {visited:?}");
+                    self.selected_request = visited.pop().or(Some(id.clone()));
+                };
+            }
+            _ => {}
         }
+
+        Ok(None)
     }
 }
 
-fn find_request_on_schema(
-    requests: &[RequestKind],
-    line: &RenderLine,
-    level: usize,
-) -> Option<Request> {
-    requests.iter().find_map(|req| match req {
-        RequestKind::Directory(dir) => find_request_on_schema(&dir.requests, line, level + 1),
-        RequestKind::Single(req) if req.name == line.name && line.level == level => {
-            Some(req.clone())
-        }
-        _ => None,
-    })
-}
-
-impl Component for ApiExplorer {
-    #[tracing::instrument(level = tracing::Level::TRACE, skip_all, target = "editor")]
+impl Component for ApiExplorer<'_> {
+    #[tracing::instrument(skip_all, target = "api_explorer")]
     fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
         self.req_builder.draw(frame, self.layout.req_builder)?;
-        self.sidebar.draw(frame, self.layout.sidebar)?;
-        self.req_editor.draw(frame, self.layout.req_editor)?;
 
-        while let Ok(action) = self.action_rx.try_recv() {
-            tracing::debug!("handling user action {action:?}");
-            match action {
-                ApiExplorerActions::SelectRequest(line) => self.update(line),
-            }
-        }
+        let mut state = SidebarState::new(
+            self.schema.requests.as_deref(),
+            self.selected_request.as_deref(),
+            &mut self.dirs_expanded,
+        );
+
+        Sidebar::new(self.colors).render(self.layout.sidebar, frame.buffer_mut(), &mut state);
+
+        self.req_editor.draw(frame, self.layout.req_editor)?;
 
         Ok(())
     }
 
     fn resize(&mut self, new_size: Rect) {
         self.layout = build_layout(new_size);
-        self.req_editor.resize(new_size);
-        self.req_builder.resize(new_size);
-        self.sidebar.resize(new_size);
     }
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
-        match (key_event.code, key_event.modifiers) {
-            (KeyCode::Char('q'), KeyModifiers::CONTROL) => Ok(Some(Command::Quit)),
-            _ => Ok(None),
-        }
-    }
+        match self.focus {
+            PaneFocus::Sidebar => self.handle_sidebar_key_event(key_event),
+        };
 
-    fn handle_mouse_event(&mut self, mouse_event: MouseEvent) -> anyhow::Result<Option<Command>> {
-        if let MouseEventKind::Down(MouseButton::Left) = mouse_event.kind {
-            let click = Rect::new(mouse_event.column, mouse_event.row, 1, 1);
-            if click.intersects(self.layout.sidebar) {
-                self.sidebar.handle_mouse_event(mouse_event)?;
-            }
-        }
         Ok(None)
+    }
+}
+
+pub fn build_layout(size: Rect) -> EditorLayout {
+    let [sidebar, right_pane] = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Length(30), Constraint::Fill(1)])
+        .areas(size);
+
+    let [url, request_builder] = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(3), Constraint::Fill(1)])
+        .areas(right_pane);
+
+    let [request_builder, request_preview] = if size.width < 80 {
+        Layout::default()
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .direction(Direction::Vertical)
+            .areas(request_builder)
+    } else {
+        Layout::default()
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .direction(Direction::Horizontal)
+            .areas(request_builder)
+    };
+
+    EditorLayout {
+        sidebar,
+        req_builder: url,
+        req_editor: request_builder,
+        _request_preview: request_preview,
+    }
+}
+
+fn visit_node(
+    selected: &str,
+    tree: &[RequestKind],
+    level: usize,
+    found: &mut bool,
+    visited: &mut Vec<String>,
+    visit: &VisitNode,
+    dirs_expanded: &HashMap<String, bool>,
+) {
+    for node in tree.iter() {
+        match node {
+            RequestKind::Single(node) => {
+                let node_id = format!("{}{}", level, node.name);
+
+                if *found {
+                    visited.push(node_id);
+                    break;
+                }
+
+                match (selected == node_id, visit) {
+                    (true, VisitNode::Next) => *found = true,
+                    (true, VisitNode::Prev) => {
+                        *found = true;
+                        break;
+                    }
+                    _ => {}
+                }
+
+                visited.push(node_id);
+            }
+            RequestKind::Nested(node) => {
+                let node_id = format!("{}{}", level, node.name);
+
+                if *found {
+                    visited.push(node_id);
+                    break;
+                }
+
+                let expanded = dirs_expanded
+                    .get(&node_id)
+                    .expect("should never have a non-registered dir");
+
+                match (selected == node_id, visit, expanded) {
+                    (true, VisitNode::Next, true) => {
+                        *found = true;
+                        visited.push(node_id);
+                        if !node.requests.is_empty() {
+                            visit_node(
+                                selected,
+                                &node.requests,
+                                level + 1,
+                                found,
+                                visited,
+                                visit,
+                                dirs_expanded,
+                            );
+                            break;
+                        }
+                    }
+                    (true, VisitNode::Next, false) => {
+                        *found = true;
+                        visited.push(node_id);
+                    }
+                    (true, VisitNode::Prev, _) => {
+                        *found = true;
+                        break;
+                    }
+                    _ => {
+                        visited.push(node_id);
+                        visit_node(
+                            selected,
+                            &node.requests,
+                            level + 1,
+                            found,
+                            visited,
+                            visit,
+                            dirs_expanded,
+                        );
+                    }
+                }
+            }
+        };
     }
 }
