@@ -1,19 +1,22 @@
-use httpretty::schema::types::RequestKind;
+use httpretty::schema::types::{RequestKind, RequestMethod};
 
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::{Style, Stylize},
-    text::Line,
+    style::{Style, Styled, Stylize},
+    text::{Line, Span},
     widgets::{Block, BorderType, Borders, Paragraph, StatefulWidget, Widget},
 };
 use std::collections::HashMap;
+
+use crate::components::api_explorer::api_explorer::NodeKind;
 
 use super::api_explorer::NodeId;
 
 pub struct SidebarState<'a> {
     requests: Option<&'a [RequestKind]>,
     selected_request: Option<&'a NodeId>,
+    hovered_requet: Option<&'a NodeId>,
     dirs_expanded: &'a mut HashMap<NodeId, bool>,
 }
 
@@ -21,11 +24,13 @@ impl<'a> SidebarState<'a> {
     pub fn new(
         requests: Option<&'a [RequestKind]>,
         selected_request: Option<&'a NodeId>,
+        hovered_requet: Option<&'a NodeId>,
         dirs_expanded: &'a mut HashMap<NodeId, bool>,
     ) -> Self {
         SidebarState {
             requests,
             selected_request,
+            hovered_requet,
             dirs_expanded,
         }
     }
@@ -66,6 +71,7 @@ impl<'a> StatefulWidget for Sidebar<'a> {
             state.requests,
             0,
             state.selected_request,
+            state.hovered_requet,
             state.dirs_expanded,
             self.colors,
         );
@@ -75,34 +81,11 @@ impl<'a> StatefulWidget for Sidebar<'a> {
     }
 }
 
-// fn find_item<'a>(
-//     items: &'a mut [ItemKind],
-//     needle: &str,
-//     needle_level: usize,
-//     level: usize,
-// ) -> (Option<&'a mut Directory>, bool) {
-//     for item in items {
-//         match item {
-//             ItemKind::Dir(dir) => match (dir.name == needle, needle_level == level) {
-//                 (true, true) => return (Some(dir), false),
-//                 (_, _) if level < needle_level => {
-//                     return find_item(&mut dir.requests, needle, needle_level, level + 1)
-//                 }
-//                 _ => continue,
-//             },
-//             ItemKind::Request(req) => match (req.name == needle, needle_level == level) {
-//                 (true, true) => return (None, true),
-//                 _ => continue,
-//             },
-//         };
-//     }
-//     (None, false)
-// }
-
 fn build_lines(
     requests: Option<&[RequestKind]>,
     level: usize,
     selected_request: Option<&NodeId>,
+    hovered_request: Option<&NodeId>,
     dirs_expanded: &mut HashMap<NodeId, bool>,
     colors: &colors::Colors,
 ) -> Vec<RenderLine> {
@@ -111,30 +94,32 @@ fn build_lines(
         .iter()
         .flat_map(|item| match item {
             RequestKind::Nested(dir) => {
-                let item_id = NodeId::new(level, &dir.name);
-                let expanded = dirs_expanded.entry(item_id).or_insert(false);
+                let item_id = NodeId::new(level, &dir.name, NodeKind::Nested);
+                let is_selected = selected_request.is_some_and(|req| *req == item_id);
+                let is_hovered = hovered_request.is_some_and(|req| *req == item_id);
+                let is_expanded = dirs_expanded.entry(item_id).or_insert(false);
 
-                let dir_fg = if *expanded {
-                    colors.normal.magenta
-                } else {
-                    colors.normal.yellow
+                let dir_style = match (is_selected, is_hovered) {
+                    (true, _) => Style::default().fg(colors.normal.magenta.into()).bold(),
+                    (_, true) => Style::default().fg(colors.normal.yellow.into()).bold(),
+                    (false, false) => Style::default().fg(colors.normal.white.into()).bold(),
                 };
 
                 let gap = " ".repeat(level * 2);
-                let chevron = if *expanded { "v" } else { ">" };
+                let chevron = if *is_expanded { "v" } else { ">" };
                 let line = vec![RenderLine {
                     level,
                     name: dir.name.clone(),
                     line: format!("{}{} {}", gap, chevron, dir.name)
-                        .bold()
-                        .fg(dir_fg)
+                        .set_style(dir_style)
                         .into(),
                 }];
-                let nested_lines = if *expanded {
+                let nested_lines = if *is_expanded {
                     build_lines(
                         Some(&dir.requests),
                         level + 1,
                         selected_request,
+                        hovered_request,
                         dirs_expanded,
                         colors,
                     )
@@ -145,18 +130,38 @@ fn build_lines(
             }
             RequestKind::Single(req) => {
                 let gap = " ".repeat(level * 2);
-                let item_id = NodeId::new(level, &req.name);
-                let req_fg = if selected_request.is_some_and(|name| *name == item_id) {
-                    colors.normal.magenta
-                } else {
-                    colors.normal.white
+                let item_id = NodeId::new(level, &req.name, NodeKind::Single);
+                let is_selected = selected_request.is_some_and(|req| *req == item_id);
+                let is_hovered = hovered_request.is_some_and(|req| *req == item_id);
+
+                let req_style = match (is_selected, is_hovered) {
+                    (true, _) => Style::default().fg(colors.normal.magenta.into()),
+                    (_, true) => Style::default().fg(colors.normal.yellow.into()),
+                    (false, false) => Style::default().fg(colors.normal.white.into()),
                 };
+
+                let line = vec![
+                    Span::from(gap.clone()),
+                    colored_method(req.method.clone(), colors),
+                    Span::from(format!(" {}", req.name.clone())).set_style(req_style),
+                ];
+
                 vec![RenderLine {
                     level,
                     name: req.name.clone(),
-                    line: format!("{}{}", gap, req.name.clone()).fg(req_fg).into(),
+                    line: line.into(),
                 }]
             }
         })
         .collect()
+}
+
+fn colored_method(method: RequestMethod, colors: &colors::Colors) -> Span<'static> {
+    match method {
+        RequestMethod::Get => "GET   ".fg(colors.normal.green).bold(),
+        RequestMethod::Post => "POST  ".fg(colors.normal.blue).bold(),
+        RequestMethod::Put => "PUT   ".fg(colors.normal.yellow).bold(),
+        RequestMethod::Patch => "PATCH ".fg(colors.normal.cyan).bold(),
+        RequestMethod::Delete => "DELETE".fg(colors.normal.red).bold(),
+    }
 }

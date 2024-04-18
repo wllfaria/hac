@@ -27,8 +27,18 @@ impl RequestKind {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum RequestMethod {
+    Get,
+    Post,
+    Put,
+    Patch,
+    Delete,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 pub struct Request {
-    pub method: String,
+    pub method: RequestMethod,
     pub name: String,
     pub uri: String,
 }

@@ -27,6 +27,29 @@ pub struct ExplorerLayout {
     pub _request_preview: Rect,
 }
 
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+pub struct NodeId {
+    level: usize,
+    name: String,
+    kind: NodeKind,
+}
+
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+pub enum NodeKind {
+    Nested,
+    Single,
+}
+
+impl NodeId {
+    pub fn new(level: usize, name: &str, kind: NodeKind) -> Self {
+        NodeId {
+            level,
+            name: name.to_owned(),
+            kind,
+        }
+    }
+}
+
 #[derive(PartialEq)]
 enum VisitNode {
     Next,
@@ -45,6 +68,8 @@ pub struct ApiExplorer<'a> {
     focus: PaneFocus,
 
     selected_request: Option<NodeId>,
+    hovered_request: Option<NodeId>,
+
     dirs_expanded: HashMap<NodeId, bool>,
 
     req_editor: ReqEditor,
@@ -55,14 +80,17 @@ pub struct ApiExplorer<'a> {
 impl<'a> ApiExplorer<'a> {
     pub fn new(size: Rect, schema: Schema, colors: &'a colors::Colors) -> Self {
         let layout = build_layout(size);
-        let selected_request = schema
-            .requests
-            .as_ref()
-            .and_then(|requests| requests.first().map(|node| NodeId::new(0, node.get_name())));
+        let selected_request = schema.requests.as_ref().and_then(|requests| {
+            requests.first().map(|node| match node {
+                RequestKind::Single(_) => NodeId::new(0, node.get_name(), NodeKind::Single),
+                RequestKind::Nested(_) => NodeId::new(0, node.get_name(), NodeKind::Nested),
+            })
+        });
 
         Self {
             schema,
 
+            hovered_request: selected_request.clone(),
             selected_request,
             dirs_expanded: HashMap::default(),
 
@@ -79,29 +107,40 @@ impl<'a> ApiExplorer<'a> {
     #[tracing::instrument(skip_all, err)]
     fn handle_sidebar_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         match key_event.code {
-            KeyCode::Enter => if let Some(ref _id) = self.selected_request {},
+            KeyCode::Enter => {
+                if let Some(ref hovered) = self.hovered_request {
+                    if hovered.kind == NodeKind::Nested {
+                        let entry = self.dirs_expanded.entry(hovered.clone()).or_insert(false);
+                        *entry = !*entry;
+                    } else {
+                        self.selected_request = Some(hovered.clone());
+                    }
+                }
+            }
             KeyCode::Char('j') => {
-                if let Some(ref id) = self.selected_request {
-                    self.selected_request = find_next_entry(
+                if let Some(ref id) = self.hovered_request {
+                    self.hovered_request = find_next_entry(
                         self.schema.requests.as_ref().context(
                             "should never have a selected request without any requests on schema",
                         )?,
                         VisitNode::Next,
                         &self.dirs_expanded,
                         id,
-                    );
+                    )
+                    .or(Some(id.clone()));
                 }
             }
             KeyCode::Char('k') => {
-                if let Some(ref id) = self.selected_request {
-                    self.selected_request = find_next_entry(
+                if let Some(ref id) = self.hovered_request {
+                    self.hovered_request = find_next_entry(
                         self.schema.requests.as_ref().context(
                             "should never have a selected request without any requests on schema",
                         )?,
                         VisitNode::Prev,
                         &self.dirs_expanded,
                         id,
-                    );
+                    )
+                    .or(Some(id.clone()));
                 };
             }
             _ => {}
@@ -119,6 +158,7 @@ impl Component for ApiExplorer<'_> {
         let mut state = SidebarState::new(
             self.schema.requests.as_deref(),
             self.selected_request.as_ref(),
+            self.hovered_request.as_ref(),
             &mut self.dirs_expanded,
         );
 
@@ -173,21 +213,6 @@ pub fn build_layout(size: Rect) -> ExplorerLayout {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
-pub struct NodeId {
-    level: usize,
-    name: String,
-}
-
-impl NodeId {
-    pub fn new(level: usize, name: &str) -> Self {
-        NodeId {
-            level,
-            name: name.to_owned(),
-        }
-    }
-}
-
 fn traverse(
     found: &mut bool,
     level: usize,
@@ -197,7 +222,10 @@ fn traverse(
     needle: &NodeId,
     path: &mut Vec<NodeId>,
 ) -> bool {
-    let node_id = NodeId::new(level, current.get_name());
+    let node_id = match current {
+        RequestKind::Single(_) => NodeId::new(level, current.get_name(), NodeKind::Single),
+        RequestKind::Nested(_) => NodeId::new(level, current.get_name(), NodeKind::Nested),
+    };
     let node_match = node_id == *needle;
 
     match (&visit, node_match, &found) {
@@ -262,19 +290,19 @@ fn find_next_entry(
         }
     }
 
-    found.then(|| path.pop().unwrap())
+    found.then(|| path.pop()).flatten()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use httpretty::schema::types::{Directory, Request};
+    use httpretty::schema::types::{Directory, Request, RequestMethod};
     use std::collections::HashMap;
 
     fn create_test_tree() -> Vec<RequestKind> {
         vec![
             RequestKind::Single(Request {
-                method: "GET".to_string(),
+                method: RequestMethod::Get,
                 name: "Root1".to_string(),
                 uri: "/root1".to_string(),
             }),
@@ -282,19 +310,19 @@ mod tests {
                 name: "Nested1".to_string(),
                 requests: vec![
                     RequestKind::Single(Request {
-                        method: "POST".to_string(),
+                        method: RequestMethod::Post,
                         name: "Child1".to_string(),
                         uri: "/nested1/child1".to_string(),
                     }),
                     RequestKind::Single(Request {
-                        method: "PUT".to_string(),
+                        method: RequestMethod::Put,
                         name: "Child2".to_string(),
                         uri: "/nested1/child2".to_string(),
                     }),
                 ],
             }),
             RequestKind::Single(Request {
-                method: "DELETE".to_string(),
+                method: RequestMethod::Delete,
                 name: "Root2".to_string(),
                 uri: "/root2".to_string(),
             }),
@@ -305,9 +333,9 @@ mod tests {
     fn test_visit_next_no_expanded() {
         let tree = create_test_tree();
         let mut dirs_expanded = HashMap::new();
-        dirs_expanded.insert(NodeId::new(0, "Nested1"), false);
-        let needle = NodeId::new(0, "Nested1");
-        let expected = Some(NodeId::new(0, "Root2"));
+        dirs_expanded.insert(NodeId::new(0, "Nested1", NodeKind::Nested), false);
+        let needle = NodeId::new(0, "Nested1", NodeKind::Nested);
+        let expected = Some(NodeId::new(0, "Root2", NodeKind::Single));
 
         let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle);
 
@@ -319,9 +347,9 @@ mod tests {
     fn test_visit_node_nested_next() {
         let tree = create_test_tree();
         let mut dirs_expanded = HashMap::new();
-        dirs_expanded.insert(NodeId::new(0, "Nested1"), true);
-        let needle = NodeId::new(0, "Nested1");
-        let expected = Some(NodeId::new(1, "Child1"));
+        dirs_expanded.insert(NodeId::new(0, "Nested1", NodeKind::Nested), true);
+        let needle = NodeId::new(0, "Nested1", NodeKind::Nested);
+        let expected = Some(NodeId::new(1, "Child1", NodeKind::Single));
 
         let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle);
 
@@ -333,8 +361,8 @@ mod tests {
     fn test_visit_node_no_match() {
         let tree = create_test_tree();
         let mut dirs_expanded = HashMap::new();
-        dirs_expanded.insert(NodeId::new(0, "Nested1"), true);
-        let needle = NodeId::new(0, "NoMatch");
+        dirs_expanded.insert(NodeId::new(0, "Nested1", NodeKind::Nested), true);
+        let needle = NodeId::new(0, "NoMatch", NodeKind::Single);
         let expected = None;
 
         let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle);
@@ -347,9 +375,9 @@ mod tests {
     fn test_visit_node_nested_prev() {
         let tree = create_test_tree();
         let mut dirs_expanded = HashMap::new();
-        dirs_expanded.insert(NodeId::new(0, "Nested1"), true);
-        let needle = NodeId::new(1, "Child1");
-        let expected = Some(NodeId::new(0, "Nested1"));
+        dirs_expanded.insert(NodeId::new(0, "Nested1", NodeKind::Nested), true);
+        let needle = NodeId::new(1, "Child1", NodeKind::Single);
+        let expected = Some(NodeId::new(0, "Nested1", NodeKind::Nested));
 
         let next = find_next_entry(&tree, VisitNode::Prev, &dirs_expanded, &needle);
 
@@ -361,9 +389,9 @@ mod tests {
     fn test_visit_prev_into_nested() {
         let tree = create_test_tree();
         let mut dirs_expanded = HashMap::new();
-        dirs_expanded.insert(NodeId::new(0, "Nested1"), true);
-        let needle = NodeId::new(0, "Root2");
-        let expected = Some(NodeId::new(1, "Child2"));
+        dirs_expanded.insert(NodeId::new(0, "Nested1", NodeKind::Nested), true);
+        let needle = NodeId::new(0, "Root2", NodeKind::Single);
+        let expected = Some(NodeId::new(1, "Child2", NodeKind::Single));
 
         let next = find_next_entry(&tree, VisitNode::Prev, &dirs_expanded, &needle);
 
@@ -375,7 +403,7 @@ mod tests {
     fn test_empty_tree() {
         let tree = vec![];
         let dirs_expanded = HashMap::new();
-        let needle = NodeId::new(0, "Root2");
+        let needle = NodeId::new(0, "Root2", NodeKind::Single);
         let expected = None;
 
         let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle);
