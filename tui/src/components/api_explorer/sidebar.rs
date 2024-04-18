@@ -9,17 +9,19 @@ use ratatui::{
 };
 use std::collections::HashMap;
 
+use super::api_explorer::NodeId;
+
 pub struct SidebarState<'a> {
     requests: Option<&'a [RequestKind]>,
-    selected_request: Option<&'a str>,
-    dirs_expanded: &'a mut HashMap<String, bool>,
+    selected_request: Option<&'a NodeId>,
+    dirs_expanded: &'a mut HashMap<NodeId, bool>,
 }
 
 impl<'a> SidebarState<'a> {
     pub fn new(
         requests: Option<&'a [RequestKind]>,
-        selected_request: Option<&'a str>,
-        dirs_expanded: &'a mut HashMap<String, bool>,
+        selected_request: Option<&'a NodeId>,
+        dirs_expanded: &'a mut HashMap<NodeId, bool>,
     ) -> Self {
         SidebarState {
             requests,
@@ -100,8 +102,8 @@ impl<'a> StatefulWidget for Sidebar<'a> {
 fn build_lines(
     requests: Option<&[RequestKind]>,
     level: usize,
-    selected_request: Option<&str>,
-    dirs_expanded: &mut HashMap<String, bool>,
+    selected_request: Option<&NodeId>,
+    dirs_expanded: &mut HashMap<NodeId, bool>,
     colors: &colors::Colors,
 ) -> Vec<RenderLine> {
     requests
@@ -109,8 +111,8 @@ fn build_lines(
         .iter()
         .flat_map(|item| match item {
             RequestKind::Nested(dir) => {
-                let item_id = format!("{}{}", level, dir.name);
-                let expanded = dirs_expanded.entry(item_id).or_insert(true);
+                let item_id = NodeId::new(level, &dir.name);
+                let expanded = dirs_expanded.entry(item_id).or_insert(false);
 
                 let dir_fg = if *expanded {
                     colors.normal.magenta
@@ -143,8 +145,8 @@ fn build_lines(
             }
             RequestKind::Single(req) => {
                 let gap = " ".repeat(level * 2);
-                let item_id = format!("{}{}", level, req.name);
-                let req_fg = if selected_request.is_some_and(|name| name == item_id) {
+                let item_id = NodeId::new(level, &req.name);
+                let req_fg = if selected_request.is_some_and(|name| *name == item_id) {
                     colors.normal.magenta
                 } else {
                     colors.normal.white

@@ -26,6 +26,7 @@ pub struct EditorLayout {
     pub _request_preview: Rect,
 }
 
+#[derive(PartialEq)]
 enum VisitNode {
     Next,
     Prev,
@@ -42,8 +43,8 @@ pub struct ApiExplorer<'a> {
 
     focus: PaneFocus,
 
-    selected_request: Option<String>,
-    dirs_expanded: HashMap<String, bool>,
+    selected_request: Option<NodeId>,
+    dirs_expanded: HashMap<NodeId, bool>,
 
     req_editor: ReqEditor,
     req_builder: ReqBuilder,
@@ -53,12 +54,10 @@ pub struct ApiExplorer<'a> {
 impl<'a> ApiExplorer<'a> {
     pub fn new(size: Rect, schema: Schema, colors: &'a colors::Colors) -> Self {
         let layout = build_layout(size);
-        let selected_request = schema.requests.as_ref().and_then(|requests| {
-            requests.first().map(|schema| match schema {
-                RequestKind::Single(req) => format!("{}{}", 0, req.name),
-                RequestKind::Nested(req) => format!("{}{}", 0, req.name),
-            })
-        });
+        let selected_request = schema
+            .requests
+            .as_ref()
+            .and_then(|requests| requests.first().map(|node| NodeId::new(0, node.get_name())));
 
         Self {
             schema,
@@ -78,45 +77,29 @@ impl<'a> ApiExplorer<'a> {
 
     fn handle_sidebar_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         match key_event.code {
+            KeyCode::Enter => if let Some(ref _id) = self.selected_request {},
             KeyCode::Char('j') => {
-                if let Some(id) = &self.selected_request {
-                    let mut found = false;
-                    let mut visited = vec![];
-
-                    visit_node(
-                        id,
+                if let Some(ref id) = self.selected_request {
+                    self.selected_request = find_next_entry(
                         self.schema.requests.as_ref().expect(
                             "should never have a selected request without any requests on schema",
                         ),
-                        0,
-                        &mut found,
-                        &mut visited,
-                        &VisitNode::Next,
+                        VisitNode::Next,
                         &self.dirs_expanded,
+                        id,
                     );
-
-                    self.selected_request = visited.pop();
                 }
             }
             KeyCode::Char('k') => {
-                if let Some(id) = &self.selected_request {
-                    let mut found = false;
-                    let mut visited = vec![];
-
-                    visit_node(
-                        id,
+                if let Some(ref id) = self.selected_request {
+                    self.selected_request = find_next_entry(
                         self.schema.requests.as_ref().expect(
                             "should never have a selected request without any requests on schema",
                         ),
-                        0,
-                        &mut found,
-                        &mut visited,
-                        &VisitNode::Prev,
+                        VisitNode::Prev,
                         &self.dirs_expanded,
+                        id,
                     );
-
-                    tracing::debug!("current: {id} found: {found} visited: {visited:?}");
-                    self.selected_request = visited.pop().or(Some(id.clone()));
                 };
             }
             _ => {}
@@ -133,7 +116,7 @@ impl Component for ApiExplorer<'_> {
 
         let mut state = SidebarState::new(
             self.schema.requests.as_deref(),
-            self.selected_request.as_deref(),
+            self.selected_request.as_ref(),
             &mut self.dirs_expanded,
         );
 
@@ -149,7 +132,7 @@ impl Component for ApiExplorer<'_> {
     }
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
-        match self.focus {
+        _ = match self.focus {
             PaneFocus::Sidebar => self.handle_sidebar_key_event(key_event),
         };
 
@@ -188,87 +171,214 @@ pub fn build_layout(size: Rect) -> EditorLayout {
     }
 }
 
-fn visit_node(
-    selected: &str,
-    tree: &[RequestKind],
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+pub struct NodeId {
     level: usize,
+    name: String,
+}
+
+impl NodeId {
+    pub fn new(level: usize, name: &str) -> Self {
+        NodeId {
+            level,
+            name: name.to_owned(),
+        }
+    }
+}
+
+fn traverse(
     found: &mut bool,
-    visited: &mut Vec<String>,
+    level: usize,
     visit: &VisitNode,
-    dirs_expanded: &HashMap<String, bool>,
-) {
-    for node in tree.iter() {
-        match node {
-            RequestKind::Single(node) => {
-                let node_id = format!("{}{}", level, node.name);
+    dirs_expanded: &HashMap<NodeId, bool>,
+    current: &RequestKind,
+    needle: &NodeId,
+    path: &mut Vec<NodeId>,
+) -> bool {
+    let node_id = NodeId::new(level, current.get_name());
+    let node_match = node_id == *needle;
 
-                if *found {
-                    visited.push(node_id);
-                    break;
-                }
+    match (&visit, node_match, &found) {
+        // We are looking for the next item and we already found the current one (needle), so the
+        // current item must be the next... we add it to the path and return found = true
+        (VisitNode::Next, false, true) => {
+            path.push(node_id);
+            return *found;
+        }
+        // We are looking for the previous item and we just found the current one (needle), so we
+        // simply return found = true as we dont want the current one on the path
+        (VisitNode::Prev, true, false) => {
+            *found = true;
+            return *found;
+        }
+        // We are looking for the next and just found the current one, so we set the flag to
+        // true in order to know when to return the next.
+        (VisitNode::Next, true, false) => *found = true,
+        _ => {}
+    }
 
-                match (selected == node_id, visit) {
-                    (true, VisitNode::Next) => *found = true,
-                    (true, VisitNode::Prev) => {
-                        *found = true;
-                        break;
-                    }
-                    _ => {}
-                }
+    // visit the node in order to have the full traversed path...
+    path.push(node_id.clone());
 
-                visited.push(node_id);
+    if let RequestKind::Nested(dir) = current {
+        // if we are on a collapsed directory we should not recurse into its children
+        if !dirs_expanded.get(&node_id).unwrap() {
+            return false;
+        }
+
+        // recurse into children when expanded
+        for node in dir.requests.iter() {
+            if traverse(found, level + 1, visit, dirs_expanded, node, needle, path) {
+                return true;
             }
-            RequestKind::Nested(node) => {
-                let node_id = format!("{}{}", level, node.name);
+        }
+    }
 
-                if *found {
-                    visited.push(node_id);
-                    break;
-                }
+    false
+}
 
-                let expanded = dirs_expanded
-                    .get(&node_id)
-                    .expect("should never have a non-registered dir");
+fn find_next_entry(
+    tree: &[RequestKind],
+    visit: VisitNode,
+    dirs_expanded: &HashMap<NodeId, bool>,
+    needle: &NodeId,
+) -> Option<NodeId> {
+    let mut found = false;
+    let mut path = vec![];
 
-                match (selected == node_id, visit, expanded) {
-                    (true, VisitNode::Next, true) => {
-                        *found = true;
-                        visited.push(node_id);
-                        if !node.requests.is_empty() {
-                            visit_node(
-                                selected,
-                                &node.requests,
-                                level + 1,
-                                found,
-                                visited,
-                                visit,
-                                dirs_expanded,
-                            );
-                            break;
-                        }
-                    }
-                    (true, VisitNode::Next, false) => {
-                        *found = true;
-                        visited.push(node_id);
-                    }
-                    (true, VisitNode::Prev, _) => {
-                        *found = true;
-                        break;
-                    }
-                    _ => {
-                        visited.push(node_id);
-                        visit_node(
-                            selected,
-                            &node.requests,
-                            level + 1,
-                            found,
-                            visited,
-                            visit,
-                            dirs_expanded,
-                        );
-                    }
-                }
-            }
-        };
+    for node in tree {
+        if traverse(
+            &mut found,
+            0,
+            &visit,
+            dirs_expanded,
+            node,
+            needle,
+            &mut path,
+        ) {
+            break;
+        }
+    }
+
+    found.then(|| path.pop().unwrap())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use httpretty::schema::types::{Directory, Request};
+    use std::collections::HashMap;
+
+    fn create_test_tree() -> Vec<RequestKind> {
+        vec![
+            RequestKind::Single(Request {
+                method: "GET".to_string(),
+                name: "Root1".to_string(),
+                uri: "/root1".to_string(),
+            }),
+            RequestKind::Nested(Directory {
+                name: "Nested1".to_string(),
+                requests: vec![
+                    RequestKind::Single(Request {
+                        method: "POST".to_string(),
+                        name: "Child1".to_string(),
+                        uri: "/nested1/child1".to_string(),
+                    }),
+                    RequestKind::Single(Request {
+                        method: "PUT".to_string(),
+                        name: "Child2".to_string(),
+                        uri: "/nested1/child2".to_string(),
+                    }),
+                ],
+            }),
+            RequestKind::Single(Request {
+                method: "DELETE".to_string(),
+                name: "Root2".to_string(),
+                uri: "/root2".to_string(),
+            }),
+        ]
+    }
+
+    #[test]
+    fn test_visit_next_no_expanded() {
+        let tree = create_test_tree();
+        let mut dirs_expanded = HashMap::new();
+        dirs_expanded.insert(NodeId::new(0, "Nested1"), false);
+        let needle = NodeId::new(0, "Nested1");
+        let expected = Some(NodeId::new(0, "Root2"));
+
+        let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle);
+
+        assert!(next.is_some());
+        assert_eq!(next, expected);
+    }
+
+    #[test]
+    fn test_visit_node_nested_next() {
+        let tree = create_test_tree();
+        let mut dirs_expanded = HashMap::new();
+        dirs_expanded.insert(NodeId::new(0, "Nested1"), true);
+        let needle = NodeId::new(0, "Nested1");
+        let expected = Some(NodeId::new(1, "Child1"));
+
+        let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle);
+
+        assert!(next.is_some());
+        assert_eq!(next, expected);
+    }
+
+    #[test]
+    fn test_visit_node_no_match() {
+        let tree = create_test_tree();
+        let mut dirs_expanded = HashMap::new();
+        dirs_expanded.insert(NodeId::new(0, "Nested1"), true);
+        let needle = NodeId::new(0, "NoMatch");
+        let expected = None;
+
+        let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle);
+
+        assert!(next.is_none());
+        assert_eq!(next, expected);
+    }
+
+    #[test]
+    fn test_visit_node_nested_prev() {
+        let tree = create_test_tree();
+        let mut dirs_expanded = HashMap::new();
+        dirs_expanded.insert(NodeId::new(0, "Nested1"), true);
+        let needle = NodeId::new(1, "Child1");
+        let expected = Some(NodeId::new(0, "Nested1"));
+
+        let next = find_next_entry(&tree, VisitNode::Prev, &dirs_expanded, &needle);
+
+        assert!(next.is_some());
+        assert_eq!(next, expected);
+    }
+
+    #[test]
+    fn test_visit_prev_into_nested() {
+        let tree = create_test_tree();
+        let mut dirs_expanded = HashMap::new();
+        dirs_expanded.insert(NodeId::new(0, "Nested1"), true);
+        let needle = NodeId::new(0, "Root2");
+        let expected = Some(NodeId::new(1, "Child2"));
+
+        let next = find_next_entry(&tree, VisitNode::Prev, &dirs_expanded, &needle);
+
+        assert!(next.is_some());
+        assert_eq!(next, expected);
+    }
+
+    #[test]
+    fn test_empty_tree() {
+        let tree = vec![];
+        let dirs_expanded = HashMap::new();
+        let needle = NodeId::new(0, "Root2");
+        let expected = None;
+
+        let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle);
+
+        assert!(next.is_none());
+        assert_eq!(next, expected);
     }
 }

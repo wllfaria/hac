@@ -10,7 +10,7 @@ pub struct Schema {
     pub path: PathBuf,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(untagged)]
 pub enum RequestKind {
     Single(Request),
@@ -26,14 +26,14 @@ impl RequestKind {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 pub struct Request {
     pub method: String,
     pub name: String,
     pub uri: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 pub struct Directory {
     pub name: String,
     pub requests: Vec<RequestKind>,
