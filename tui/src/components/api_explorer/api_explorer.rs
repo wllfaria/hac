@@ -6,6 +6,7 @@ use crate::components::{
     },
     Component,
 };
+use anyhow::Context;
 use crossterm::event::{KeyCode, KeyEvent};
 use httpretty::{
     command::Command,
@@ -19,7 +20,7 @@ use ratatui::{
 };
 use std::collections::HashMap;
 
-pub struct EditorLayout {
+pub struct ExplorerLayout {
     pub sidebar: Rect,
     pub req_builder: Rect,
     pub req_editor: Rect,
@@ -38,7 +39,7 @@ enum PaneFocus {
 }
 
 pub struct ApiExplorer<'a> {
-    layout: EditorLayout,
+    layout: ExplorerLayout,
     schema: Schema,
 
     focus: PaneFocus,
@@ -75,15 +76,16 @@ impl<'a> ApiExplorer<'a> {
         }
     }
 
+    #[tracing::instrument(skip_all, err)]
     fn handle_sidebar_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         match key_event.code {
             KeyCode::Enter => if let Some(ref _id) = self.selected_request {},
             KeyCode::Char('j') => {
                 if let Some(ref id) = self.selected_request {
                     self.selected_request = find_next_entry(
-                        self.schema.requests.as_ref().expect(
+                        self.schema.requests.as_ref().context(
                             "should never have a selected request without any requests on schema",
-                        ),
+                        )?,
                         VisitNode::Next,
                         &self.dirs_expanded,
                         id,
@@ -93,9 +95,9 @@ impl<'a> ApiExplorer<'a> {
             KeyCode::Char('k') => {
                 if let Some(ref id) = self.selected_request {
                     self.selected_request = find_next_entry(
-                        self.schema.requests.as_ref().expect(
+                        self.schema.requests.as_ref().context(
                             "should never have a selected request without any requests on schema",
-                        ),
+                        )?,
                         VisitNode::Prev,
                         &self.dirs_expanded,
                         id,
@@ -140,7 +142,7 @@ impl Component for ApiExplorer<'_> {
     }
 }
 
-pub fn build_layout(size: Rect) -> EditorLayout {
+pub fn build_layout(size: Rect) -> ExplorerLayout {
     let [sidebar, right_pane] = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Length(30), Constraint::Fill(1)])
@@ -163,7 +165,7 @@ pub fn build_layout(size: Rect) -> EditorLayout {
             .areas(request_builder)
     };
 
-    EditorLayout {
+    ExplorerLayout {
         sidebar,
         req_builder: url,
         req_editor: request_builder,
