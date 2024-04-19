@@ -150,7 +150,7 @@ impl<'a> Dashboard<'a> {
             KeyCode::Char('n') | KeyCode::Char('c') => {
                 self.pane_focus = PaneFocus::Form;
             }
-            KeyCode::Char('h') => {
+            KeyCode::Char('h') | KeyCode::Left => {
                 if !self.list_state.items.is_empty() {
                     self.list_state.select(
                         self.list_state
@@ -160,7 +160,7 @@ impl<'a> Dashboard<'a> {
                     );
                 }
             }
-            KeyCode::Char('j') => {
+            KeyCode::Char('j') | KeyCode::Down => {
                 if !self.list_state.items.is_empty() {
                     self.list_state.select(
                         self.list_state
@@ -175,7 +175,7 @@ impl<'a> Dashboard<'a> {
                     );
                 }
             }
-            KeyCode::Char('k') => {
+            KeyCode::Char('k') | KeyCode::Up => {
                 if !self.list_state.items.is_empty() {
                     self.list_state.select(
                         self.list_state
@@ -187,7 +187,7 @@ impl<'a> Dashboard<'a> {
                     );
                 }
             }
-            KeyCode::Char('l') => {
+            KeyCode::Char('l') | KeyCode::Right => {
                 if !self.list_state.items.is_empty() {
                     self.list_state.select(
                         self.list_state
@@ -317,7 +317,7 @@ impl<'a> Dashboard<'a> {
     }
 
     fn build_hint_text(&self) -> Line<'static> {
-        "[j/k -> up/down] [n -> new] [enter -> select item] [? -> help] [<C-c> -> quit]"
+        "[h/j/k/l to move] [n -> new] [enter -> select item] [? -> help] [<C-c> -> quit]"
             .fg(self.colors.normal.magenta)
             .to_centered_line()
     }
@@ -657,13 +657,13 @@ mod tests {
     fn test_build_layout() {
         let size = Rect::new(0, 0, 80, 24);
         let expected = DashboardLayout {
-            schemas_pane: Rect::new(0, 6, 80, 17),
-            help_pane: Rect::new(0, 23, 80, 1),
-            title_pane: Rect::new(0, 1, 80, 5),
-            help_popup: Rect::new(20, 5, 40, 14),
-            confirm_popup: Rect::new(20, 8, 40, 8),
-            form_popup: Rect::new(20, 5, 40, 14),
-            error_popup: Rect::new(20, 2, 40, 20),
+            schemas_pane: Rect::new(1, 6, 79, 17),
+            help_pane: Rect::new(1, 23, 79, 1),
+            title_pane: Rect::new(1, 1, 79, 5),
+            help_popup: Rect::new(14, 5, 50, 14),
+            confirm_popup: Rect::new(19, 8, 39, 8),
+            form_popup: Rect::new(19, 5, 39, 14),
+            error_popup: Rect::new(19, 2, 39, 20),
         };
 
         let layout = build_layout(size);

@@ -6,8 +6,8 @@ use ratatui::{
     layout::{Constraint, Direction, Flex, Layout, Rect},
     style::{Style, Stylize},
     widgets::{
-        Block, BorderType, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation,
-        ScrollbarState, StatefulWidget, Widget,
+        Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+        StatefulWidget, Widget,
     },
 };
 

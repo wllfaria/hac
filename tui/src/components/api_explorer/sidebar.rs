@@ -1,4 +1,4 @@
-use httpretty::schema::types::{RequestKind, RequestMethod};
+use httpretty::schema::types::{Request, RequestKind, RequestMethod};
 
 use ratatui::{
     buffer::Buffer,
@@ -9,29 +9,28 @@ use ratatui::{
 };
 use std::collections::HashMap;
 
-use crate::components::api_explorer::api_explorer::NodeKind;
-
-use super::api_explorer::NodeId;
-
 pub struct SidebarState<'a> {
     requests: Option<&'a [RequestKind]>,
-    selected_request: Option<&'a NodeId>,
-    hovered_requet: Option<&'a NodeId>,
-    dirs_expanded: &'a mut HashMap<NodeId, bool>,
+    selected_request: Option<&'a Request>,
+    hovered_requet: Option<&'a RequestKind>,
+    dirs_expanded: &'a mut HashMap<RequestKind, bool>,
+    is_focused: bool,
 }
 
 impl<'a> SidebarState<'a> {
     pub fn new(
         requests: Option<&'a [RequestKind]>,
-        selected_request: Option<&'a NodeId>,
-        hovered_requet: Option<&'a NodeId>,
-        dirs_expanded: &'a mut HashMap<NodeId, bool>,
+        selected_request: Option<&'a Request>,
+        hovered_requet: Option<&'a RequestKind>,
+        dirs_expanded: &'a mut HashMap<RequestKind, bool>,
+        is_focused: bool,
     ) -> Self {
         SidebarState {
             requests,
             selected_request,
             hovered_requet,
             dirs_expanded,
+            is_focused,
         }
     }
 }
@@ -73,11 +72,17 @@ impl<'a> StatefulWidget for Sidebar<'a> {
             .map(|l| l.line.clone())
             .collect::<Vec<Paragraph>>();
 
+        let block_border = if state.is_focused {
+            Style::default().fg(self.colors.bright.magenta.into())
+        } else {
+            // TODO: we need better border colors
+            Style::default().fg(self.colors.primary.hover.into())
+        };
+
         let block = Block::default()
             .borders(Borders::ALL)
             .title("Requests")
-            .border_style(Style::default().gray().dim())
-            .bg(self.colors.normal.black.into());
+            .border_style(block_border);
 
         block.render(area, buf);
 
@@ -91,9 +96,9 @@ impl<'a> StatefulWidget for Sidebar<'a> {
 fn build_lines(
     requests: Option<&[RequestKind]>,
     level: usize,
-    selected_request: Option<&NodeId>,
-    hovered_request: Option<&NodeId>,
-    dirs_expanded: &mut HashMap<NodeId, bool>,
+    selected_request: Option<&Request>,
+    hovered_request: Option<&RequestKind>,
+    dirs_expanded: &mut HashMap<RequestKind, bool>,
     colors: &colors::Colors,
 ) -> Vec<RenderLine> {
     requests
@@ -101,9 +106,8 @@ fn build_lines(
         .iter()
         .flat_map(|item| match item {
             RequestKind::Nested(dir) => {
-                let item_id = NodeId::new(level, &dir.name, NodeKind::Nested);
-                let is_hovered = hovered_request.is_some_and(|req| *req == item_id);
-                let is_expanded = dirs_expanded.entry(item_id).or_insert(false);
+                let is_hovered = hovered_request.is_some_and(|req| *req == *item);
+                let is_expanded = dirs_expanded.entry(item.clone()).or_insert(false);
 
                 let dir_style = match is_hovered {
                     true => Style::default()
@@ -143,9 +147,8 @@ fn build_lines(
             }
             RequestKind::Single(req) => {
                 let gap = " ".repeat(level * 2);
-                let item_id = NodeId::new(level, &req.name, NodeKind::Single);
-                let is_selected = selected_request.is_some_and(|req| *req == item_id);
-                let is_hovered = hovered_request.is_some_and(|req| *req == item_id);
+                let is_selected = selected_request.is_some_and(|selected| *selected == *req);
+                let is_hovered = hovered_request.is_some_and(|req| *req == *item);
 
                 let req_style = match (is_selected, is_hovered) {
                     (true, true) => Style::default()
