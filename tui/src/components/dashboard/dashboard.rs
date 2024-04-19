@@ -42,7 +42,7 @@ pub struct Dashboard<'a> {
     colors: &'a colors::Colors,
     filter: String,
     pane_focus: PaneFocus,
-    sender: Option<UnboundedSender<Command>>,
+    command_sender: Option<UnboundedSender<Command>>,
     error_message: String,
 }
 
@@ -73,7 +73,7 @@ impl<'a> Dashboard<'a> {
             schemas,
             list: SchemaList::new(colors),
             filter: String::new(),
-            sender: None,
+            command_sender: None,
             error_message: String::default(),
             pane_focus: PaneFocus::List,
         })
@@ -223,7 +223,7 @@ impl<'a> Dashboard<'a> {
                     let description = self.form_state.description.clone();
 
                     let sender_copy = self
-                        .sender
+                        .command_sender
                         .clone()
                         .expect("should always have a sender at this point");
 
@@ -400,18 +400,15 @@ impl<'a> Dashboard<'a> {
         Line::from(format!("/{}", self.filter))
     }
 
-    fn build_title(&self) -> anyhow::Result<BigText<'_>> {
-        let title = BigText::builder()
-            .pixel_size(PixelSize::Quadrant)
-            .style(Style::default().fg(self.colors.bright.magenta.into()))
-            .lines(vec!["Select a collection".into()])
-            .alignment(Alignment::Center)
-            .build()?;
-
-        Ok(title)
+    fn draw_schemas_list(&mut self, frame: &mut Frame) {
+        frame.render_stateful_widget(
+            self.list.clone(),
+            self.layout.schemas_pane,
+            &mut self.list_state,
+        );
     }
 
-    fn build_no_matches_text(&self, size: Rect) -> anyhow::Result<(Rect, BigText<'_>)> {
+    fn draw_no_matches_text(&self, frame: &mut Frame) -> anyhow::Result<()> {
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -419,20 +416,22 @@ impl<'a> Dashboard<'a> {
                 Constraint::Length(8),
                 Constraint::Fill(1),
             ])
-            .split(size)[1];
+            .split(self.layout.schemas_pane)[1];
 
         let no_matches = BigText::builder()
             .pixel_size(PixelSize::Quadrant)
-            .style(Style::default().fg(self.colors.bright.black.into()))
+            .style(Style::default().fg(self.colors.normal.magenta.into()))
             .lines(vec!["No matches".into()])
             .alignment(Alignment::Center)
             .build()?;
 
-        Ok((layout, no_matches))
+        frame.render_widget(no_matches, layout);
+
+        Ok(())
     }
 
-    fn build_empty_message(&self, size: Rect) -> anyhow::Result<(Rect, BigText<'_>)> {
-        let layout = Layout::default()
+    fn draw_empty_message(&self, frame: &mut Frame) -> anyhow::Result<()> {
+        let size = Layout::default()
             .direction(Direction::Vertical)
             .flex(Flex::Center)
             .constraints([
@@ -440,16 +439,18 @@ impl<'a> Dashboard<'a> {
                 Constraint::Length(8),
                 Constraint::Fill(1),
             ])
-            .split(size)[1];
+            .split(self.layout.schemas_pane)[1];
 
         let empty_message = BigText::builder()
             .pixel_size(PixelSize::Quadrant)
-            .style(Style::default().fg(self.colors.bright.black.into()))
+            .style(Style::default().fg(self.colors.normal.magenta.into()))
             .lines(vec!["No schemas".into()])
             .alignment(Alignment::Center)
             .build()?;
 
-        Ok((layout, empty_message))
+        frame.render_widget(empty_message, size);
+
+        Ok(())
     }
 
     fn draw_background(&self, size: Rect, frame: &mut Frame) {
@@ -459,87 +460,87 @@ impl<'a> Dashboard<'a> {
             size,
         );
     }
+
+    fn draw_error_popup(&self, frame: &mut Frame) {
+        let popup = ErrorPopup::new(self.error_message.clone(), self.colors);
+        popup.render(self.layout.error_popup, frame.buffer_mut());
+    }
+
+    fn draw_form_popup(&mut self, frame: &mut Frame) {
+        let form = NewCollectionForm::new(self.colors);
+        form.render(
+            self.layout.form_popup,
+            frame.buffer_mut(),
+            &mut self.form_state,
+        );
+    }
+
+    fn draw_filter_line(&self, frame: &mut Frame) {
+        let filter_input = self.build_filter_input();
+        frame.render_widget(filter_input, self.layout.help_pane);
+    }
+
+    fn draw_delete_prompt(&self, frame: &mut Frame) {
+        let selected_index = self
+            .list_state
+            .selected()
+            .expect("attempted to open confirm popup without an item selected");
+        let selected_item_name = &self
+            .schemas
+            .get(selected_index)
+            .expect("should never be able to have an out of bounds selection")
+            .info
+            .name;
+
+        let confirm_popup = ConfirmPopup::new(
+            format!(
+                "You really want to delete collection {}?",
+                selected_item_name
+            ),
+            self.colors,
+        );
+        confirm_popup.render(self.layout.confirm_popup, frame.buffer_mut());
+    }
+
+    fn draw_hint_text(&self, frame: &mut Frame) {
+        let hint_text = self.build_hint_text();
+        frame.render_widget(hint_text, self.layout.help_pane);
+    }
+
+    fn draw_title(&self, frame: &mut Frame) -> anyhow::Result<()> {
+        let title = BigText::builder()
+            .pixel_size(PixelSize::Quadrant)
+            .style(Style::default().fg(self.colors.bright.magenta.into()))
+            .lines(vec!["Select a collection".into()])
+            .alignment(Alignment::Center)
+            .build()?;
+        frame.render_widget(title, self.layout.title_pane);
+        Ok(())
+    }
 }
 
 impl Component for Dashboard<'_> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         self.draw_background(size, frame);
-
-        let title = self.build_title()?;
-        frame.render_widget(title, self.layout.title_pane);
+        self.draw_title(frame)?;
 
         match (self.schemas.is_empty(), self.list_state.items.is_empty()) {
-            (false, false) => {
-                frame.render_stateful_widget(
-                    self.list.clone(),
-                    self.layout.schemas_pane,
-                    &mut self.list_state,
-                );
-            }
-            (false, true) => {
-                let (layout, no_matches) = self.build_no_matches_text(self.layout.schemas_pane)?;
-                frame.render_widget(no_matches, layout);
-            }
-            (true, true) => {
-                let (layout, no_schemas) = self.build_empty_message(self.layout.schemas_pane)?;
-                frame.render_widget(no_schemas, layout);
-            }
+            (false, false) => self.draw_schemas_list(frame),
+            (false, true) => self.draw_no_matches_text(frame)?,
+            (true, true) => self.draw_empty_message(frame)?,
             (true, false) => unreachable!(),
         }
 
-        if self.pane_focus == PaneFocus::Error {
-            let popup = ErrorPopup::new(self.error_message.clone(), self.colors);
-            popup.render(self.layout.error_popup, frame.buffer_mut());
-        }
-
-        if self.pane_focus == PaneFocus::Form {
-            let form = NewCollectionForm::new(self.colors);
-            form.render(
-                self.layout.form_popup,
-                frame.buffer_mut(),
-                &mut self.form_state,
-            );
-        }
-
-        if self.pane_focus == PaneFocus::Filter {
-            let filter_input = self.build_filter_input();
-            frame.render_widget(filter_input, self.layout.help_pane);
-        } else {
-            let hint_text = self.build_hint_text();
-            frame.render_widget(hint_text, self.layout.help_pane);
-        }
-
-        if self.pane_focus == PaneFocus::Help {
-            self.draw_help_popup(size, frame);
-        }
-
-        if self.pane_focus == PaneFocus::Prompt {
-            let selected_index = self
-                .list_state
-                .selected()
-                .expect("attempted to open confirm popup without an item selected");
-            let selected_item_name = &self
-                .schemas
-                .get(selected_index)
-                .expect("should never be able to have an out of bounds selection")
-                .info
-                .name;
-
-            let confirm_popup = ConfirmPopup::new(
-                format!(
-                    "You really want to delete collection {}?",
-                    selected_item_name
-                ),
-                self.colors,
-            );
-            confirm_popup.render(self.layout.confirm_popup, frame.buffer_mut());
+        match self.pane_focus {
+            PaneFocus::Error => self.draw_error_popup(frame),
+            PaneFocus::Form => self.draw_form_popup(frame),
+            PaneFocus::Filter => self.draw_filter_line(frame),
+            PaneFocus::Help => self.draw_help_popup(size, frame),
+            PaneFocus::Prompt => self.draw_delete_prompt(frame),
+            PaneFocus::List => self.draw_hint_text(frame),
         }
 
         Ok(())
-    }
-
-    fn resize(&mut self, new_size: Rect) {
-        self.layout = build_layout(new_size);
     }
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
@@ -557,8 +558,12 @@ impl Component for Dashboard<'_> {
     }
 
     fn register_command_handler(&mut self, sender: UnboundedSender<Command>) -> anyhow::Result<()> {
-        self.sender = Some(sender.clone());
+        self.command_sender = Some(sender.clone());
         Ok(())
+    }
+
+    fn resize(&mut self, new_size: Rect) {
+        self.layout = build_layout(new_size);
     }
 }
 
