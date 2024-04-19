@@ -11,6 +11,9 @@ pub struct Colors {
 #[derive(Debug)]
 pub struct PrimaryColors {
     pub foreground: Color,
+    pub background: Color,
+    pub accent: Color,
+    pub hover: Color,
 }
 
 #[derive(Debug)]
@@ -60,6 +63,21 @@ impl Default for PrimaryColors {
                 g: 0xCE,
                 b: 0xCE,
             },
+            background: Color::Rgb {
+                r: 0x0B,
+                g: 0x0E,
+                b: 0x14,
+            },
+            accent: Color::Rgb {
+                r: 0x12,
+                g: 0x21,
+                b: 0x32,
+            },
+            hover: Color::Rgb {
+                r: 0x1A,
+                g: 0x1F,
+                b: 0x29,
+            },
         }
     }
 }
@@ -68,9 +86,9 @@ impl Default for NormalColors {
     fn default() -> Self {
         NormalColors {
             black: Color::Rgb {
-                r: 0x10,
-                g: 0x13,
-                b: 0x17,
+                r: 0x0B,
+                g: 0x0E,
+                b: 0x14,
             },
             red: Color::Rgb {
                 r: 0xF8,

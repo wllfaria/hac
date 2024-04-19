@@ -5,7 +5,7 @@ use ratatui::{
     layout::Rect,
     style::{Style, Styled, Stylize},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Paragraph, StatefulWidget, Widget},
+    widgets::{Block, Borders, Paragraph, StatefulWidget, Widget},
 };
 use std::collections::HashMap;
 
@@ -40,7 +40,7 @@ impl<'a> SidebarState<'a> {
 pub struct RenderLine {
     pub level: usize,
     pub name: String,
-    pub line: Line<'static>,
+    pub line: Paragraph<'static>,
 }
 
 pub struct Sidebar<'a> {
@@ -50,16 +50,6 @@ pub struct Sidebar<'a> {
 impl<'a> Sidebar<'a> {
     pub fn new(colors: &'a colors::Colors) -> Self {
         Self { colors }
-    }
-
-    fn build_sidebar(&self, lines: &[RenderLine]) -> Paragraph<'_> {
-        Paragraph::new(lines.iter().map(|l| l.line.clone()).collect::<Vec<Line>>()).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Requests")
-                .border_style(Style::default().gray().dim())
-                .border_type(BorderType::Rounded),
-        )
     }
 }
 
@@ -75,9 +65,26 @@ impl<'a> StatefulWidget for Sidebar<'a> {
             state.dirs_expanded,
             self.colors,
         );
-        let requests = self.build_sidebar(&lines);
 
-        requests.render(area, buf);
+        let mut requests_size = Rect::new(area.x + 1, area.y, area.width.saturating_sub(2), 1);
+
+        let requests = lines
+            .iter()
+            .map(|l| l.line.clone())
+            .collect::<Vec<Paragraph>>();
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title("Requests")
+            .border_style(Style::default().gray().dim())
+            .bg(self.colors.normal.black.into());
+
+        block.render(area, buf);
+
+        requests.iter().for_each(|req| {
+            requests_size.y += 1;
+            req.render(requests_size, buf);
+        });
     }
 }
 
@@ -95,14 +102,15 @@ fn build_lines(
         .flat_map(|item| match item {
             RequestKind::Nested(dir) => {
                 let item_id = NodeId::new(level, &dir.name, NodeKind::Nested);
-                let is_selected = selected_request.is_some_and(|req| *req == item_id);
                 let is_hovered = hovered_request.is_some_and(|req| *req == item_id);
                 let is_expanded = dirs_expanded.entry(item_id).or_insert(false);
 
-                let dir_style = match (is_selected, is_hovered) {
-                    (true, _) => Style::default().fg(colors.normal.magenta.into()).bold(),
-                    (_, true) => Style::default().fg(colors.normal.yellow.into()).bold(),
-                    (false, false) => Style::default().fg(colors.normal.white.into()).bold(),
+                let dir_style = match is_hovered {
+                    true => Style::default()
+                        .fg(colors.normal.white.into())
+                        .bg(colors.primary.hover.into())
+                        .bold(),
+                    false => Style::default().fg(colors.normal.white.into()).bold(),
                 };
 
                 let gap = " ".repeat(level * 2);
@@ -110,10 +118,15 @@ fn build_lines(
                 let line = vec![RenderLine {
                     level,
                     name: dir.name.clone(),
-                    line: format!("{}{} {}", gap, chevron, dir.name)
-                        .set_style(dir_style)
-                        .into(),
+                    line: Paragraph::new(format!(
+                        "{}{} {}/",
+                        gap,
+                        chevron,
+                        dir.name.to_lowercase().replace(' ', "-")
+                    ))
+                    .set_style(dir_style),
                 }];
+
                 let nested_lines = if *is_expanded {
                     build_lines(
                         Some(&dir.requests),
@@ -135,21 +148,29 @@ fn build_lines(
                 let is_hovered = hovered_request.is_some_and(|req| *req == item_id);
 
                 let req_style = match (is_selected, is_hovered) {
-                    (true, _) => Style::default().fg(colors.normal.magenta.into()),
-                    (_, true) => Style::default().fg(colors.normal.yellow.into()),
+                    (true, true) => Style::default()
+                        .fg(colors.normal.yellow.into())
+                        .bg(colors.primary.accent.into()),
+                    (true, _) => Style::default()
+                        .fg(colors.normal.white.into())
+                        .bg(colors.primary.accent.into()),
+                    (_, true) => Style::default()
+                        .fg(colors.normal.white.into())
+                        .bg(colors.primary.hover.into()),
                     (false, false) => Style::default().fg(colors.normal.white.into()),
                 };
 
-                let line = vec![
+                let line: Line<'_> = vec![
                     Span::from(gap.clone()),
                     colored_method(req.method.clone(), colors),
-                    Span::from(format!(" {}", req.name.clone())).set_style(req_style),
-                ];
+                    Span::from(format!(" {}", req.name.clone())),
+                ]
+                .into();
 
                 vec![RenderLine {
                     level,
                     name: req.name.clone(),
-                    line: line.into(),
+                    line: Paragraph::new(line).set_style(req_style),
                 }]
             }
         })
