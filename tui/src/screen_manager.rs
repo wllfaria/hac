@@ -68,7 +68,7 @@ impl Component for ScreenManager<'_> {
     fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
         let size = frame.size();
 
-        match (size.width < 80, size.height < 24) {
+        match (size.width < 80, size.height < 22) {
             (true, _) => self.cur_screen = Screens::TerminalTooSmall,
             (_, true) => self.cur_screen = Screens::TerminalTooSmall,
             (false, false) if self.cur_screen == Screens::TerminalTooSmall => {

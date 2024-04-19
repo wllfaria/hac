@@ -3,9 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Flex, Layout, Rect},
     style::{Style, Stylize},
     text::Line,
-    widgets::{
-        block::Title, Block, BorderType, Borders, Clear, Padding, Paragraph, StatefulWidget, Widget,
-    },
+    widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, StatefulWidget, Widget},
 };
 
 use crate::components::input::Input;
@@ -24,6 +22,7 @@ struct FormLayout {
     desc_input: Rect,
     confirm_button: Rect,
     cancel_button: Rect,
+    hint: Rect,
 }
 
 #[derive(Debug, Default)]
@@ -54,17 +53,19 @@ impl<'a> NewCollectionForm<'a> {
     fn build_layout(&self, size: &Rect) -> FormLayout {
         let size = Rect {
             x: size.x + 2,
-            y: size.y + 2,
+            y: size.y + 1,
             width: size.width.saturating_sub(4),
             height: size.height.saturating_sub(2),
         };
-        let [name_input, desc_input, _, buttons] = Layout::default()
+        let [name_input, desc_input, _, buttons, _, hint] = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(3),
                 Constraint::Length(3),
                 Constraint::Length(1),
                 Constraint::Length(3),
+                Constraint::Length(1),
+                Constraint::Length(1),
             ])
             .areas(size);
 
@@ -83,6 +84,7 @@ impl<'a> NewCollectionForm<'a> {
             desc_input,
             confirm_button,
             cancel_button,
+            hint,
         }
     }
 }
@@ -138,14 +140,17 @@ impl StatefulWidget for NewCollectionForm<'_> {
 
         let full_block = Block::default()
             .padding(Padding::uniform(1))
-            .title(Title::default().content(" New Collection"))
-            .title_style(Style::default().fg(self.colors.normal.white.into()))
             .style(Style::default().bg(self.colors.primary.background.into()));
+
+        let hint = Paragraph::new("[Tab] to switch focus [Enter] to select a button")
+            .centered()
+            .fg(self.colors.normal.magenta);
 
         full_block.render(size, buf);
         name_input.render(layout.name_input, buf, &mut state.name);
         desc_input.render(layout.desc_input, buf, &mut state.description);
         cancel_button.render(layout.cancel_button, buf);
         confirm_button.render(layout.confirm_button, buf);
+        hint.render(layout.hint, buf);
     }
 }

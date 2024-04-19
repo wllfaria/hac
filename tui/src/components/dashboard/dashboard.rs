@@ -36,6 +36,7 @@ struct DashboardLayout {
 pub struct Dashboard<'a> {
     layout: DashboardLayout,
     schemas: Vec<Schema>,
+
     list: SchemaList<'a>,
     list_state: SchemaListState,
     form_state: FormState,
@@ -329,7 +330,6 @@ impl<'a> Dashboard<'a> {
         Paragraph::new(lines)
             .fg(self.colors.primary.hover)
             .bg(self.colors.primary.background.into())
-            .italic()
             .bold()
     }
 

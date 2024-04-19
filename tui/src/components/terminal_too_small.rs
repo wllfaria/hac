@@ -33,7 +33,7 @@ impl Component for TerminalTooSmall<'_> {
         ]);
         let empty = Line::from(" ");
         let hint = Line::from("Minimum size needed:".bold().fg(self.colors.bright.black));
-        let min_size = Line::from("Width = 80 Height = 24".bold().fg(self.colors.bright.black));
+        let min_size = Line::from("Width = 80 Height = 22".bold().fg(self.colors.bright.black));
 
         let text = Paragraph::new(vec![lines, curr_size, empty, hint, min_size])
             .wrap(Wrap { trim: true })

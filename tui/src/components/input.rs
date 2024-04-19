@@ -37,13 +37,13 @@ impl<'a> Input<'a> {
 
     fn build_input(&self, value: String) -> Paragraph<'_> {
         let border_color = if self.focused {
-            Style::default().fg(self.colors.normal.green.into())
+            Style::default().fg(self.colors.bright.magenta.into())
         } else {
-            Style::default().fg(self.colors.bright.black.into())
+            Style::default().fg(self.colors.primary.hover.into())
         };
 
         let (value, color) = if value.is_empty() {
-            let color = Style::default().fg(self.colors.normal.blue.into());
+            let color = Style::default().fg(self.colors.normal.magenta.into());
             (self.placeholder.clone().unwrap_or_default(), color)
         } else {
             let color = Style::default().fg(self.colors.normal.white.into());
@@ -54,6 +54,7 @@ impl<'a> Input<'a> {
             .block(
                 Block::default()
                     .title(self.name.clone())
+                    .title_style(Style::default().fg(self.colors.normal.white.into()))
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
                     .border_style(border_color),

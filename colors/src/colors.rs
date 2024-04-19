@@ -48,9 +48,9 @@ impl Default for PrimaryColors {
                 b: 0xCE,
             },
             background: Color::Rgb {
-                r: 0x0B,
-                g: 0x0E,
-                b: 0x14,
+                r: 0x0F,
+                g: 0x14,
+                b: 0x19,
             },
             accent: Color::Rgb {
                 r: 0x12,

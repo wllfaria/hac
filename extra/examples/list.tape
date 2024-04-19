@@ -12,7 +12,7 @@ Hide
     Set WindowBar Colorful
     Set WindowBarSize 40
 
-    Set Theme "Catppuccin Mocha"
+    Set Theme "ayu"
     Type "cargo run -q"
     Enter
     Sleep 3s
