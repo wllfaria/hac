@@ -3,7 +3,9 @@ use ratatui::{
     layout::{Constraint, Direction, Flex, Layout, Rect},
     style::{Style, Stylize},
     text::Line,
-    widgets::{block::Title, Block, BorderType, Borders, Clear, Paragraph, StatefulWidget, Widget},
+    widgets::{
+        block::Title, Block, BorderType, Borders, Clear, Padding, Paragraph, StatefulWidget, Widget,
+    },
 };
 
 use crate::components::input::Input;
@@ -135,12 +137,10 @@ impl StatefulWidget for NewCollectionForm<'_> {
         );
 
         let full_block = Block::default()
-            .title(Title::default().content("New Collection"))
+            .padding(Padding::uniform(1))
+            .title(Title::default().content(" New Collection"))
             .title_style(Style::default().fg(self.colors.normal.white.into()))
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(self.colors.bright.black.into()))
-            .border_type(BorderType::Rounded)
-            .style(Style::default().bg(self.colors.normal.black.into()));
+            .style(Style::default().bg(self.colors.primary.background.into()));
 
         full_block.render(size, buf);
         name_input.render(layout.name_input, buf, &mut state.name);

@@ -322,9 +322,9 @@ impl<'a> Dashboard<'a> {
             .to_centered_line()
     }
 
-    fn make_overlay(&self, size: Rect) -> Paragraph<'_> {
+    fn make_overlay(&self, size: Rect, fill_text: &str) -> Paragraph<'_> {
         let lines: Vec<Line<'_>> =
-            vec!["助ける".repeat(size.width.into()).into(); size.height.into()];
+            vec![fill_text.repeat(size.width.into()).into(); size.height.into()];
 
         Paragraph::new(lines)
             .fg(self.colors.primary.hover)
@@ -335,7 +335,7 @@ impl<'a> Dashboard<'a> {
 
     fn draw_help_popup(&self, size: Rect, frame: &mut Frame) {
         frame.render_widget(Clear, size);
-        let overlay = self.make_overlay(size);
+        let overlay = self.make_overlay(size, "助ける");
         frame.render_widget(overlay, size);
 
         let lines = vec![
@@ -466,7 +466,11 @@ impl<'a> Dashboard<'a> {
         popup.render(self.layout.error_popup, frame.buffer_mut());
     }
 
-    fn draw_form_popup(&mut self, frame: &mut Frame) {
+    fn draw_form_popup(&mut self, size: Rect, frame: &mut Frame) {
+        frame.render_widget(Clear, size);
+        let overlay = self.make_overlay(size, "新");
+        frame.render_widget(overlay, size);
+
         let form = NewCollectionForm::new(self.colors);
         form.render(
             self.layout.form_popup,
@@ -533,7 +537,7 @@ impl Component for Dashboard<'_> {
 
         match self.pane_focus {
             PaneFocus::Error => self.draw_error_popup(frame),
-            PaneFocus::Form => self.draw_form_popup(frame),
+            PaneFocus::Form => self.draw_form_popup(size, frame),
             PaneFocus::Filter => self.draw_filter_line(frame),
             PaneFocus::Help => self.draw_help_popup(size, frame),
             PaneFocus::Prompt => self.draw_delete_prompt(frame),
