@@ -6,8 +6,8 @@ use ratatui::{
     layout::{Constraint, Direction, Flex, Layout, Rect},
     style::{Style, Stylize},
     widgets::{
-        Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
-        StatefulWidget, Widget,
+        Block, BorderType, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation,
+        ScrollbarState, StatefulWidget, Widget,
     },
 };
 
@@ -87,18 +87,13 @@ impl<'a> SchemaList<'a> {
 
     fn build_card(&self, state: &SchemaListState, schema: &Schema, index: usize) -> Paragraph<'_> {
         let lines = vec![
-            schema
-                .info
-                .name
-                .clone()
-                .fg(self.colors.normal.yellow)
-                .into(),
+            schema.info.name.clone().fg(self.colors.normal.white).into(),
             schema
                 .info
                 .description
                 .clone()
                 .unwrap_or_default()
-                .fg(self.colors.normal.white)
+                .fg(self.colors.bright.yellow)
                 .into(),
         ];
 
@@ -106,9 +101,9 @@ impl<'a> SchemaList<'a> {
             .selected
             .is_some_and(|selected| selected.eq(&(index + state.scroll)))
         {
-            self.colors.normal.green
+            self.colors.bright.magenta
         } else {
-            self.colors.bright.black
+            self.colors.primary.hover
         };
 
         Paragraph::new(lines).block(
@@ -124,7 +119,7 @@ impl StatefulWidget for SchemaList<'_> {
     type State = SchemaListState;
 
     fn render(self, size: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let list_size = Rect::new(size.x, size.y, size.width.saturating_sub(1), size.height);
+        let list_size = Rect::new(size.x, size.y, size.width.saturating_sub(3), size.height);
         let scrollbar_size = Rect::new(size.width.saturating_sub(1), size.y, 1, size.height);
         let mut rects = self.build_layout(&list_size);
 

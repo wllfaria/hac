@@ -14,7 +14,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
     style::{Style, Stylize},
     text::Line,
-    widgets::{Block, Borders, Clear, Padding, Paragraph, StatefulWidget, Widget, Wrap},
+    widgets::{Block, Clear, Padding, Paragraph, StatefulWidget, Widget, Wrap},
     Frame,
 };
 use std::ops::{Div, Not};
@@ -75,7 +75,6 @@ impl<'a> Dashboard<'a> {
             filter: String::new(),
             sender: None,
             error_message: String::default(),
-
             pane_focus: PaneFocus::List,
         })
     }
@@ -318,63 +317,83 @@ impl<'a> Dashboard<'a> {
     }
 
     fn build_hint_text(&self) -> Line<'static> {
-        "[j/k -> up/down] [n -> new] [enter -> select item] [? -> help] [q -> quit]"
-            .fg(self.colors.bright.black)
+        "[j/k -> up/down] [n -> new] [enter -> select item] [? -> help] [<C-c> -> quit]"
+            .fg(self.colors.normal.magenta)
             .to_centered_line()
     }
 
-    fn build_help_popup(&self) -> Paragraph<'_> {
+    fn make_overlay(&self, size: Rect) -> Paragraph<'_> {
+        let lines: Vec<Line<'_>> =
+            vec!["助ける".repeat(size.width.into()).into(); size.height.into()];
+
+        Paragraph::new(lines)
+            .fg(self.colors.primary.hover)
+            .bg(self.colors.primary.background.into())
+            .italic()
+            .bold()
+    }
+
+    fn draw_help_popup(&self, size: Rect, frame: &mut Frame) {
+        frame.render_widget(Clear, size);
+        let overlay = self.make_overlay(size);
+        frame.render_widget(overlay, size);
+
         let lines = vec![
             Line::from(vec![
-                "h/<left>".fg(self.colors.normal.magenta),
+                "h/<left>".fg(self.colors.bright.magenta),
                 "    - select left item".into(),
             ]),
             Line::from(vec![
-                "j/<down>".fg(self.colors.normal.magenta),
+                "j/<down>".fg(self.colors.bright.magenta),
                 "    - select item below".into(),
             ]),
             Line::from(vec![
-                "k/<up>".fg(self.colors.normal.magenta),
+                "k/<up>".fg(self.colors.bright.magenta),
                 "      - select item above".into(),
             ]),
             Line::from(vec![
-                "l/<right>".fg(self.colors.normal.magenta),
+                "l/<right>".fg(self.colors.bright.magenta),
                 "   - select right item".into(),
             ]),
             Line::from(vec![
-                "n/c".fg(self.colors.normal.magenta),
+                "n/c".fg(self.colors.bright.magenta),
                 "         - creates a new collection".into(),
             ]),
             Line::from(vec![
-                "d".fg(self.colors.normal.magenta),
+                "d".fg(self.colors.bright.magenta),
                 "           - deletes the selected collection".into(),
             ]),
             Line::from(vec![
-                "?".fg(self.colors.normal.magenta),
+                "?".fg(self.colors.bright.magenta),
                 "           - toggle this help window".into(),
             ]),
             Line::from(vec![
-                "enter".fg(self.colors.normal.magenta),
+                "enter".fg(self.colors.bright.magenta),
                 "       - select item under cursor".into(),
             ]),
             Line::from(vec![
-                "/".fg(self.colors.normal.magenta),
+                "/".fg(self.colors.bright.magenta),
                 "           - enter filter mode".into(),
             ]),
             Line::from(vec![
-                "q".fg(self.colors.normal.magenta),
-                "           - quits the application".into(),
+                "<C-c>".fg(self.colors.bright.magenta),
+                "       - quits the application".into(),
             ]),
+            Line::from(""),
+            Line::from("press any key to go back".fg(self.colors.normal.magenta)).centered(),
         ];
-        Paragraph::new(lines).wrap(Wrap { trim: true }).block(
-            Block::default()
-                .title("Help")
-                .title_style(Style::default().fg(self.colors.normal.white.into()))
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(self.colors.bright.black.into()))
-                .padding(Padding::new(2, 2, 1, 1))
-                .bg(self.colors.normal.black.into()),
-        )
+
+        frame.render_widget(Clear, self.layout.help_popup);
+        frame.render_widget(
+            Paragraph::new(lines).wrap(Wrap { trim: true }).block(
+                Block::default().padding(Padding::new(2, 2, 1, 1)).bg(self
+                    .colors
+                    .primary
+                    .background
+                    .into()),
+            ),
+            self.layout.help_popup,
+        );
     }
 
     fn build_filter_input(&self) -> Line<'_> {
@@ -384,7 +403,7 @@ impl<'a> Dashboard<'a> {
     fn build_title(&self) -> anyhow::Result<BigText<'_>> {
         let title = BigText::builder()
             .pixel_size(PixelSize::Quadrant)
-            .style(Style::default().fg(self.colors.normal.magenta.into()))
+            .style(Style::default().fg(self.colors.bright.magenta.into()))
             .lines(vec!["Select a collection".into()])
             .alignment(Alignment::Center)
             .build()?;
@@ -432,12 +451,21 @@ impl<'a> Dashboard<'a> {
 
         Ok((layout, empty_message))
     }
+
+    fn draw_background(&self, size: Rect, frame: &mut Frame) {
+        frame.render_widget(Clear, size);
+        frame.render_widget(
+            Block::default().bg(self.colors.primary.background.into()),
+            size,
+        );
+    }
 }
 
 impl Component for Dashboard<'_> {
-    fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
-        let title = self.build_title()?;
+    fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
+        self.draw_background(size, frame);
 
+        let title = self.build_title()?;
         frame.render_widget(title, self.layout.title_pane);
 
         match (self.schemas.is_empty(), self.list_state.items.is_empty()) {
@@ -482,9 +510,7 @@ impl Component for Dashboard<'_> {
         }
 
         if self.pane_focus == PaneFocus::Help {
-            Clear.render(self.layout.help_popup, frame.buffer_mut());
-            let list_keymaps_popup = self.build_help_popup();
-            list_keymaps_popup.render(self.layout.help_popup, frame.buffer_mut());
+            self.draw_help_popup(size, frame);
         }
 
         if self.pane_focus == PaneFocus::Prompt {
@@ -537,6 +563,7 @@ impl Component for Dashboard<'_> {
 }
 
 fn build_layout(size: Rect) -> DashboardLayout {
+    let size = Rect::new(size.x + 1, size.y, size.width - 1, size.height);
     let [top, help_pane] = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Fill(1), Constraint::Length(1)])
@@ -552,9 +579,9 @@ fn build_layout(size: Rect) -> DashboardLayout {
         .areas(top);
 
     let help_popup = Rect::new(
-        size.width / 4,
+        size.width.div(2).saturating_sub(25),
         size.height.div(2).saturating_sub(7),
-        size.width / 2,
+        50,
         14,
     );
     let confirm_popup = Rect::new(

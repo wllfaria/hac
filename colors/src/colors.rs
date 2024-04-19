@@ -1,11 +1,10 @@
 use crossterm::style::Color;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Colors {
     pub primary: PrimaryColors,
     pub normal: NormalColors,
     pub bright: BrightColors,
-    pub cursor_line: Color,
 }
 
 #[derive(Debug)]
@@ -40,21 +39,6 @@ pub struct BrightColors {
     pub white: Color,
 }
 
-impl Default for Colors {
-    fn default() -> Self {
-        Colors {
-            primary: Default::default(),
-            normal: Default::default(),
-            bright: Default::default(),
-            cursor_line: Color::Rgb {
-                r: 0xE1,
-                g: 0xC5,
-                b: 0x8D,
-            },
-        }
-    }
-}
-
 impl Default for PrimaryColors {
     fn default() -> Self {
         PrimaryColors {
@@ -86,44 +70,44 @@ impl Default for NormalColors {
     fn default() -> Self {
         NormalColors {
             black: Color::Rgb {
-                r: 0x0B,
-                g: 0x0E,
-                b: 0x14,
+                r: 0x03,
+                g: 0x03,
+                b: 0x03,
             },
             red: Color::Rgb {
-                r: 0xF8,
-                g: 0x70,
-                b: 0x70,
+                r: 0xD9,
+                g: 0x57,
+                b: 0x57,
             },
             green: Color::Rgb {
-                r: 0x36,
-                g: 0xC6,
-                b: 0x92,
+                r: 0xAA,
+                g: 0xd9,
+                b: 0x4C,
             },
             yellow: Color::Rgb {
-                r: 0xE1,
-                g: 0xC5,
-                b: 0x8D,
+                r: 0xE6,
+                g: 0xB4,
+                b: 0x50,
             },
             blue: Color::Rgb {
-                r: 0x5F,
-                g: 0xB0,
-                b: 0xFC,
+                r: 0x59,
+                g: 0xBA,
+                b: 0xE6,
             },
             magenta: Color::Rgb {
-                r: 0xB7,
-                g: 0x7E,
-                b: 0xE0,
+                r: 0x6C,
+                g: 0x59,
+                b: 0x80,
             },
             cyan: Color::Rgb {
-                r: 0x54,
-                g: 0xCE,
-                b: 0xD6,
+                r: 0x95,
+                g: 0xE6,
+                b: 0xCB,
             },
             white: Color::Rgb {
-                r: 0xCE,
-                g: 0xCE,
-                b: 0xCE,
+                r: 0xBF,
+                g: 0xBD,
+                b: 0xB6,
             },
         }
     }
@@ -133,9 +117,9 @@ impl Default for BrightColors {
     fn default() -> Self {
         BrightColors {
             black: Color::Rgb {
-                r: 0x51,
-                g: 0x5C,
-                b: 0x68,
+                r: 0x11,
+                g: 0x15,
+                b: 0x1C,
             },
             red: Color::Rgb {
                 r: 0xFB,
@@ -143,34 +127,34 @@ impl Default for BrightColors {
                 b: 0x73,
             },
             green: Color::Rgb {
-                r: 0x79,
-                g: 0xDC,
-                b: 0xAA,
+                r: 0x7F,
+                g: 0xD9,
+                b: 0x4C,
             },
             yellow: Color::Rgb {
-                r: 0xFF,
-                g: 0xE5,
-                b: 0x9E,
+                r: 0xE6,
+                g: 0xB6,
+                b: 0x73,
             },
             blue: Color::Rgb {
-                r: 0x7A,
-                g: 0xB0,
-                b: 0xDF,
+                r: 0x73,
+                g: 0xB8,
+                b: 0xFF,
             },
             magenta: Color::Rgb {
-                r: 0xC3,
-                g: 0x97,
-                b: 0xD8,
+                r: 0xD2,
+                g: 0xA6,
+                b: 0xFF,
             },
             cyan: Color::Rgb {
-                r: 0x70,
-                g: 0xC0,
-                b: 0xBA,
+                r: 0x95,
+                g: 0xE6,
+                b: 0xCB,
             },
             white: Color::Rgb {
-                r: 0xFF,
-                g: 0xFF,
-                b: 0xFF,
+                r: 0xFC,
+                g: 0xFC,
+                b: 0xFC,
             },
         }
     }
