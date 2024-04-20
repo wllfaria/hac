@@ -84,11 +84,12 @@ mod tests {
             .block(
                 Block::default()
                     .title("my input".to_string())
+                    .title_style(Style::default().fg(colors.normal.white.into()))
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
-                    .border_style(Style::default().fg(colors.bright.black.into())),
+                    .border_style(Style::default().fg(colors.primary.hover.into())),
             )
-            .style(Style::default().fg(colors.normal.blue.into()));
+            .style(Style::default().fg(colors.normal.magenta.into()));
 
         let result = input.build_input("".into());
 
@@ -103,11 +104,12 @@ mod tests {
             .block(
                 Block::default()
                     .title("my input".to_string())
+                    .title_style(Style::default().fg(colors.normal.white.into()))
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
-                    .border_style(Style::default().fg(colors.normal.green.into())),
+                    .border_style(Style::default().fg(colors.bright.magenta.into())),
             )
-            .style(Style::default().fg(colors.normal.blue.into()));
+            .style(Style::default().fg(colors.normal.magenta.into()));
 
         input.focus();
         let result = input.build_input("".into());
@@ -123,9 +125,10 @@ mod tests {
             .block(
                 Block::default()
                     .title("my input".to_string())
+                    .title_style(Style::default().fg(colors.normal.white.into()))
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
-                    .border_style(Style::default().fg(colors.bright.black.into())),
+                    .border_style(Style::default().fg(colors.primary.hover.into())),
             )
             .style(Style::default().fg(colors.normal.white.into()));
 
@@ -142,9 +145,10 @@ mod tests {
             .block(
                 Block::default()
                     .title("my input".to_string())
+                    .title_style(Style::default().fg(colors.normal.white.into()))
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
-                    .border_style(Style::default().fg(colors.normal.green.into())),
+                    .border_style(Style::default().fg(colors.bright.magenta.into())),
             )
             .style(Style::default().fg(colors.normal.white.into()));
 
