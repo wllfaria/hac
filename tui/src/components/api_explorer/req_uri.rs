@@ -1,10 +1,10 @@
-use httpretty::schema::types::Request;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::{Style, Stylize},
     widgets::{Block, Borders, Paragraph, StatefulWidget, Widget},
 };
+use reqtui::schema::types::Request;
 
 #[derive(Debug)]
 pub struct ReqUriState<'a> {

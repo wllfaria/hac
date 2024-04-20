@@ -1,12 +1,12 @@
 use std::ops::{Add, Sub};
 
-use httpretty::net::request_manager::ReqtuiResponse;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::Style,
     widgets::{Block, Borders, Paragraph, StatefulWidget, Widget, Wrap},
 };
+use reqtui::net::request_manager::ReqtuiResponse;
 
 pub struct ResViewerState {
     is_focused: bool,

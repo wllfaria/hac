@@ -6,7 +6,7 @@ pub mod input;
 pub mod terminal_too_small;
 
 use crate::event_pool::Event;
-use httpretty::command::Command;
+use reqtui::command::Command;
 
 use crossterm::event::KeyEvent;
 use ratatui::{layout::Rect, Frame};

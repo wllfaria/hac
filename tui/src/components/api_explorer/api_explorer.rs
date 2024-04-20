@@ -7,7 +7,7 @@ use crate::components::{
 };
 use anyhow::Context;
 use crossterm::event::{KeyCode, KeyEvent};
-use httpretty::{
+use reqtui::{
     command::Command,
     net::request_manager::{ReqtuiNetRequest, ReqtuiResponse},
     schema::types::{Request, RequestKind, Schema},
@@ -150,7 +150,7 @@ impl<'a> ApiExplorer<'a> {
     }
 
     fn handle_req_uri_key_event(&self, _key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
-        httpretty::net::handle_request(
+        reqtui::net::handle_request(
             self.selected_request.as_ref().unwrap().clone(),
             self.request_tx.clone(),
         );
@@ -339,7 +339,7 @@ fn find_next_entry(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use httpretty::schema::types::{Directory, Request, RequestMethod};
+    use reqtui::schema::types::{Directory, Request, RequestMethod};
     use std::collections::HashMap;
 
     fn create_root_one() -> RequestKind {

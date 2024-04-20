@@ -1,4 +1,4 @@
-use httpretty::schema::types::{Request, RequestKind, RequestMethod};
+use reqtui::schema::types::{Request, RequestKind, RequestMethod};
 
 use ratatui::{
     buffer::Buffer,

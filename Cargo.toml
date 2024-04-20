@@ -1,11 +1,11 @@
 [workspace]
-members = ["config", "httpretty", "tui", "colors"]
+members = ["config", "reqtui", "tui", "colors"]
 default-members = ["tui"]
 resolver = "2"
 
 [workspace.dependencies]
 config = { path = "config" }
-httpretty = { path = "httpretty" }
+reqtui = { path = "reqtui" }
 colors = { path = "colors" }
 
 anyhow = "1.0.81"

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-httpretty.workspace = true
+reqtui.workspace = true
 config.workspace = true
 colors.workspace = true
 

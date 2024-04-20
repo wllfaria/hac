@@ -3,7 +3,7 @@ use crate::{
     event_pool::{Event, EventPool},
     screen_manager::ScreenManager,
 };
-use httpretty::command::Command;
+use reqtui::command::Command;
 
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io::Stdout;

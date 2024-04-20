@@ -1,6 +1,5 @@
 use std::{collections::VecDeque, ops::Add};
 
-use httpretty::schema::Schema;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Flex, Layout, Rect},
@@ -10,6 +9,7 @@ use ratatui::{
         StatefulWidget, Widget,
     },
 };
+use reqtui::schema::Schema;
 
 #[derive(Debug)]
 pub struct SchemaListState {

@@ -7,7 +7,7 @@ use crate::components::{
     error_popup::ErrorPopup,
     Component,
 };
-use httpretty::{command::Command, schema::types::Schema};
+use reqtui::{command::Command, schema::types::Schema};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
@@ -229,7 +229,7 @@ impl<'a> Dashboard<'a> {
                         .expect("should always have a sender at this point");
 
                     tokio::spawn(async move {
-                        match httpretty::fs::create_schema(name, description).await {
+                        match reqtui::fs::create_schema(name, description).await {
                             Ok(schema) => {
                                 if sender_copy.send(Command::CreateSchema(schema)).is_err() {
                                     tracing::error!("failed to send command through channel");
@@ -284,7 +284,7 @@ impl<'a> Dashboard<'a> {
 
                 tokio::spawn(async move {
                     tracing::debug!("attempting to delete schema: {:?}", path);
-                    httpretty::fs::delete_schema(&path)
+                    reqtui::fs::delete_schema(&path)
                         .await
                         .expect("failed to delete schema from filesystem");
                 });
@@ -625,7 +625,7 @@ fn build_layout(size: Rect) -> DashboardLayout {
 
 #[cfg(test)]
 mod tests {
-    use httpretty::schema;
+    use reqtui::schema;
     use std::{
         fs::{create_dir, File},
         io::Write,

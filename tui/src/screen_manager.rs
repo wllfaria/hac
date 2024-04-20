@@ -7,7 +7,7 @@ use crate::{
 };
 use anyhow::Context;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use httpretty::{command::Command, schema::schema};
+use reqtui::{command::Command, schema::schema};
 
 use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;
