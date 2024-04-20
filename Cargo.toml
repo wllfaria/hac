@@ -13,3 +13,5 @@ crossterm = { version = "0.27.0", features = ["event-stream"] }
 tokio = { version = "1.37.0", features = ["full"] }
 tracing = "0.1.40"
 serde = { version = "1.0.197", features = ["derive"] }
+serde_json = "1.0.115"
+reqwest = "0.12"

@@ -9,6 +9,7 @@ use anyhow::Context;
 use crossterm::event::{KeyCode, KeyEvent};
 use httpretty::{
     command::Command,
+    net::request_manager::{ReqtuiNetRequest, ReqtuiResponse},
     schema::types::{Request, RequestKind, Schema},
 };
 
@@ -19,14 +20,18 @@ use ratatui::{
     Frame,
 };
 use std::collections::HashMap;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use super::req_uri::ReqUriState;
+use super::{
+    req_uri::ReqUriState,
+    res_viewer::{ResViewer, ResViewerState},
+};
 
 pub struct ExplorerLayout {
     pub sidebar: Rect,
     pub req_uri: Rect,
     pub req_editor: Rect,
-    pub _request_preview: Rect,
+    pub response_preview: Rect,
 }
 
 #[derive(PartialEq)]
@@ -39,6 +44,7 @@ enum VisitNode {
 enum PaneFocus {
     Sidebar,
     ReqUri,
+    Preview,
 }
 
 pub struct ApiExplorer<'a> {
@@ -52,6 +58,11 @@ pub struct ApiExplorer<'a> {
 
     dirs_expanded: HashMap<RequestKind, bool>,
     colors: &'a colors::Colors,
+
+    response_rx: UnboundedReceiver<ReqtuiNetRequest>,
+    request_tx: UnboundedSender<ReqtuiNetRequest>,
+
+    response: Option<ReqtuiResponse>,
 }
 
 impl<'a> ApiExplorer<'a> {
@@ -73,7 +84,9 @@ impl<'a> ApiExplorer<'a> {
             .as_ref()
             .and_then(|requests| requests.first().cloned());
 
-        Self {
+        let (request_tx, response_rx) = unbounded_channel::<ReqtuiNetRequest>();
+
+        ApiExplorer {
             schema,
             hovered_request,
             selected_request,
@@ -81,6 +94,10 @@ impl<'a> ApiExplorer<'a> {
             focus: PaneFocus::ReqUri,
             layout,
             colors,
+
+            response_rx,
+            request_tx,
+            response: None,
         }
     }
 
@@ -132,10 +149,11 @@ impl<'a> ApiExplorer<'a> {
         Ok(None)
     }
 
-    fn handle_req_builder_key_event(
-        &self,
-        _key_event: KeyEvent,
-    ) -> anyhow::Result<Option<Command>> {
+    fn handle_req_uri_key_event(&self, _key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
+        httpretty::net::handle_request(
+            self.selected_request.as_ref().unwrap().clone(),
+            self.request_tx.clone(),
+        );
         Ok(None)
     }
 
@@ -166,12 +184,33 @@ impl<'a> ApiExplorer<'a> {
         );
         ReqUri::new(self.colors).render(self.layout.req_uri, frame.buffer_mut(), &mut state);
     }
+
+    fn draw_response_viewer(&mut self, frame: &mut Frame) {
+        let mut state =
+            ResViewerState::new(self.focus == PaneFocus::Preview, self.response.clone());
+
+        frame.render_stateful_widget(
+            ResViewer::new(self.colors),
+            self.layout.response_preview,
+            &mut state,
+        )
+    }
+
+    fn drain_response_rx(&mut self) {
+        while let Ok(ReqtuiNetRequest::Response(res)) = self.response_rx.try_recv() {
+            self.response = Some(res);
+        }
+    }
 }
 
 impl Component for ApiExplorer<'_> {
     #[tracing::instrument(skip_all, target = "api_explorer")]
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         self.draw_background(size, frame);
+
+        self.drain_response_rx();
+
+        self.draw_response_viewer(frame);
         self.draw_sidebar(frame);
         self.draw_req_uri(frame);
 
@@ -185,14 +224,16 @@ impl Component for ApiExplorer<'_> {
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         if let KeyCode::Tab = key_event.code {
             match self.focus {
-                PaneFocus::ReqUri => self.focus = PaneFocus::Sidebar,
                 PaneFocus::Sidebar => self.focus = PaneFocus::ReqUri,
+                PaneFocus::ReqUri => self.focus = PaneFocus::Preview,
+                PaneFocus::Preview => self.focus = PaneFocus::Sidebar,
             }
         };
 
         match self.focus {
             PaneFocus::Sidebar => self.handle_sidebar_key_event(key_event),
-            PaneFocus::ReqUri => self.handle_req_builder_key_event(key_event),
+            PaneFocus::ReqUri => self.handle_req_uri_key_event(key_event),
+            PaneFocus::Preview => Ok(None),
         }
     }
 }
@@ -208,7 +249,7 @@ pub fn build_layout(size: Rect) -> ExplorerLayout {
         .constraints([Constraint::Length(3), Constraint::Fill(1)])
         .areas(right_pane);
 
-    let [req_builder, req_preview] = if size.width < 80 {
+    let [req_editor, response_preview] = if size.width < 120 {
         Layout::default()
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .direction(Direction::Vertical)
@@ -223,8 +264,8 @@ pub fn build_layout(size: Rect) -> ExplorerLayout {
     ExplorerLayout {
         sidebar,
         req_uri,
-        req_editor: req_builder,
-        _request_preview: req_preview,
+        req_editor,
+        response_preview,
     }
 }
 
