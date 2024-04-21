@@ -1,13 +1,13 @@
 use crossterm::style::Color;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct Colors {
     pub primary: PrimaryColors,
     pub normal: NormalColors,
     pub bright: BrightColors,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct PrimaryColors {
     pub foreground: Color,
     pub background: Color,
@@ -15,7 +15,7 @@ pub struct PrimaryColors {
     pub hover: Color,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct NormalColors {
     pub black: Color,
     pub red: Color,
@@ -27,7 +27,7 @@ pub struct NormalColors {
     pub white: Color,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct BrightColors {
     pub black: Color,
     pub red: Color,

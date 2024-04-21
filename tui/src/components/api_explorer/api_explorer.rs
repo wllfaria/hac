@@ -27,6 +27,7 @@ use super::{
     res_viewer::{ResViewer, ResViewerState},
 };
 
+#[derive(Debug, PartialEq)]
 pub struct ExplorerLayout {
     pub sidebar: Rect,
     pub req_uri: Rect,
@@ -47,6 +48,7 @@ enum PaneFocus {
     Preview,
 }
 
+#[derive(Debug)]
 pub struct ApiExplorer<'a> {
     layout: ExplorerLayout,
     schema: Schema,

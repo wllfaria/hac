@@ -3,13 +3,13 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::schema::types::Request;
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, PartialEq)]
 pub struct ReqtuiResponse {
     pub body: String,
     pub pretty_body: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, PartialEq)]
 pub enum ReqtuiNetRequest {
     Request(Request),
     Response(ReqtuiResponse),

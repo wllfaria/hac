@@ -43,7 +43,7 @@ pub struct Dashboard<'a> {
     colors: &'a colors::Colors,
     filter: String,
     pane_focus: PaneFocus,
-    command_sender: Option<UnboundedSender<Command>>,
+    pub command_sender: Option<UnboundedSender<Command>>,
     error_message: String,
 }
 

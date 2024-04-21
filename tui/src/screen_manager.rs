@@ -12,7 +12,7 @@ use reqtui::{command::Command, schema::schema};
 use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Screens {
     Editor,
     Dashboard,
@@ -20,11 +20,11 @@ pub enum Screens {
 }
 
 pub struct ScreenManager<'a> {
-    cur_screen: Screens,
+    curr_screen: Screens,
     api_explorer: Option<ApiExplorer<'a>>,
     dashboard: Dashboard<'a>,
     terminal_too_small: TerminalTooSmall<'a>,
-    previous_screen: Screens,
+    prev_screen: Screens,
     size: Rect,
     colors: &'a colors::Colors,
 }
@@ -34,8 +34,8 @@ impl<'a> ScreenManager<'a> {
         let mut schemas = schema::get_schemas_from_config()?;
         schemas.sort_by_key(|k| k.info.name.clone());
         Ok(Self {
-            cur_screen: Screens::Dashboard,
-            previous_screen: Screens::Dashboard,
+            curr_screen: Screens::Dashboard,
+            prev_screen: Screens::Dashboard,
             api_explorer: None,
             terminal_too_small: TerminalTooSmall::new(colors),
             dashboard: Dashboard::new(size, colors, schemas)?,
@@ -44,9 +44,19 @@ impl<'a> ScreenManager<'a> {
         })
     }
 
+    fn restore_screen(&mut self) {
+        let temp = self.curr_screen.clone();
+        self.curr_screen = self.prev_screen.clone();
+        self.prev_screen = temp;
+    }
+
     fn switch_screen(&mut self, screen: Screens) {
-        self.previous_screen = self.cur_screen.clone();
-        self.cur_screen = screen;
+        if self.curr_screen == screen {
+            return;
+        }
+
+        self.prev_screen = self.curr_screen.clone();
+        self.curr_screen = screen;
     }
 
     pub fn handle_command(&mut self, command: Command) {
@@ -65,19 +75,14 @@ impl<'a> ScreenManager<'a> {
 }
 
 impl Component for ScreenManager<'_> {
-    fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
-        let size = frame.size();
-
+    fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         match (size.width < 80, size.height < 22) {
-            (true, _) => self.cur_screen = Screens::TerminalTooSmall,
-            (_, true) => self.cur_screen = Screens::TerminalTooSmall,
-            (false, false) if self.cur_screen == Screens::TerminalTooSmall => {
-                self.cur_screen = self.previous_screen.clone()
-            }
-            _ => (),
+            (true, _) => self.switch_screen(Screens::TerminalTooSmall),
+            (_, true) => self.switch_screen(Screens::TerminalTooSmall),
+            (false, false) => self.restore_screen(),
         }
 
-        match &self.cur_screen {
+        match &self.curr_screen {
             Screens::Editor => self
                 .api_explorer
                 .as_mut()
@@ -100,7 +105,7 @@ impl Component for ScreenManager<'_> {
             return Ok(Some(Command::Quit));
         };
 
-        match self.cur_screen {
+        match self.curr_screen {
             Screens::Editor => self
                 .api_explorer
                 .as_mut()
@@ -123,5 +128,104 @@ impl Component for ScreenManager<'_> {
         if let Some(e) = self.api_explorer.as_mut() {
             e.resize(new_size)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::backend::CrosstermBackend;
+    use ratatui::terminal::Terminal;
+    use reqtui::schema::types::*;
+
+    #[test]
+    fn test_show_terminal_too_small_screen() {
+        let small_in_width = Rect::new(0, 0, 79, 22);
+        let small_in_height = Rect::new(0, 0, 100, 19);
+        let colors = colors::Colors::default();
+        let mut sm = ScreenManager::new(small_in_width, &colors).unwrap();
+        let mut terminal = Terminal::new(CrosstermBackend::new(std::io::stdout())).unwrap();
+
+        sm.draw(&mut terminal.get_frame(), small_in_width).unwrap();
+        assert_eq!(sm.curr_screen, Screens::TerminalTooSmall);
+
+        sm.draw(&mut terminal.get_frame(), small_in_height).unwrap();
+        assert_eq!(sm.curr_screen, Screens::TerminalTooSmall);
+    }
+
+    #[test]
+    fn test_restore_screeen() {
+        let small = Rect::new(0, 0, 79, 22);
+        let enough = Rect::new(0, 0, 80, 22);
+        let colors = colors::Colors::default();
+        let mut sm = ScreenManager::new(small, &colors).unwrap();
+        let mut terminal = Terminal::new(CrosstermBackend::new(std::io::stdout())).unwrap();
+
+        sm.draw(&mut terminal.get_frame(), small).unwrap();
+        assert_eq!(sm.curr_screen, Screens::TerminalTooSmall);
+
+        sm.draw(&mut terminal.get_frame(), enough).unwrap();
+        assert_eq!(sm.curr_screen, Screens::Dashboard);
+        assert_eq!(sm.prev_screen, Screens::TerminalTooSmall);
+    }
+
+    #[test]
+    fn test_resizing() {
+        let initial = Rect::new(0, 0, 80, 22);
+        let expected = Rect::new(0, 0, 100, 22);
+        let colors = colors::Colors::default();
+        let mut sm = ScreenManager::new(initial, &colors).unwrap();
+
+        sm.resize(expected);
+
+        assert_eq!(sm.size, expected);
+    }
+
+    #[test]
+    fn test_switch_to_explorer_on_select() {
+        let initial = Rect::new(0, 0, 80, 22);
+        let colors = colors::Colors::default();
+        let schema = Schema {
+            info: Info {
+                name: String::from("any_name"),
+                description: None,
+            },
+            path: "any_path".into(),
+            requests: None,
+        };
+        let command = Command::SelectSchema(schema.clone());
+
+        let mut sm = ScreenManager::new(initial, &colors).unwrap();
+        assert_eq!(sm.curr_screen, Screens::Dashboard);
+
+        sm.handle_command(command);
+        assert_eq!(sm.curr_screen, Screens::Editor);
+    }
+
+    #[test]
+    fn test_register_command_sender_for_dashboard() {
+        let initial = Rect::new(0, 0, 80, 22);
+        let colors = colors::Colors::default();
+        let mut sm = ScreenManager::new(initial, &colors).unwrap();
+
+        let (tx, _) = tokio::sync::mpsc::unbounded_channel::<Command>();
+
+        sm.register_command_handler(tx.clone()).unwrap();
+
+        assert!(sm.dashboard.command_sender.is_some());
+    }
+
+    #[test]
+    fn test_quit_event() {
+        let initial = Rect::new(0, 0, 80, 22);
+        let colors = colors::Colors::default();
+        let mut sm = ScreenManager::new(initial, &colors).unwrap();
+
+        let event = Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
+
+        let command = sm.handle_event(Some(event)).unwrap();
+
+        assert!(command.is_some());
+        assert_eq!(command, Some(Command::Quit));
     }
 }
