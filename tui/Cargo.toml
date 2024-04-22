@@ -23,6 +23,7 @@ tracing-appender = "0.2.3"
 
 [dev-dependencies]
 tempfile = "3.10.1"
+mutants = "0.0.3"
 
 [[bin]]
 name = "rqt"

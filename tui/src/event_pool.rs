@@ -1,9 +1,10 @@
 use crossterm::event::{Event as CrosstermEvent, KeyEventKind};
 use futures::{FutureExt, StreamExt};
 use ratatui::layout::Rect;
+use std::ops::Div;
 use tokio::task::JoinHandle;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Event {
     Key(crossterm::event::KeyEvent),
     Mouse(crossterm::event::MouseEvent),
@@ -26,6 +27,7 @@ impl EventPool {
     pub fn new(tick_rate: f64, frame_rate: f64) -> Self {
         let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
         let task = tokio::spawn(async {});
+
         EventPool {
             event_rx,
             event_tx,
@@ -35,9 +37,10 @@ impl EventPool {
         }
     }
 
+    #[cfg_attr(test, mutants::skip)]
     pub fn start(&mut self) {
-        let tick_delay = std::time::Duration::from_secs_f64(1.0 / self.tick_rate);
-        let render_delay = std::time::Duration::from_secs_f64(1.0 / self.frame_rate);
+        let tick_delay = std::time::Duration::from_secs_f64(1.0.div(self.tick_rate));
+        let render_delay = std::time::Duration::from_secs_f64(1.0.div(self.frame_rate));
 
         let _event_tx = self.event_tx.clone();
         self.task = tokio::spawn(async move {
@@ -83,5 +86,21 @@ impl EventPool {
 
     pub async fn next(&mut self) -> Option<Event> {
         self.event_rx.recv().await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_receive_init_event() {
+        let mut event_pool = EventPool::new(30f64, 60f64);
+
+        event_pool.start();
+        let event = event_pool.next().await;
+
+        assert!(event.is_some());
+        assert_eq!(event, Some(Event::Init));
     }
 }

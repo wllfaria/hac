@@ -1,3 +1,4 @@
 /target
 reqtui.log
 tarpaulin-report.html
+mutants.out*
