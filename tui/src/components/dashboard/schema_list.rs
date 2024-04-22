@@ -135,11 +135,13 @@ impl StatefulWidget for SchemaList<'_> {
             .begin_symbol(Some("↑"))
             .end_symbol(Some("↓"));
 
-        let items_on_display = self.items_per_row(&size).mul(self.total_rows(&size));
+        let items_on_display = self
+            .items_per_row(&list_size)
+            .mul(self.total_rows(&list_size));
         if let Some(index) = state.selected {
             index
                 .gt(&items_on_display.saturating_sub(1).add(state.scroll))
-                .then(|| state.scroll.add(self.items_per_row(&size)));
+                .then(|| state.scroll = state.scroll.add(self.items_per_row(&list_size)));
 
             state.scroll.gt(&0).then(|| {
                 index
