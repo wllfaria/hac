@@ -37,8 +37,8 @@ impl<'a> SidebarState<'a> {
 
 #[derive(Debug, Clone)]
 pub struct RenderLine {
-    pub level: usize,
-    pub name: String,
+    pub _level: usize,
+    pub _name: String,
     pub line: Paragraph<'static>,
 }
 
@@ -120,8 +120,8 @@ fn build_lines(
                 let gap = " ".repeat(level * 2);
                 let chevron = if *is_expanded { "v" } else { ">" };
                 let line = vec![RenderLine {
-                    level,
-                    name: dir.name.clone(),
+                    _level: level,
+                    _name: dir.name.clone(),
                     line: Paragraph::new(format!(
                         "{}{} {}/",
                         gap,
@@ -171,8 +171,8 @@ fn build_lines(
                 .into();
 
                 vec![RenderLine {
-                    level,
-                    name: req.name.clone(),
+                    _level: level,
+                    _name: req.name.clone(),
                     line: Paragraph::new(line).set_style(req_style),
                 }]
             }
