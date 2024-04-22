@@ -17,14 +17,14 @@ use ratatui::{
     widgets::{Block, Clear, Padding, Paragraph, StatefulWidget, Widget, Wrap},
     Frame,
 };
-use std::ops::{Div, Not};
+use std::ops::{Add, Div, Not, Sub};
 use tokio::sync::mpsc::UnboundedSender;
 use tui_big_text::{BigText, PixelSize};
 
 #[derive(Debug, PartialEq)]
 struct DashboardLayout {
     schemas_pane: Rect,
-    help_pane: Rect,
+    hint_pane: Rect,
     help_popup: Rect,
     title_pane: Rect,
     confirm_popup: Rect,
@@ -193,7 +193,7 @@ impl<'a> Dashboard<'a> {
                     self.list_state.select(
                         self.list_state
                             .selected()
-                            .map(|i| usize::min(self.list_state.items.len() - 1, i + 1))
+                            .map(|i| usize::min(self.list_state.items.len().sub(1), i.add(1)))
                             .or(Some(0)),
                     );
                 }
@@ -317,26 +317,30 @@ impl<'a> Dashboard<'a> {
         Ok(None)
     }
 
-    fn build_hint_text(&self) -> Line<'static> {
-        "[h/j/k/l to move] [n -> new] [enter -> select item] [? -> help] [<C-c> -> quit]"
-            .fg(self.colors.normal.magenta)
-            .to_centered_line()
+    fn draw_hint_text(&self, frame: &mut Frame) {
+        let hint =
+            "[h/j/k/l to move] [n -> new] [enter -> select item] [? -> help] [<C-c> -> quit]"
+                .fg(self.colors.normal.magenta)
+                .to_centered_line();
+
+        frame.render_widget(hint, self.layout.hint_pane);
     }
 
-    fn make_overlay(&self, size: Rect, fill_text: &str) -> Paragraph<'_> {
+    fn draw_overlay(&self, size: Rect, fill_text: &str, frame: &mut Frame) {
         let lines: Vec<Line<'_>> =
             vec![fill_text.repeat(size.width.into()).into(); size.height.into()];
 
-        Paragraph::new(lines)
+        let overlay = Paragraph::new(lines)
             .fg(self.colors.primary.hover)
             .bg(self.colors.primary.background.into())
-            .bold()
+            .bold();
+
+        frame.render_widget(overlay, size);
     }
 
     fn draw_help_popup(&self, size: Rect, frame: &mut Frame) {
         frame.render_widget(Clear, size);
-        let overlay = self.make_overlay(size, "助ける");
-        frame.render_widget(overlay, size);
+        self.draw_overlay(size, "助ける", frame);
 
         let lines = vec![
             Line::from(vec![
@@ -396,8 +400,9 @@ impl<'a> Dashboard<'a> {
         );
     }
 
-    fn build_filter_input(&self) -> Line<'_> {
-        Line::from(format!("/{}", self.filter))
+    fn draw_filter_prompt(&self, frame: &mut Frame) {
+        let filter = Line::from(format!("/{}", self.filter));
+        frame.render_widget(filter, self.layout.hint_pane);
     }
 
     fn draw_schemas_list(&mut self, frame: &mut Frame) {
@@ -467,9 +472,8 @@ impl<'a> Dashboard<'a> {
     }
 
     fn draw_form_popup(&mut self, size: Rect, frame: &mut Frame) {
-        frame.render_widget(Clear, size);
-        let overlay = self.make_overlay(size, "新");
-        frame.render_widget(overlay, size);
+        self.draw_background(size, frame);
+        self.draw_overlay(size, "新", frame);
 
         let form = NewCollectionForm::new(self.colors);
         form.render(
@@ -477,11 +481,6 @@ impl<'a> Dashboard<'a> {
             frame.buffer_mut(),
             &mut self.form_state,
         );
-    }
-
-    fn draw_filter_line(&self, frame: &mut Frame) {
-        let filter_input = self.build_filter_input();
-        frame.render_widget(filter_input, self.layout.help_pane);
     }
 
     fn draw_delete_prompt(&self, frame: &mut Frame) {
@@ -506,11 +505,6 @@ impl<'a> Dashboard<'a> {
         confirm_popup.render(self.layout.confirm_popup, frame.buffer_mut());
     }
 
-    fn draw_hint_text(&self, frame: &mut Frame) {
-        let hint_text = self.build_hint_text();
-        frame.render_widget(hint_text, self.layout.help_pane);
-    }
-
     fn draw_title(&self, frame: &mut Frame) -> anyhow::Result<()> {
         let title = BigText::builder()
             .pixel_size(PixelSize::Quadrant)
@@ -518,7 +512,9 @@ impl<'a> Dashboard<'a> {
             .lines(vec!["Select a collection".into()])
             .alignment(Alignment::Center)
             .build()?;
+
         frame.render_widget(title, self.layout.title_pane);
+
         Ok(())
     }
 }
@@ -538,7 +534,7 @@ impl Component for Dashboard<'_> {
         match self.pane_focus {
             PaneFocus::Error => self.draw_error_popup(frame),
             PaneFocus::Form => self.draw_form_popup(size, frame),
-            PaneFocus::Filter => self.draw_filter_line(frame),
+            PaneFocus::Filter => self.draw_filter_prompt(frame),
             PaneFocus::Help => self.draw_help_popup(size, frame),
             PaneFocus::Prompt => self.draw_delete_prompt(frame),
             PaneFocus::List => self.draw_hint_text(frame),
@@ -594,27 +590,27 @@ fn build_layout(size: Rect) -> DashboardLayout {
         14,
     );
     let confirm_popup = Rect::new(
-        size.width / 4,
+        size.width.div(4),
         size.height.div(2).saturating_sub(4),
-        size.width / 2,
+        size.width.div(2),
         8,
     );
     let form_popup = Rect::new(
-        size.width / 4,
+        size.width.div(4),
         size.height.div(2).saturating_sub(7),
-        size.width / 2,
+        size.width.div(2),
         14,
     );
     let error_popup = Rect::new(
-        size.width / 4,
+        size.width.div(4),
         size.height.div(2).saturating_sub(10),
-        size.width / 2,
+        size.width.div(2),
         20,
     );
 
     DashboardLayout {
         schemas_pane,
-        help_pane,
+        hint_pane: help_pane,
         title_pane,
         help_popup,
         confirm_popup,
@@ -625,6 +621,7 @@ fn build_layout(size: Rect) -> DashboardLayout {
 
 #[cfg(test)]
 mod tests {
+    use ratatui::{backend::TestBackend, buffer::Cell, Terminal};
     use reqtui::schema;
     use std::{
         fs::{create_dir, File},
@@ -662,12 +659,21 @@ mod tests {
         }
     }
 
+    fn get_rendered_from_buffer(frame: &mut Frame, size: Rect) -> Vec<String> {
+        frame
+            .buffer_mut()
+            .content
+            .chunks(size.width.into())
+            .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+            .collect::<Vec<_>>()
+    }
+
     #[test]
     fn test_build_layout() {
         let size = Rect::new(0, 0, 80, 24);
         let expected = DashboardLayout {
             schemas_pane: Rect::new(1, 6, 79, 17),
-            help_pane: Rect::new(1, 23, 79, 1),
+            hint_pane: Rect::new(1, 23, 79, 1),
             title_pane: Rect::new(1, 1, 79, 5),
             help_popup: Rect::new(14, 5, 50, 14),
             confirm_popup: Rect::new(19, 8, 39, 8),
@@ -922,7 +928,6 @@ mod tests {
         let colors = colors::Colors::default();
         let (_guard, path) = setup_temp_schemas(3);
         let schemas = schema::schema::get_schemas(path).unwrap();
-
         let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
 
         feed_keys(
@@ -938,5 +943,507 @@ mod tests {
         );
 
         assert_eq!(dashboard.pane_focus, PaneFocus::List);
+    }
+
+    #[test]
+    fn test_display_error() {
+        let size = Rect::new(0, 0, 80, 24);
+        let colors = colors::Colors::default();
+        let mut dashboard = Dashboard::new(size, &colors, vec![]).unwrap();
+
+        dashboard.display_error("any error message".into());
+
+        assert_eq!(dashboard.pane_focus, PaneFocus::Error);
+        assert_eq!(dashboard.error_message, "any error message");
+    }
+
+    #[test]
+    fn test_draw_background() {
+        let colors = colors::Colors::default();
+        let size = Rect::new(0, 0, 80, 22);
+        let dashboard = Dashboard::new(size, &colors, vec![]).unwrap();
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
+        let mut frame = terminal.get_frame();
+
+        for cell in frame.buffer_mut().content.iter() {
+            assert_eq!(cell, &Cell::default());
+        }
+
+        dashboard.draw_background(size, &mut frame);
+
+        for cell in frame.buffer_mut().content.iter() {
+            assert_eq!(cell.bg, colors.primary.background.into());
+        }
+    }
+
+    #[test]
+    fn test_draw_empty_message() {
+        let colors = colors::Colors::default();
+        let size = Rect::new(0, 0, 80, 22);
+        let mut dashboard = Dashboard::new(size, &colors, vec![]).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
+        let mut frame = terminal.get_frame();
+
+        let expected = [
+            "                    █▖▐▌                ▜▌                                      ",
+            "                    █▜▟▌▟▀▙     ▟▀▀ ▟▀▙ ▐▙▜▖▟▀▙ █▄█▖▝▀▙ ▟▀▀                     ",
+            "                    █ ▜▌█ █     ▝▀▙ █ ▄ ▐▌▐▌█▀▀ █▜▜▌▟▀█ ▝▀▙                     ",
+            "                    ▀ ▝▘▝▀▘     ▀▀▘ ▝▀▘ ▀▘▝▘▝▀▘ ▀ ▝▘▝▀▝▘▀▀▘                     ",
+        ];
+
+        dashboard.draw(&mut frame, size).unwrap();
+
+        let rendered = frame
+            .buffer_mut()
+            .content
+            .chunks(size.width.into())
+            .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+            .collect::<Vec<_>>();
+
+        let result = [&rendered[10], &rendered[11], &rendered[12], &rendered[13]];
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_draw_no_matches_message() {
+        let colors = colors::Colors::default();
+        let size = Rect::new(0, 0, 80, 22);
+        let (_guard, path) = setup_temp_schemas(3);
+        let schemas = schema::schema::get_schemas(path).unwrap();
+        let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
+        let mut frame = terminal.get_frame();
+
+        let expected = [
+            "                    █▖▐▌                 ▟      ▜▌                              ",
+            "                    █▜▟▌▟▀▙     █▄█▖▝▀▙ ▝█▀ ▟▀▙ ▐▙▜▖▟▀▙ ▟▀▀                     ",
+            "                    █ ▜▌█ █     █▜▜▌▟▀█  █▗ █ ▄ ▐▌▐▌█▀▀ ▝▀▙                     ",
+            "                    ▀ ▝▘▝▀▘     ▀ ▝▘▝▀▝▘ ▝▘ ▝▀▘ ▀▘▝▘▝▀▘ ▀▀▘                     ",
+        ];
+
+        feed_keys(
+            &mut dashboard,
+            &[
+                KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+            ],
+        );
+        dashboard.draw(&mut frame, size).unwrap();
+
+        let rendered = frame
+            .buffer_mut()
+            .content
+            .chunks(size.width.into())
+            .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+            .collect::<Vec<_>>();
+
+        let result = [&rendered[10], &rendered[11], &rendered[12], &rendered[13]];
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn draw_hint_text() {
+        let colors = colors::Colors::default();
+        let size = Rect::new(0, 0, 80, 22);
+        let (_guard, path) = setup_temp_schemas(3);
+        let schemas = schema::schema::get_schemas(path).unwrap();
+        let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
+        let mut frame = terminal.get_frame();
+
+        let expected =
+            [" [h/j/k/l to move] [n -> new] [enter -> select item] [? -> help] [<C-c> -> quit]"];
+
+        dashboard.draw(&mut frame, size).unwrap();
+        let rendered = get_rendered_from_buffer(&mut frame, size);
+        let result = [rendered.last().unwrap().as_str()];
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn draw_filter_prompt() {
+        let colors = colors::Colors::default();
+        let size = Rect::new(0, 0, 80, 22);
+        let (_guard, path) = setup_temp_schemas(3);
+        let schemas = schema::schema::get_schemas(path).unwrap();
+        let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
+        let mut frame = terminal.get_frame();
+        let expected =
+            [" /any_filter                                                                    "];
+
+        feed_keys(
+            &mut dashboard,
+            &[
+                KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('_'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE),
+                KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE),
+            ],
+        );
+
+        dashboard.draw(&mut frame, size).unwrap();
+        let rendered = get_rendered_from_buffer(&mut frame, size);
+        let result = [rendered.last().unwrap().as_str()];
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_draw_title() {
+        let colors = colors::Colors::default();
+        let size = Rect::new(0, 0, 80, 22);
+        let mut dashboard = Dashboard::new(size, &colors, vec![]).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
+        let mut frame = terminal.get_frame();
+
+        let expected = [
+            "  ▟▀▙     ▝█           ▟                      ▝█  ▝█           ▟   ▀            ",
+            "  ▜▙  ▟▀▙  █  ▟▀▙ ▟▀▙ ▝█▀     ▝▀▙     ▟▀▙ ▟▀▙  █   █  ▟▀▙ ▟▀▙ ▝█▀ ▝█  ▟▀▙ █▀▙   ",
+            "  ▄▝█ █▀▀  █  █▀▀ █ ▄  █▗     ▟▀█     █ ▄ █ █  █   █  █▀▀ █ ▄  █▗  █  █ █ █ █   ",
+            "  ▝▀▘ ▝▀▘ ▝▀▘ ▝▀▘ ▝▀▘  ▝▘     ▝▀▝▘    ▝▀▘ ▝▀▘ ▝▀▘ ▝▀▘ ▝▀▘ ▝▀▘  ▝▘ ▝▀▘ ▝▀▘ ▀ ▀   ",
+        ];
+
+        dashboard.draw(&mut frame, size).unwrap();
+
+        let rendered = frame
+            .buffer_mut()
+            .content
+            .chunks(size.width.into())
+            .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+            .collect::<Vec<_>>();
+
+        let result = [&rendered[1], &rendered[2], &rendered[3], &rendered[4]];
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_draw_overlay() {
+        let colors = colors::Colors::default();
+        let size = Rect::new(0, 0, 80, 22);
+        let dashboard = Dashboard::new(size, &colors, vec![]).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
+        let mut frame = terminal.get_frame();
+
+        let expected = (0..22)
+            .map(|_| "_".repeat(size.width.into()))
+            .collect::<Vec<_>>();
+
+        dashboard.draw_overlay(size, "_", &mut frame);
+
+        let rendered = frame
+            .buffer_mut()
+            .content
+            .chunks(size.width.into())
+            .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+            .collect::<Vec<_>>();
+
+        assert_eq!(rendered, expected);
+    }
+
+    #[test]
+    fn test_draw_error() {
+        let colors = colors::Colors::default();
+        let size = Rect::new(0, 0, 80, 22);
+        let mut dashboard = Dashboard::new(size, &colors, vec![]).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
+        let mut frame = terminal.get_frame();
+
+        let expected = [
+            "                                                                                ",
+            "  ▟▀▙     ▝█       ┌─────────────────────────────────────┐     ▟   ▀            ",
+            "  ▜▙  ▟▀▙  █  ▟▀▙ ▟│                                     │▟▀▙ ▝█▀ ▝█  ▟▀▙ █▀▙   ",
+            "  ▄▝█ █▀▀  █  █▀▀ █│ any_error_message                   │█ ▄  █▗  █  █ █ █ █   ",
+            "  ▝▀▘ ▝▀▘ ▝▀▘ ▝▀▘ ▝│                                     │▝▀▘  ▝▘ ▝▀▘ ▝▀▘ ▀ ▀   ",
+            "                   │                                     │                      ",
+            "                   │                                     │                      ",
+            "                   │                                     │                      ",
+            "                   │                                     │                      ",
+            "                   │                                     │                      ",
+            "                   │                                     │                      ",
+            "                   │                                     │▀                     ",
+            "                   │                                     │▙                     ",
+            "                   │                                     │▘                     ",
+            "                   │                                     │                      ",
+            "                   │                                     │                      ",
+            "                   │                                     │                      ",
+            "                   │                                     │                      ",
+            "                   │                (O)k                 │                      ",
+            "                   │                                     │                      ",
+            "                   └─────────────────────────────────────┘                      ",
+            "                                                                                ",
+        ];
+
+        dashboard.display_error("any_error_message".into());
+        dashboard.draw(&mut frame, size).unwrap();
+
+        let rendered = frame
+            .buffer_mut()
+            .content
+            .chunks(size.width.into())
+            .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+            .collect::<Vec<_>>();
+
+        assert_eq!(rendered, expected);
+    }
+
+    #[test]
+    fn test_draw_help() {
+        let colors = colors::Colors::default();
+        let size = Rect::new(0, 0, 80, 22);
+        let mut dashboard = Dashboard::new(size, &colors, vec![]).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
+        let mut frame = terminal.get_frame();
+
+        let expected = [
+            "助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助                                                   る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助   h/<left>    - select left item                  る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助   j/<down>    - select item below                 る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助   k/<up>      - select item above                 る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助   l/<right>   - select right item                 る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助   n/c         - creates a new collection          る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助   d           - deletes the selected collection   る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助   ?           - toggle this help window           る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助   enter       - select item under cursor          る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助   /           - enter filter mode                 る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助   <C-c>       - quits the application             る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助                                                   る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助              press any key to go back             る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助                                                   る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 ",
+            "助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 け る 助 ",
+        ];
+
+        feed_keys(
+            &mut dashboard,
+            &[KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE)],
+        );
+        dashboard.draw(&mut frame, size).unwrap();
+
+        let rendered = frame
+            .buffer_mut()
+            .content
+            .chunks(size.width.into())
+            .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+            .collect::<Vec<_>>();
+
+        assert_eq!(rendered, expected);
+    }
+
+    #[test]
+    fn test_draw_form_popup() {
+        let colors = colors::Colors::default();
+        let size = Rect::new(0, 0, 80, 22);
+        let mut dashboard = Dashboard::new(size, &colors, vec![]).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
+        let mut frame = terminal.get_frame();
+
+        let expected = [
+            "新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新                                       新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新  ╭Name─────────────────────────────╮  新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新  │My awesome API                   │  新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新  ╰─────────────────────────────────╯  新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新  ╭Description──────────────────────╮  新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新  │Request testing                  │  新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新  ╰─────────────────────────────────╯  新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新                                       新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新         ╭────────╮ ╭────────╮         新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新         │ Create │ │ Cancel │         新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新         ╰────────╯ ╰────────╯         新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新                                       新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新  [Tab] to switch focus [Enter] to se  新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新                                       新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 ",
+            "新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 新 ",
+        ];
+
+        feed_keys(
+            &mut dashboard,
+            &[KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE)],
+        );
+        dashboard.draw(&mut frame, size).unwrap();
+
+        let rendered = frame
+            .buffer_mut()
+            .content
+            .chunks(size.width.into())
+            .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+            .collect::<Vec<_>>();
+
+        assert_eq!(rendered, expected);
+    }
+
+    #[test]
+    fn test_draw_delete_prompt() {
+        let colors = colors::Colors::default();
+        let size = Rect::new(0, 0, 80, 22);
+        let (_guard, path) = setup_temp_schemas(3);
+        let schemas = schema::schema::get_schemas(path).unwrap();
+        let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
+        let mut frame = terminal.get_frame();
+
+        let expected = [
+            "                                                                                ",
+            "  ▟▀▙     ▝█           ▟                      ▝█  ▝█           ▟   ▀            ",
+            "  ▜▙  ▟▀▙  █  ▟▀▙ ▟▀▙ ▝█▀     ▝▀▙     ▟▀▙ ▟▀▙  █   █  ▟▀▙ ▟▀▙ ▝█▀ ▝█  ▟▀▙ █▀▙   ",
+            "  ▄▝█ █▀▀  █  █▀▀ █ ▄  █▗     ▟▀█     █ ▄ █ █  █   █  █▀▀ █ ▄  █▗  █  █ █ █ █   ",
+            "  ▝▀▘ ▝▀▘ ▝▀▘ ▝▀▘ ▝▀▘  ▝▘     ▝▀▝▘    ▝▀▘ ▝▀▘ ▝▀▘ ▝▀▘ ▝▀▘ ▝▀▘  ▝▘ ▝▀▘ ▝▀▘ ▀ ▀   ",
+            "                                                                                ",
+            " ╭────────────────────────────────────╮╭────────────────────────────────────╮ ↑ ",
+            " │test_collection_0┌─────────────────────────────────────┐                  │ █ ",
+            " │test_description_│                                     │                  │ █ ",
+            " ╰─────────────────│  You really want to delete          │──────────────────╯ █ ",
+            " ╭─────────────────│  collection test_collection_0?      │                    █ ",
+            " │test_collection_2│                                     │                    █ ",
+            " │test_description_│             (y)es (n)o              │                    █ ",
+            " ╰─────────────────│                                     │                    █ ",
+            "                   └─────────────────────────────────────┘                    █ ",
+            "                                                                              █ ",
+            "                                                                              █ ",
+            "                                                                              █ ",
+            "                                                                              █ ",
+            "                                                                              █ ",
+            "                                                                              ↓ ",
+            "                                                                                ",
+        ];
+
+        feed_keys(
+            &mut dashboard,
+            &[KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE)],
+        );
+        dashboard.draw(&mut frame, size).unwrap();
+
+        let rendered = frame
+            .buffer_mut()
+            .content
+            .chunks(size.width.into())
+            .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+            .collect::<Vec<_>>();
+
+        assert_eq!(rendered, expected);
+    }
+
+    #[test]
+    fn test_draw_schema_list() {
+        let colors = colors::Colors::default();
+        let size = Rect::new(0, 0, 80, 22);
+        let (_guard, path) = setup_temp_schemas(3);
+        let schemas = schema::schema::get_schemas(path).unwrap();
+        let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
+        let mut frame = terminal.get_frame();
+
+        let expected = [
+            "                                                                                ",
+            "  ▟▀▙     ▝█           ▟                      ▝█  ▝█           ▟   ▀            ",
+            "  ▜▙  ▟▀▙  █  ▟▀▙ ▟▀▙ ▝█▀     ▝▀▙     ▟▀▙ ▟▀▙  █   █  ▟▀▙ ▟▀▙ ▝█▀ ▝█  ▟▀▙ █▀▙   ",
+            "  ▄▝█ █▀▀  █  █▀▀ █ ▄  █▗     ▟▀█     █ ▄ █ █  █   █  █▀▀ █ ▄  █▗  █  █ █ █ █   ",
+            "  ▝▀▘ ▝▀▘ ▝▀▘ ▝▀▘ ▝▀▘  ▝▘     ▝▀▝▘    ▝▀▘ ▝▀▘ ▝▀▘ ▝▀▘ ▝▀▘ ▝▀▘  ▝▘ ▝▀▘ ▝▀▘ ▀ ▀   ",
+            "                                                                                ",
+            " ╭────────────────────────────────────╮╭────────────────────────────────────╮ ↑ ",
+            " │test_collection_0                   ││test_collection_1                   │ █ ",
+            " │test_description_0                  ││test_description_1                  │ █ ",
+            " ╰────────────────────────────────────╯╰────────────────────────────────────╯ █ ",
+            " ╭────────────────────────────────────╮                                       █ ",
+            " │test_collection_2                   │                                       █ ",
+            " │test_description_2                  │                                       █ ",
+            " ╰────────────────────────────────────╯                                       █ ",
+            "                                                                              █ ",
+            "                                                                              █ ",
+            "                                                                              █ ",
+            "                                                                              █ ",
+            "                                                                              █ ",
+            "                                                                              █ ",
+            "                                                                              ↓ ",
+            " [h/j/k/l to move] [n -> new] [enter -> select item] [? -> help] [<C-c> -> quit]",
+        ];
+
+        dashboard.draw(&mut frame, size).unwrap();
+
+        let rendered = frame
+            .buffer_mut()
+            .content
+            .chunks(size.width.into())
+            .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+            .collect::<Vec<_>>();
+
+        assert_eq!(rendered, expected);
+    }
+
+    #[test]
+    fn test_close_error_popup() {
+        let colors = colors::Colors::default();
+        let size = Rect::new(0, 0, 80, 22);
+        let (_guard, path) = setup_temp_schemas(3);
+        let schemas = schema::schema::get_schemas(path).unwrap();
+        let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+
+        dashboard.display_error("any_error_message".into());
+        assert_eq!(dashboard.pane_focus, PaneFocus::Error);
+        feed_keys(
+            &mut dashboard,
+            &[KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE)],
+        );
+
+        assert_eq!(dashboard.pane_focus, PaneFocus::List);
+    }
+
+    #[test]
+    fn test_resizing() {
+        let colors = colors::Colors::default();
+        let size = Rect::new(0, 0, 80, 22);
+        let new_size = Rect::new(0, 0, 80, 24);
+        let (_guard, path) = setup_temp_schemas(3);
+        let schemas = schema::schema::get_schemas(path).unwrap();
+        let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+        let expected = DashboardLayout {
+            schemas_pane: Rect::new(1, 6, 79, 17),
+            hint_pane: Rect::new(1, 23, 79, 1),
+            title_pane: Rect::new(1, 1, 79, 5),
+            help_popup: Rect::new(14, 5, 50, 14),
+            confirm_popup: Rect::new(19, 8, 39, 8),
+            form_popup: Rect::new(19, 5, 39, 14),
+            error_popup: Rect::new(19, 2, 39, 20),
+        };
+
+        dashboard.resize(new_size);
+        assert_eq!(dashboard.layout, expected);
     }
 }

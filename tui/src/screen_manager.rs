@@ -45,6 +45,10 @@ impl<'a> ScreenManager<'a> {
     }
 
     fn restore_screen(&mut self) {
+        if self.curr_screen.ne(&Screens::TerminalTooSmall) {
+            return;
+        }
+
         let temp = self.curr_screen.clone();
         self.curr_screen = self.prev_screen.clone();
         self.prev_screen = temp;
@@ -134,7 +138,7 @@ impl Component for ScreenManager<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::backend::CrosstermBackend;
+    use ratatui::backend::TestBackend;
     use ratatui::terminal::Terminal;
     use reqtui::schema::types::*;
 
@@ -144,7 +148,7 @@ mod tests {
         let small_in_height = Rect::new(0, 0, 100, 19);
         let colors = colors::Colors::default();
         let mut sm = ScreenManager::new(small_in_width, &colors).unwrap();
-        let mut terminal = Terminal::new(CrosstermBackend::new(std::io::stdout())).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
 
         sm.draw(&mut terminal.get_frame(), small_in_width).unwrap();
         assert_eq!(sm.curr_screen, Screens::TerminalTooSmall);
@@ -159,11 +163,14 @@ mod tests {
         let enough = Rect::new(0, 0, 80, 22);
         let colors = colors::Colors::default();
         let mut sm = ScreenManager::new(small, &colors).unwrap();
-        let mut terminal = Terminal::new(CrosstermBackend::new(std::io::stdout())).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
 
+        terminal.resize(small).unwrap();
         sm.draw(&mut terminal.get_frame(), small).unwrap();
         assert_eq!(sm.curr_screen, Screens::TerminalTooSmall);
+        assert_eq!(sm.prev_screen, Screens::Dashboard);
 
+        terminal.resize(enough).unwrap();
         sm.draw(&mut terminal.get_frame(), enough).unwrap();
         assert_eq!(sm.curr_screen, Screens::Dashboard);
         assert_eq!(sm.prev_screen, Screens::TerminalTooSmall);

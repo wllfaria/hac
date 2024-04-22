@@ -168,7 +168,7 @@ mod tests {
     use std::ops::Sub;
 
     use super::*;
-    use ratatui::{backend::CrosstermBackend, buffer::Cell, Terminal};
+    use ratatui::{backend::TestBackend, buffer::Cell, Terminal};
     use reqtui::schema::types::*;
 
     fn sample_schema() -> Schema {
@@ -243,7 +243,7 @@ mod tests {
         let colors = colors::Colors::default();
         let schemas = (0..100).map(|_| sample_schema()).collect::<Vec<_>>();
 
-        let backend = CrosstermBackend::new(std::io::stdout());
+        let backend = TestBackend::new(80, 22);
         let mut terminal = Terminal::new(backend).unwrap();
         let size = terminal.size().unwrap();
         let mut frame = terminal.get_frame();

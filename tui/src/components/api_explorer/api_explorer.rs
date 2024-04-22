@@ -5,14 +5,14 @@ use crate::components::{
     },
     Component,
 };
-use anyhow::Context;
-use crossterm::event::{KeyCode, KeyEvent};
 use reqtui::{
     command::Command,
     net::request_manager::{ReqtuiNetRequest, ReqtuiResponse},
     schema::types::{Request, RequestKind, Schema},
 };
 
+use anyhow::Context;
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Stylize,
@@ -279,7 +279,7 @@ fn traverse(
     needle: &RequestKind,
     path: &mut Vec<RequestKind>,
 ) -> bool {
-    let node_match = *current == *needle;
+    let node_match = current.eq(needle);
 
     match (&visit, node_match, &found) {
         // We are looking for the next item and we already found the current one (needle), so the
