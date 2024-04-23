@@ -32,6 +32,8 @@ where
         collections.push(schema);
     }
 
+    collections.sort_by(|a, b| a.info.name.cmp(&b.info.name));
+
     Ok(collections)
 }
 

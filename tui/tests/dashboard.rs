@@ -401,6 +401,8 @@ fn test_draw_delete_prompt() {
         .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
         .collect::<Vec<_>>();
 
+    println!("{:?}", frame.buffer_mut());
+
     assert_eq!(rendered, expected);
 }
 

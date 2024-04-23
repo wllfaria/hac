@@ -1,6 +1,8 @@
 use crate::components::{
     api_explorer::{
         req_uri::ReqUri,
+        req_uri::ReqUriState,
+        res_viewer::{ResViewer, ResViewerState, ResViewerTabs},
         sidebar::{Sidebar, SidebarState},
     },
     Component,
@@ -21,11 +23,6 @@ use ratatui::{
 };
 use std::{collections::HashMap, ops::Add};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-
-use super::{
-    req_uri::ReqUriState,
-    res_viewer::{ResViewer, ResViewerState, ResViewerTabs},
-};
 
 #[derive(Debug, PartialEq)]
 pub struct ExplorerLayout {
