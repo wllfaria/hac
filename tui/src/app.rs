@@ -3,7 +3,7 @@ use crate::{
     event_pool::{Event, EventPool},
     screen_manager::ScreenManager,
 };
-use reqtui::command::Command;
+use reqtui::{command::Command, schema::Schema};
 
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io::Stdout;
@@ -17,10 +17,10 @@ pub struct App<'a> {
 }
 
 impl<'a> App<'a> {
-    pub fn new(colors: &'a colors::Colors) -> anyhow::Result<Self> {
+    pub fn new(colors: &'a colors::Colors, schemas: Vec<Schema>) -> anyhow::Result<Self> {
         let terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
         Ok(Self {
-            screen_manager: ScreenManager::new(terminal.size()?, colors)?,
+            screen_manager: ScreenManager::new(terminal.size()?, colors, schemas)?,
             event_pool: EventPool::new(30f64, 60f64),
             should_quit: false,
             terminal,

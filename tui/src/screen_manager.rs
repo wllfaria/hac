@@ -5,10 +5,10 @@ use crate::{
     },
     event_pool::Event,
 };
+use reqtui::{command::Command, schema::Schema};
+
 use anyhow::Context;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use reqtui::{command::Command, schema::schema};
-
 use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -30,9 +30,11 @@ pub struct ScreenManager<'a> {
 }
 
 impl<'a> ScreenManager<'a> {
-    pub fn new(size: Rect, colors: &'a colors::Colors) -> anyhow::Result<Self> {
-        let mut schemas = schema::get_schemas_from_config()?;
-        schemas.sort_by_key(|k| k.info.name.clone());
+    pub fn new(
+        size: Rect,
+        colors: &'a colors::Colors,
+        schemas: Vec<Schema>,
+    ) -> anyhow::Result<Self> {
         Ok(Self {
             curr_screen: Screens::Dashboard,
             prev_screen: Screens::Dashboard,
@@ -138,16 +140,46 @@ impl Component for ScreenManager<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::backend::TestBackend;
-    use ratatui::terminal::Terminal;
     use reqtui::schema::types::*;
+
+    use ratatui::{backend::TestBackend, Terminal};
+    use reqtui::schema;
+    use std::{
+        fs::{create_dir, File},
+        io::Write,
+    };
+    use tempfile::{tempdir, TempDir};
+
+    fn setup_temp_schemas(amount: usize) -> (TempDir, String) {
+        let tmp_data_dir = tempdir().expect("Failed to create temp data dir");
+
+        let tmp_dir = tmp_data_dir.path().join("schemas");
+        create_dir(&tmp_dir).expect("Failed to create schemas directory");
+
+        for i in 0..amount {
+            let file_path = tmp_dir.join(format!("test_schema_{}.json", i));
+            let mut tmp_file = File::create(&file_path).expect("Failed to create file");
+
+            write!(
+            tmp_file,
+            r#"{{"info": {{ "name": "test_collection_{}", "description": "test_description_{}" }}}}"#,
+            i, i
+        ).expect("Failed to write to file");
+
+            tmp_file.flush().expect("Failed to flush file");
+        }
+
+        (tmp_data_dir, tmp_dir.to_string_lossy().to_string())
+    }
 
     #[test]
     fn test_show_terminal_too_small_screen() {
         let small_in_width = Rect::new(0, 0, 79, 22);
         let small_in_height = Rect::new(0, 0, 100, 19);
         let colors = colors::Colors::default();
-        let mut sm = ScreenManager::new(small_in_width, &colors).unwrap();
+        let (_guard, path) = setup_temp_schemas(10);
+        let schemas = schema::schema::get_schemas(path).unwrap();
+        let mut sm = ScreenManager::new(small_in_width, &colors, schemas).unwrap();
         let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
 
         sm.draw(&mut terminal.get_frame(), small_in_width).unwrap();
@@ -162,7 +194,9 @@ mod tests {
         let small = Rect::new(0, 0, 79, 22);
         let enough = Rect::new(0, 0, 80, 22);
         let colors = colors::Colors::default();
-        let mut sm = ScreenManager::new(small, &colors).unwrap();
+        let (_guard, path) = setup_temp_schemas(10);
+        let schemas = schema::schema::get_schemas(path).unwrap();
+        let mut sm = ScreenManager::new(small, &colors, schemas).unwrap();
         let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
 
         terminal.resize(small).unwrap();
@@ -181,7 +215,9 @@ mod tests {
         let initial = Rect::new(0, 0, 80, 22);
         let expected = Rect::new(0, 0, 100, 22);
         let colors = colors::Colors::default();
-        let mut sm = ScreenManager::new(initial, &colors).unwrap();
+        let (_guard, path) = setup_temp_schemas(10);
+        let schemas = schema::schema::get_schemas(path).unwrap();
+        let mut sm = ScreenManager::new(initial, &colors, schemas).unwrap();
 
         sm.resize(expected);
 
@@ -201,8 +237,10 @@ mod tests {
             requests: None,
         };
         let command = Command::SelectSchema(schema.clone());
+        let (_guard, path) = setup_temp_schemas(10);
+        let schemas = schema::schema::get_schemas(path).unwrap();
 
-        let mut sm = ScreenManager::new(initial, &colors).unwrap();
+        let mut sm = ScreenManager::new(initial, &colors, schemas).unwrap();
         assert_eq!(sm.curr_screen, Screens::Dashboard);
 
         sm.handle_command(command);
@@ -213,7 +251,9 @@ mod tests {
     fn test_register_command_sender_for_dashboard() {
         let initial = Rect::new(0, 0, 80, 22);
         let colors = colors::Colors::default();
-        let mut sm = ScreenManager::new(initial, &colors).unwrap();
+        let (_guard, path) = setup_temp_schemas(10);
+        let schemas = schema::schema::get_schemas(path).unwrap();
+        let mut sm = ScreenManager::new(initial, &colors, schemas).unwrap();
 
         let (tx, _) = tokio::sync::mpsc::unbounded_channel::<Command>();
 
@@ -226,7 +266,9 @@ mod tests {
     fn test_quit_event() {
         let initial = Rect::new(0, 0, 80, 22);
         let colors = colors::Colors::default();
-        let mut sm = ScreenManager::new(initial, &colors).unwrap();
+        let (_guard, path) = setup_temp_schemas(10);
+        let schemas = schema::schema::get_schemas(path).unwrap();
+        let mut sm = ScreenManager::new(initial, &colors, schemas).unwrap();
 
         let event = Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
 

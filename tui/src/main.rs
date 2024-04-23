@@ -1,3 +1,4 @@
+use reqtui::schema::schema;
 use tui::app;
 
 use std::path::PathBuf;
@@ -25,7 +26,9 @@ async fn main() -> anyhow::Result<()> {
     let _guard = setup_tracing(&data_dir)?;
 
     let colors = colors::Colors::default();
-    let mut app = app::App::new(&colors)?;
+    let mut schemas = schema::get_schemas_from_config()?;
+    schemas.sort_by_key(|k| k.info.name.clone());
+    let mut app = app::App::new(&colors, schemas)?;
     app.run().await?;
 
     Ok(())
