@@ -53,7 +53,7 @@ pub struct ApiExplorer<'a> {
     layout: ExplorerLayout,
     schema: Schema,
 
-    focus: PaneFocus,
+    focused_pane: PaneFocus,
     selected_pane: Option<PaneFocus>,
     preview_tab: ResViewerTabs,
     raw_preview_scroll: usize,
@@ -67,7 +67,7 @@ pub struct ApiExplorer<'a> {
     response_rx: UnboundedReceiver<ReqtuiNetRequest>,
     request_tx: UnboundedSender<ReqtuiNetRequest>,
 
-    response: Option<ReqtuiResponse>,
+    responses_map: HashMap<Request, ReqtuiResponse>,
 }
 
 impl<'a> ApiExplorer<'a> {
@@ -93,19 +93,21 @@ impl<'a> ApiExplorer<'a> {
 
         ApiExplorer {
             schema,
+            focused_pane: PaneFocus::ReqUri,
+            selected_pane: None,
+            layout,
+            colors,
+
             hovered_request,
             selected_request,
             dirs_expanded: HashMap::default(),
-            focus: PaneFocus::ReqUri,
-            layout,
-            colors,
-            selected_pane: None,
+            responses_map: HashMap::default(),
+
             preview_tab: ResViewerTabs::Preview,
             raw_preview_scroll: 0,
 
             response_rx,
             request_tx,
-            response: None,
         }
     }
 
@@ -179,7 +181,7 @@ impl<'a> ApiExplorer<'a> {
             self.selected_request.as_ref(),
             self.hovered_request.as_ref(),
             &mut self.dirs_expanded,
-            self.focus == PaneFocus::Sidebar,
+            self.focused_pane == PaneFocus::Sidebar,
         );
 
         Sidebar::new(self.colors).render(self.layout.sidebar, frame.buffer_mut(), &mut state);
@@ -188,19 +190,24 @@ impl<'a> ApiExplorer<'a> {
     fn draw_req_uri(&mut self, frame: &mut Frame) {
         let mut state = ReqUriState::new(
             self.selected_request.as_ref(),
-            self.focus == PaneFocus::ReqUri,
+            self.focused_pane == PaneFocus::ReqUri,
         );
         ReqUri::new(self.colors).render(self.layout.req_uri, frame.buffer_mut(), &mut state);
     }
 
     fn draw_response_viewer(&mut self, frame: &mut Frame) {
+        let current_response = self
+            .selected_request
+            .as_ref()
+            .and_then(|selected| self.responses_map.get(selected));
+
         let mut state = ResViewerState::new(
-            self.focus == PaneFocus::Preview,
+            self.focused_pane == PaneFocus::Preview,
             self.selected_pane
                 .as_ref()
                 .map(|sel| sel.eq(&PaneFocus::Preview))
                 .unwrap_or(false),
-            self.response.clone(),
+            current_response.cloned(),
             self.preview_tab.clone(),
             &mut self.raw_preview_scroll,
         );
@@ -214,7 +221,9 @@ impl<'a> ApiExplorer<'a> {
 
     fn drain_response_rx(&mut self) {
         while let Ok(ReqtuiNetRequest::Response(res)) = self.response_rx.try_recv() {
-            self.response = Some(res);
+            if let Some(ref req) = self.selected_request {
+                self.responses_map.insert(req.clone(), res);
+            }
         }
     }
 
@@ -254,10 +263,10 @@ impl Component for ApiExplorer<'_> {
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         if let KeyCode::Tab = key_event.code {
-            match (&self.focus, &self.selected_pane) {
-                (PaneFocus::Sidebar, None) => self.focus = PaneFocus::ReqUri,
-                (PaneFocus::ReqUri, None) => self.focus = PaneFocus::Preview,
-                (PaneFocus::Preview, None) => self.focus = PaneFocus::Sidebar,
+            match (&self.focused_pane, &self.selected_pane) {
+                (PaneFocus::Sidebar, None) => self.focused_pane = PaneFocus::ReqUri,
+                (PaneFocus::ReqUri, None) => self.focused_pane = PaneFocus::Preview,
+                (PaneFocus::Preview, None) => self.focused_pane = PaneFocus::Sidebar,
 
                 (PaneFocus::Preview, Some(_)) => {
                     self.handle_preview_key_event(key_event)?;
@@ -267,7 +276,7 @@ impl Component for ApiExplorer<'_> {
             return Ok(None);
         };
 
-        match self.focus {
+        match self.focused_pane {
             PaneFocus::Sidebar => self.handle_sidebar_key_event(key_event),
             PaneFocus::ReqUri => self.handle_req_uri_key_event(key_event),
             PaneFocus::Preview => self.handle_preview_key_event(key_event),
