@@ -19,12 +19,12 @@ use ratatui::{
     widgets::{Block, Clear, StatefulWidget},
     Frame,
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Add};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use super::{
     req_uri::ReqUriState,
-    res_viewer::{ResViewer, ResViewerState},
+    res_viewer::{ResViewer, ResViewerState, ResViewerTabs},
 };
 
 #[derive(Debug, PartialEq)]
@@ -54,6 +54,9 @@ pub struct ApiExplorer<'a> {
     schema: Schema,
 
     focus: PaneFocus,
+    selected_pane: Option<PaneFocus>,
+    preview_tab: ResViewerTabs,
+    raw_preview_scroll: usize,
 
     selected_request: Option<Request>,
     hovered_request: Option<RequestKind>,
@@ -96,6 +99,9 @@ impl<'a> ApiExplorer<'a> {
             focus: PaneFocus::ReqUri,
             layout,
             colors,
+            selected_pane: None,
+            preview_tab: ResViewerTabs::Preview,
+            raw_preview_scroll: 0,
 
             response_rx,
             request_tx,
@@ -188,8 +194,16 @@ impl<'a> ApiExplorer<'a> {
     }
 
     fn draw_response_viewer(&mut self, frame: &mut Frame) {
-        let mut state =
-            ResViewerState::new(self.focus == PaneFocus::Preview, self.response.clone());
+        let mut state = ResViewerState::new(
+            self.focus == PaneFocus::Preview,
+            self.selected_pane
+                .as_ref()
+                .map(|sel| sel.eq(&PaneFocus::Preview))
+                .unwrap_or(false),
+            self.response.clone(),
+            self.preview_tab.clone(),
+            &mut self.raw_preview_scroll,
+        );
 
         frame.render_stateful_widget(
             ResViewer::new(self.colors),
@@ -202,6 +216,21 @@ impl<'a> ApiExplorer<'a> {
         while let Ok(ReqtuiNetRequest::Response(res)) = self.response_rx.try_recv() {
             self.response = Some(res);
         }
+    }
+
+    fn handle_preview_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
+        match key_event.code {
+            KeyCode::Enter => self.selected_pane = Some(PaneFocus::Preview),
+            KeyCode::Tab => self.preview_tab = ResViewerTabs::next(&self.preview_tab),
+            KeyCode::Esc => self.selected_pane = None,
+            KeyCode::Char('k') => {
+                self.raw_preview_scroll = self.raw_preview_scroll.saturating_sub(1)
+            }
+            KeyCode::Char('j') => self.raw_preview_scroll = self.raw_preview_scroll.add(1),
+            _ => {}
+        }
+
+        Ok(None)
     }
 }
 
@@ -225,17 +254,23 @@ impl Component for ApiExplorer<'_> {
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         if let KeyCode::Tab = key_event.code {
-            match self.focus {
-                PaneFocus::Sidebar => self.focus = PaneFocus::ReqUri,
-                PaneFocus::ReqUri => self.focus = PaneFocus::Preview,
-                PaneFocus::Preview => self.focus = PaneFocus::Sidebar,
+            match (&self.focus, &self.selected_pane) {
+                (PaneFocus::Sidebar, None) => self.focus = PaneFocus::ReqUri,
+                (PaneFocus::ReqUri, None) => self.focus = PaneFocus::Preview,
+                (PaneFocus::Preview, None) => self.focus = PaneFocus::Sidebar,
+
+                (PaneFocus::Preview, Some(_)) => {
+                    self.handle_preview_key_event(key_event)?;
+                }
+                _ => {}
             }
+            return Ok(None);
         };
 
         match self.focus {
             PaneFocus::Sidebar => self.handle_sidebar_key_event(key_event),
             PaneFocus::ReqUri => self.handle_req_uri_key_event(key_event),
-            PaneFocus::Preview => Ok(None),
+            PaneFocus::Preview => self.handle_preview_key_event(key_event),
         }
     }
 }
