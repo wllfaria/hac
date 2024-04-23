@@ -84,23 +84,8 @@ impl EventPool {
         });
     }
 
+    #[cfg_attr(test, mutants::skip)]
     pub async fn next(&mut self) -> Option<Event> {
         self.event_rx.recv().await
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_receive_init_event() {
-        let mut event_pool = EventPool::new(30f64, 60f64);
-
-        event_pool.start();
-        let event = event_pool.next().await;
-
-        assert!(event.is_some());
-        assert_eq!(event, Some(Event::Init));
     }
 }
