@@ -199,7 +199,7 @@ impl<'a> ApiExplorer<'a> {
             .and_then(|selected| self.responses_map.get(selected));
 
         let mut state = ResViewerState::new(
-            self.focused_pane == PaneFocus::Preview,
+            self.focused_pane.eq(&PaneFocus::Preview),
             self.selected_pane
                 .as_ref()
                 .map(|sel| sel.eq(&PaneFocus::Preview))
@@ -219,6 +219,7 @@ impl<'a> ApiExplorer<'a> {
     fn drain_response_rx(&mut self) {
         while let Ok(ReqtuiNetRequest::Response(res)) = self.response_rx.try_recv() {
             if let Some(ref req) = self.selected_request {
+                tracing::debug!("{req:?}");
                 self.responses_map.insert(req.clone(), res);
             }
         }

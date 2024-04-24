@@ -11,3 +11,9 @@ serde.workspace = true
 tokio.workspace = true
 reqwest.workspace = true
 serde_json.workspace = true
+
+tree-sitter = "0.22.5"
+tree-sitter-json = "0.21"
+
+[build-dependencies]
+cc="*"

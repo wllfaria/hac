@@ -1,13 +1,19 @@
-use reqtui::net::request_manager::ReqtuiResponse;
+use reqtui::{net::request_manager::ReqtuiResponse, syntax::highlighter::Highlighter};
 
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
-    style::Style,
+    style::{Style, Stylize},
     text::Line,
-    widgets::{Block, Borders, Paragraph, StatefulWidget, Tabs, Widget, Wrap},
+    widgets::{
+        Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget,
+        Tabs, Widget,
+    },
 };
-use std::ops::{Add, Sub};
+use std::{
+    iter,
+    ops::{Add, Deref},
+};
 
 pub struct ResViewerState<'a> {
     is_focused: bool,
@@ -107,7 +113,7 @@ impl<'a> ResViewer<'a> {
 
     fn draw_preview_tab(&self, state: &mut ResViewerState, buf: &mut Buffer, size: Rect) {
         match state.curr_tab {
-            ResViewerTabs::Preview => {}
+            ResViewerTabs::Preview => self.draw_preview_response(state, buf, size),
             ResViewerTabs::Raw => self.draw_raw_response(state, buf, size),
             ResViewerTabs::Cookies => {}
             ResViewerTabs::Headers => {}
@@ -120,22 +126,54 @@ impl<'a> ResViewer<'a> {
                 .body
                 .chars()
                 .collect::<Vec<_>>()
-                .chunks(size.width.into())
+                // accounting for the scrollbar width when splitting the lines
+                .chunks(size.width.saturating_sub(2).into())
                 .map(|row| Line::from(row.iter().collect::<String>()))
                 .collect::<Vec<_>>();
 
-            if state.raw_scroll >= &mut lines.len().sub(2) {
-                *state.raw_scroll = lines.len().sub(2);
+            // allow for scrolling down until theres only one line left into view
+            if state.raw_scroll.deref().ge(&lines.len().saturating_sub(1)) {
+                *state.raw_scroll = lines.len().saturating_sub(1);
             }
 
-            let lines = lines
+            let [request_pane, scrollbar_pane] = build_preview_layout(size);
+
+            self.draw_scrollbar(lines.len(), *state.raw_scroll, buf, scrollbar_pane);
+
+            let lines_in_view = lines
                 .into_iter()
                 .skip(*state.raw_scroll)
+                .chain(iter::repeat(Line::from("~".fg(self.colors.normal.magenta))))
                 .take(size.height.into())
                 .collect::<Vec<_>>();
 
-            let raw_response = Paragraph::new(lines).wrap(Wrap { trim: true });
-            raw_response.render(size, buf);
+            let raw_response = Paragraph::new(lines_in_view);
+            raw_response.render(request_pane, buf);
+        }
+    }
+
+    fn draw_scrollbar(
+        &self,
+        total_ines: usize,
+        current_scroll: usize,
+        buf: &mut Buffer,
+        size: Rect,
+    ) {
+        let mut scrollbar_state = ScrollbarState::new(total_ines).position(current_scroll);
+
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .style(Style::default().fg(self.colors.normal.magenta.into()))
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓"));
+
+        scrollbar.render(size, buf, &mut scrollbar_state);
+    }
+
+    fn draw_preview_response(&self, state: &mut ResViewerState, _buf: &mut Buffer, _size: Rect) {
+        if let Some(ref response) = state.response {
+            let mut high = Highlighter::default();
+            let res = high.apply(&response.body);
+            tracing::debug!("{res:?}")
         }
     }
 }
@@ -173,4 +211,17 @@ fn build_layout(size: Rect) -> ResViewerLayout {
         tabs_pane,
         content_pane,
     }
+}
+
+fn build_preview_layout(size: Rect) -> [Rect; 2] {
+    let [request_pane, _, scrollbar_pane] = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Fill(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
+        .areas(size);
+
+    [request_pane, scrollbar_pane]
 }
