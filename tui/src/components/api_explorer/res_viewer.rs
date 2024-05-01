@@ -1,10 +1,10 @@
-use reqtui::{net::request_manager::ReqtuiResponse, syntax::highlighter::Highlighter};
+use reqtui::net::request_manager::ReqtuiResponse;
 
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Style, Stylize},
-    text::Line,
+    style::{Style, Styled, Stylize},
+    text::{Line, Span},
     widgets::{
         Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget,
         Tabs, Widget,
@@ -18,8 +18,8 @@ use std::{
 pub struct ResViewerState<'a> {
     is_focused: bool,
     is_selected: bool,
-    response: Option<ReqtuiResponse>,
-    curr_tab: ResViewerTabs,
+    response: Option<&'a ReqtuiResponse>,
+    curr_tab: &'a ResViewerTabs,
     raw_scroll: &'a mut usize,
 }
 
@@ -62,8 +62,8 @@ impl<'a> ResViewerState<'a> {
     pub fn new(
         is_focused: bool,
         is_selected: bool,
-        response: Option<ReqtuiResponse>,
-        curr_tab: ResViewerTabs,
+        response: Option<&'a ReqtuiResponse>,
+        curr_tab: &'a ResViewerTabs,
         raw_scroll: &'a mut usize,
     ) -> Self {
         ResViewerState {
@@ -121,7 +121,7 @@ impl<'a> ResViewer<'a> {
     }
 
     fn draw_raw_response(&self, state: &mut ResViewerState, buf: &mut Buffer, size: Rect) {
-        if let Some(ref response) = state.response {
+        if let Some(response) = state.response {
             let lines = response
                 .body
                 .chars()
@@ -162,18 +162,16 @@ impl<'a> ResViewer<'a> {
         let mut scrollbar_state = ScrollbarState::new(total_ines).position(current_scroll);
 
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .style(Style::default().fg(self.colors.normal.magenta.into()))
+            .style(Style::default().fg(self.colors.normal.magenta))
             .begin_symbol(Some("↑"))
             .end_symbol(Some("↓"));
 
         scrollbar.render(size, buf, &mut scrollbar_state);
     }
 
-    fn draw_preview_response(&self, state: &mut ResViewerState, _buf: &mut Buffer, _size: Rect) {
-        if let Some(ref response) = state.response {
-            let mut high = Highlighter::default();
-            let res = high.apply(&response.body);
-            tracing::debug!("{res:?}")
+    fn draw_preview_response(&self, state: &mut ResViewerState, buf: &mut Buffer, size: Rect) {
+        if let Some(response) = state.response {
+            response.pretty_body.display.clone().render(size, buf);
         }
     }
 }

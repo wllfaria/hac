@@ -1,3 +1,4 @@
+use crate::components::Component;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
     style::Stylize,
@@ -5,8 +6,6 @@ use ratatui::{
     widgets::{Paragraph, Wrap},
     Frame,
 };
-
-use super::Component;
 
 pub struct TerminalTooSmall<'a> {
     colors: &'a colors::Colors,

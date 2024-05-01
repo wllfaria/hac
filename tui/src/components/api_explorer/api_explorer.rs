@@ -7,12 +7,6 @@ use crate::components::{
     },
     Component,
 };
-use reqtui::{
-    command::Command,
-    net::request_manager::{ReqtuiNetRequest, ReqtuiResponse},
-    schema::types::{Request, RequestKind, Schema},
-};
-
 use anyhow::Context;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
@@ -20,6 +14,11 @@ use ratatui::{
     style::Stylize,
     widgets::{Block, Clear, StatefulWidget},
     Frame,
+};
+use reqtui::{
+    command::Command,
+    net::request_manager::{ReqtuiNetRequest, ReqtuiResponse},
+    schema::types::{Directory, Request, RequestKind, Schema},
 };
 use std::{collections::HashMap, ops::Add};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
@@ -47,22 +46,19 @@ enum PaneFocus {
 
 #[derive(Debug)]
 pub struct ApiExplorer<'a> {
-    layout: ExplorerLayout,
     schema: Schema,
-
-    focused_pane: PaneFocus,
-    selected_pane: Option<PaneFocus>,
-    preview_tab: ResViewerTabs,
-    raw_preview_scroll: usize,
-
-    selected_request: Option<Request>,
-    hovered_request: Option<RequestKind>,
-
-    dirs_expanded: HashMap<RequestKind, bool>,
     colors: &'a colors::Colors,
-
+    layout: ExplorerLayout,
     response_rx: UnboundedReceiver<ReqtuiNetRequest>,
     request_tx: UnboundedSender<ReqtuiNetRequest>,
+    selected_request: Option<Request>,
+    hovered_request: Option<RequestKind>,
+    dirs_expanded: HashMap<Directory, bool>,
+    focused_pane: PaneFocus,
+    selected_pane: Option<PaneFocus>,
+
+    preview_tab: ResViewerTabs,
+    raw_preview_scroll: usize,
 
     responses_map: HashMap<Request, ReqtuiResponse>,
 }
@@ -114,8 +110,8 @@ impl<'a> ApiExplorer<'a> {
             KeyCode::Enter => {
                 if let Some(ref req) = self.hovered_request {
                     match req {
-                        RequestKind::Nested(_) => {
-                            let entry = self.dirs_expanded.entry(req.clone()).or_insert(false);
+                        RequestKind::Nested(dir) => {
+                            let entry = self.dirs_expanded.entry(dir.clone()).or_insert(false);
                             *entry = !*entry;
                         }
                         RequestKind::Single(req) => {
@@ -160,6 +156,7 @@ impl<'a> ApiExplorer<'a> {
         reqtui::net::handle_request(
             self.selected_request.as_ref().unwrap().clone(),
             self.request_tx.clone(),
+            self.colors.tokens.clone(),
         );
         Ok(None)
     }
@@ -204,8 +201,8 @@ impl<'a> ApiExplorer<'a> {
                 .as_ref()
                 .map(|sel| sel.eq(&PaneFocus::Preview))
                 .unwrap_or(false),
-            current_response.cloned(),
-            self.preview_tab.clone(),
+            current_response,
+            &self.preview_tab,
             &mut self.raw_preview_scroll,
         );
 
@@ -316,7 +313,7 @@ pub fn build_layout(size: Rect) -> ExplorerLayout {
 fn traverse(
     found: &mut bool,
     visit: &VisitNode,
-    dirs_expanded: &HashMap<RequestKind, bool>,
+    dirs_expanded: &HashMap<Directory, bool>,
     current: &RequestKind,
     needle: &RequestKind,
     path: &mut Vec<RequestKind>,
@@ -347,7 +344,7 @@ fn traverse(
 
     if let RequestKind::Nested(dir) = current {
         // if we are on a collapsed directory we should not recurse into its children
-        if !dirs_expanded.get(current).unwrap() {
+        if !dirs_expanded.get(dir).unwrap() {
             return false;
         }
 
@@ -365,7 +362,7 @@ fn traverse(
 fn find_next_entry(
     tree: &[RequestKind],
     visit: VisitNode,
-    dirs_expanded: &HashMap<RequestKind, bool>,
+    dirs_expanded: &HashMap<Directory, bool>,
     needle: &RequestKind,
 ) -> Option<RequestKind> {
     let mut found = false;
@@ -418,11 +415,15 @@ mod tests {
         })
     }
 
-    fn create_nested() -> RequestKind {
-        RequestKind::Nested(Directory {
+    fn create_dir() -> Directory {
+        Directory {
             name: "Nested1".to_string(),
             requests: vec![create_child_one(), create_child_two()],
-        })
+        }
+    }
+
+    fn create_nested() -> RequestKind {
+        RequestKind::Nested(create_dir())
     }
 
     fn create_root_two() -> RequestKind {
@@ -441,7 +442,7 @@ mod tests {
     fn test_visit_next_no_expanded() {
         let tree = create_test_tree();
         let mut dirs_expanded = HashMap::new();
-        dirs_expanded.insert(create_nested(), false);
+        dirs_expanded.insert(create_dir(), false);
         let needle = create_nested();
         let expected = Some(create_root_two());
 
@@ -455,7 +456,7 @@ mod tests {
     fn test_visit_node_nested_next() {
         let tree = create_test_tree();
         let mut dirs_expanded = HashMap::new();
-        dirs_expanded.insert(create_nested(), true);
+        dirs_expanded.insert(create_dir(), true);
         let needle = create_nested();
         let expected = Some(create_child_one());
 
@@ -469,7 +470,7 @@ mod tests {
     fn test_visit_node_no_match() {
         let tree = create_test_tree();
         let mut dirs_expanded = HashMap::new();
-        dirs_expanded.insert(create_nested(), true);
+        dirs_expanded.insert(create_dir(), true);
         let needle = create_not_used();
         let expected = None;
 
@@ -483,7 +484,7 @@ mod tests {
     fn test_visit_node_nested_prev() {
         let tree = create_test_tree();
         let mut dirs_expanded = HashMap::new();
-        dirs_expanded.insert(create_nested(), true);
+        dirs_expanded.insert(create_dir(), true);
         let needle = create_child_one();
         let expected = Some(create_nested());
 
@@ -497,7 +498,7 @@ mod tests {
     fn test_visit_prev_into_nested() {
         let tree = create_test_tree();
         let mut dirs_expanded = HashMap::new();
-        dirs_expanded.insert(create_nested(), true);
+        dirs_expanded.insert(create_dir(), true);
         let needle = create_root_two();
         let expected = Some(create_child_two());
 

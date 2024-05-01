@@ -1,4 +1,4 @@
-use reqtui::schema::types::{Request, RequestKind, RequestMethod};
+use reqtui::schema::types::{Directory, Request, RequestKind, RequestMethod};
 
 use ratatui::{
     buffer::Buffer,
@@ -13,7 +13,7 @@ pub struct SidebarState<'a> {
     requests: Option<&'a [RequestKind]>,
     selected_request: Option<&'a Request>,
     hovered_requet: Option<&'a RequestKind>,
-    dirs_expanded: &'a mut HashMap<RequestKind, bool>,
+    dirs_expanded: &'a mut HashMap<Directory, bool>,
     is_focused: bool,
 }
 
@@ -22,7 +22,7 @@ impl<'a> SidebarState<'a> {
         requests: Option<&'a [RequestKind]>,
         selected_request: Option<&'a Request>,
         hovered_requet: Option<&'a RequestKind>,
-        dirs_expanded: &'a mut HashMap<RequestKind, bool>,
+        dirs_expanded: &'a mut HashMap<Directory, bool>,
         is_focused: bool,
     ) -> Self {
         SidebarState {
@@ -98,7 +98,7 @@ fn build_lines(
     level: usize,
     selected_request: Option<&Request>,
     hovered_request: Option<&RequestKind>,
-    dirs_expanded: &mut HashMap<RequestKind, bool>,
+    dirs_expanded: &mut HashMap<Directory, bool>,
     colors: &colors::Colors,
 ) -> Vec<RenderLine> {
     requests
@@ -107,7 +107,7 @@ fn build_lines(
         .flat_map(|item| match item {
             RequestKind::Nested(dir) => {
                 let is_hovered = hovered_request.is_some_and(|req| *req == *item);
-                let is_expanded = dirs_expanded.entry(item.clone()).or_insert(false);
+                let is_expanded = dirs_expanded.entry(dir.clone()).or_insert(false);
 
                 let dir_style = match is_hovered {
                     true => Style::default()
