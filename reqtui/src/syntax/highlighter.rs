@@ -43,7 +43,7 @@ impl Default for Highlighter {
 }
 
 impl Highlighter {
-    pub fn parse<'a>(&mut self, buffer: &str) -> Option<Tree> {
+    pub fn parse(&mut self, buffer: &str) -> Option<Tree> {
         self.parser.parse(buffer, None)
     }
 

@@ -23,14 +23,21 @@ impl Default for Colors {
 
 fn token_highlight() -> HashMap<String, Style> {
     let mut tokens = HashMap::new();
-    let colors = NormalColors::default();
+    let colors = BrightColors::default();
 
     tokens.insert("conceal".into(), Style::new().fg(colors.red));
-    tokens.insert("number".into(), Style::new().fg(colors.blue));
-    tokens.insert("property".into(), Style::new().fg(colors.green));
-    tokens.insert("punctuation.bracket".into(), Style::new().fg(colors.yellow));
-    tokens.insert("punctuation.delimiter".into(), Style::new().fg(colors.cyan));
-    tokens.insert("string".into(), Style::new().fg(colors.magenta));
+    tokens.insert("boolean".into(), Style::new().fg(colors.red));
+    tokens.insert("number".into(), Style::new().fg(colors.yellow));
+    tokens.insert("property".into(), Style::new().fg(colors.blue));
+    tokens.insert(
+        "punctuation.bracket".into(),
+        Style::new().fg(colors.magenta),
+    );
+    tokens.insert(
+        "punctuation.delimiter".into(),
+        Style::new().fg(colors.magenta),
+    );
+    tokens.insert("string".into(), Style::new().fg(colors.green));
 
     tokens
 }

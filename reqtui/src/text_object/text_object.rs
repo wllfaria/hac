@@ -1,9 +1,11 @@
+use std::str::{Chars, FromStr};
+
 use ratatui::{
-    style::Styled,
+    style::{Color, Style, Styled},
     text::{Line, Span},
     widgets::Paragraph,
 };
-use ropey::{iter::Chars, Rope};
+use ropey::Rope;
 
 use crate::syntax::highlighter::ColorInfo;
 
@@ -38,14 +40,10 @@ impl TextObject<Readonly> {
 }
 
 impl TextObject {
-    pub fn chars(&self) -> Chars<'_> {
-        self.content.chars()
-    }
-
     pub fn with_highlight(self, colors: Vec<ColorInfo>) -> Self {
         let mut lines: Vec<Line> = vec![];
         let mut current_line: Vec<Span> = vec![];
-        for (idx, c) in self.chars().enumerate() {
+        for (idx, c) in self.to_string().chars().enumerate() {
             let style = colors
                 .iter()
                 .find(|color| color.start <= idx && color.end >= idx)
@@ -67,5 +65,11 @@ impl TextObject {
             state: std::marker::PhantomData,
             display,
         }
+    }
+}
+
+impl std::fmt::Display for TextObject {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.content.to_string())
     }
 }
