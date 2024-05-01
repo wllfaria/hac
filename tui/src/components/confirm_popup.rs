@@ -30,9 +30,9 @@ impl<'a> ConfirmPopup<'a> {
         Paragraph::new(lines).wrap(Wrap { trim: true }).block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(self.colors.bright.black.into()))
+                .border_style(Style::default().fg(self.colors.bright.black))
                 .padding(Padding::new(2, 2, 1, 1))
-                .bg(self.colors.normal.black.into()),
+                .bg(self.colors.normal.black),
         )
     }
 }
@@ -69,9 +69,9 @@ mod tests {
         let expected = Paragraph::new(lines).wrap(Wrap { trim: true }).block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(colors.bright.black.into()))
+                .border_style(Style::default().fg(colors.bright.black))
                 .padding(Padding::new(2, 2, 1, 1))
-                .bg(colors.normal.black.into()),
+                .bg(colors.normal.black),
         );
 
         let content = popup.build_popup();

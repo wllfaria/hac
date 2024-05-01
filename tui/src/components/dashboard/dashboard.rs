@@ -321,7 +321,7 @@ impl<'a> Dashboard<'a> {
         let hint =
             "[h/j/k/l to move] [n -> new] [enter -> select item] [? -> help] [<C-c> -> quit]"
                 .fg(self.colors.normal.magenta)
-                .to_centered_line();
+                .into_centered_line();
 
         frame.render_widget(hint, self.layout.hint_pane);
     }
@@ -332,7 +332,7 @@ impl<'a> Dashboard<'a> {
 
         let overlay = Paragraph::new(lines)
             .fg(self.colors.primary.hover)
-            .bg(self.colors.primary.background.into())
+            .bg(self.colors.primary.background)
             .bold();
 
         frame.render_widget(overlay, size);
@@ -390,11 +390,9 @@ impl<'a> Dashboard<'a> {
         frame.render_widget(Clear, self.layout.help_popup);
         frame.render_widget(
             Paragraph::new(lines).wrap(Wrap { trim: true }).block(
-                Block::default().padding(Padding::new(2, 2, 1, 1)).bg(self
-                    .colors
-                    .primary
-                    .background
-                    .into()),
+                Block::default()
+                    .padding(Padding::new(2, 2, 1, 1))
+                    .bg(self.colors.primary.background),
             ),
             self.layout.help_popup,
         );
@@ -425,7 +423,7 @@ impl<'a> Dashboard<'a> {
 
         let no_matches = BigText::builder()
             .pixel_size(PixelSize::Quadrant)
-            .style(Style::default().fg(self.colors.normal.magenta.into()))
+            .style(Style::default().fg(self.colors.normal.magenta))
             .lines(vec!["No matches".into()])
             .alignment(Alignment::Center)
             .build()?;
@@ -448,7 +446,7 @@ impl<'a> Dashboard<'a> {
 
         let empty_message = BigText::builder()
             .pixel_size(PixelSize::Quadrant)
-            .style(Style::default().fg(self.colors.normal.magenta.into()))
+            .style(Style::default().fg(self.colors.normal.magenta))
             .lines(vec!["No schemas".into()])
             .alignment(Alignment::Center)
             .build()?;
@@ -460,10 +458,7 @@ impl<'a> Dashboard<'a> {
 
     fn draw_background(&self, size: Rect, frame: &mut Frame) {
         frame.render_widget(Clear, size);
-        frame.render_widget(
-            Block::default().bg(self.colors.primary.background.into()),
-            size,
-        );
+        frame.render_widget(Block::default().bg(self.colors.primary.background), size);
     }
 
     fn draw_error_popup(&self, frame: &mut Frame) {
@@ -508,7 +503,7 @@ impl<'a> Dashboard<'a> {
     fn draw_title(&self, frame: &mut Frame) -> anyhow::Result<()> {
         let title = BigText::builder()
             .pixel_size(PixelSize::Quadrant)
-            .style(Style::default().fg(self.colors.bright.magenta.into()))
+            .style(Style::default().fg(self.colors.bright.magenta))
             .lines(vec!["Select a collection".into()])
             .alignment(Alignment::Center)
             .build()?;
@@ -964,7 +959,7 @@ mod tests {
         dashboard.draw_background(size, &mut frame);
 
         for cell in frame.buffer_mut().content.iter() {
-            assert_eq!(cell.bg, colors.primary.background.into());
+            assert_eq!(cell.bg, colors.primary.background);
         }
     }
 

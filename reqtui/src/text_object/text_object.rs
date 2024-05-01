@@ -1,7 +1,5 @@
-use std::str::{Chars, FromStr};
-
 use ratatui::{
-    style::{Color, Style, Styled},
+    style::Styled,
     text::{Line, Span},
     widgets::Paragraph,
 };

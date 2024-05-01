@@ -3,8 +3,8 @@ use reqtui::net::request_manager::ReqtuiResponse;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Style, Styled, Stylize},
-    text::{Line, Span},
+    style::{Style, Stylize},
+    text::Line,
     widgets::{
         Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget,
         Tabs, Widget,
@@ -87,9 +87,9 @@ impl<'a> ResViewer<'a> {
 
     fn draw_container(&self, size: Rect, buf: &mut Buffer, state: &mut ResViewerState) {
         let block_border = match (state.is_focused, state.is_selected) {
-            (true, false) => Style::default().fg(self.colors.bright.magenta.into()),
-            (true, true) => Style::default().fg(self.colors.bright.yellow.into()),
-            (_, _) => Style::default().fg(self.colors.primary.hover.into()),
+            (true, false) => Style::default().fg(self.colors.bright.magenta),
+            (true, true) => Style::default().fg(self.colors.bright.yellow),
+            (_, _) => Style::default().fg(self.colors.primary.hover),
         };
 
         let block = Block::default()
@@ -101,12 +101,12 @@ impl<'a> ResViewer<'a> {
 
     fn draw_tabs(&self, buf: &mut Buffer, state: &ResViewerState, size: Rect) {
         let tabs = Tabs::new(["Pretty", "Raw", "Cookies", "Headers"])
-            .style(Style::default().fg(self.colors.primary.hover.into()))
+            .style(Style::default().fg(self.colors.primary.hover))
             .select(state.curr_tab.clone().into())
             .highlight_style(
                 Style::default()
-                    .fg(self.colors.bright.magenta.into())
-                    .bg(self.colors.primary.hover.into()),
+                    .fg(self.colors.bright.magenta)
+                    .bg(self.colors.primary.hover),
             );
         tabs.render(size, buf);
     }

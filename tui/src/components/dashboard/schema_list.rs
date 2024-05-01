@@ -113,7 +113,7 @@ impl<'a> SchemaList<'a> {
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(border_color.into())),
+                .border_style(Style::default().fg(border_color)),
         )
     }
 }
@@ -131,7 +131,7 @@ impl StatefulWidget for SchemaList<'_> {
                 .position(state.scroll);
 
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .style(Style::default().fg(self.colors.normal.magenta.into()))
+            .style(Style::default().fg(self.colors.normal.magenta))
             .begin_symbol(Some("↑"))
             .end_symbol(Some("↓"));
 
@@ -232,7 +232,7 @@ mod tests {
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(colors.primary.hover.into())),
+                .border_style(Style::default().fg(colors.primary.hover)),
         );
 
         let card = schema_list.build_card(&state, &schemas[0], 0);

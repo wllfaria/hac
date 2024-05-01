@@ -163,10 +163,7 @@ impl<'a> ApiExplorer<'a> {
 
     fn draw_background(&self, size: Rect, frame: &mut Frame) {
         frame.render_widget(Clear, size);
-        frame.render_widget(
-            Block::default().bg(self.colors.primary.background.into()),
-            size,
-        );
+        frame.render_widget(Block::default().bg(self.colors.primary.background), size);
     }
 
     fn draw_sidebar(&mut self, frame: &mut Frame) {

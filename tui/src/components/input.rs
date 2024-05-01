@@ -37,16 +37,16 @@ impl<'a> Input<'a> {
 
     fn build_input(&self, value: String) -> Paragraph<'_> {
         let border_color = if self.focused {
-            Style::default().fg(self.colors.bright.magenta.into())
+            Style::default().fg(self.colors.bright.magenta)
         } else {
-            Style::default().fg(self.colors.primary.hover.into())
+            Style::default().fg(self.colors.primary.hover)
         };
 
         let (value, color) = if value.is_empty() {
-            let color = Style::default().fg(self.colors.normal.magenta.into());
+            let color = Style::default().fg(self.colors.normal.magenta);
             (self.placeholder.clone().unwrap_or_default(), color)
         } else {
-            let color = Style::default().fg(self.colors.normal.white.into());
+            let color = Style::default().fg(self.colors.normal.white);
             (value, color)
         };
 
@@ -54,7 +54,7 @@ impl<'a> Input<'a> {
             .block(
                 Block::default()
                     .title(self.name.clone())
-                    .title_style(Style::default().fg(self.colors.normal.white.into()))
+                    .title_style(Style::default().fg(self.colors.normal.white))
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
                     .border_style(border_color),
@@ -84,12 +84,12 @@ mod tests {
             .block(
                 Block::default()
                     .title("my input".to_string())
-                    .title_style(Style::default().fg(colors.normal.white.into()))
+                    .title_style(Style::default().fg(colors.normal.white))
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
-                    .border_style(Style::default().fg(colors.primary.hover.into())),
+                    .border_style(Style::default().fg(colors.primary.hover)),
             )
-            .style(Style::default().fg(colors.normal.magenta.into()));
+            .style(Style::default().fg(colors.normal.magenta));
 
         let result = input.build_input("".into());
 
@@ -104,12 +104,12 @@ mod tests {
             .block(
                 Block::default()
                     .title("my input".to_string())
-                    .title_style(Style::default().fg(colors.normal.white.into()))
+                    .title_style(Style::default().fg(colors.normal.white))
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
-                    .border_style(Style::default().fg(colors.bright.magenta.into())),
+                    .border_style(Style::default().fg(colors.bright.magenta)),
             )
-            .style(Style::default().fg(colors.normal.magenta.into()));
+            .style(Style::default().fg(colors.normal.magenta));
 
         input.focus();
         let result = input.build_input("".into());
@@ -125,12 +125,12 @@ mod tests {
             .block(
                 Block::default()
                     .title("my input".to_string())
-                    .title_style(Style::default().fg(colors.normal.white.into()))
+                    .title_style(Style::default().fg(colors.normal.white))
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
-                    .border_style(Style::default().fg(colors.primary.hover.into())),
+                    .border_style(Style::default().fg(colors.primary.hover)),
             )
-            .style(Style::default().fg(colors.normal.white.into()));
+            .style(Style::default().fg(colors.normal.white));
 
         let result = input.build_input("my value".into());
 
@@ -145,12 +145,12 @@ mod tests {
             .block(
                 Block::default()
                     .title("my input".to_string())
-                    .title_style(Style::default().fg(colors.normal.white.into()))
+                    .title_style(Style::default().fg(colors.normal.white))
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
-                    .border_style(Style::default().fg(colors.bright.magenta.into())),
+                    .border_style(Style::default().fg(colors.bright.magenta)),
             )
-            .style(Style::default().fg(colors.normal.white.into()));
+            .style(Style::default().fg(colors.normal.white));
 
         input.focus();
         let result = input.build_input("my value".into());

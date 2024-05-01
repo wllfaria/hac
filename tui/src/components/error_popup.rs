@@ -25,7 +25,7 @@ impl<'a> ErrorPopup<'a> {
         let message = Paragraph::new(self.message.clone().fg(self.colors.normal.red))
             .wrap(Wrap { trim: true });
 
-        let confirmation = Paragraph::new("(O)k".fg(self.colors.normal.green).to_centered_line())
+        let confirmation = Paragraph::new("(O)k".fg(self.colors.normal.green).into_centered_line())
             .wrap(Wrap { trim: true });
 
         (message, confirmation)
@@ -54,9 +54,9 @@ impl<'a> ErrorPopup<'a> {
     fn build_container(&self) -> Block<'_> {
         Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(self.colors.bright.black.into()))
+            .border_style(Style::default().fg(self.colors.bright.black))
             .padding(Padding::new(2, 2, 1, 1))
-            .bg(self.colors.normal.black.into())
+            .bg(self.colors.normal.black)
     }
 }
 
@@ -94,7 +94,7 @@ mod tests {
 
         assert_eq!(
             confirmation,
-            Paragraph::new("(O)k".fg(colors.normal.green).to_centered_line())
+            Paragraph::new("(O)k".fg(colors.normal.green).into_centered_line())
                 .wrap(Wrap { trim: true })
         );
     }
@@ -121,9 +121,9 @@ mod tests {
 
         let expected = Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(colors.bright.black.into()))
+            .border_style(Style::default().fg(colors.bright.black))
             .padding(Padding::new(2, 2, 1, 1))
-            .bg(colors.normal.black.into());
+            .bg(colors.normal.black);
 
         let block = popup.build_container();
 

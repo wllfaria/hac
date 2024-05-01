@@ -73,10 +73,10 @@ impl<'a> StatefulWidget for Sidebar<'a> {
             .collect::<Vec<Paragraph>>();
 
         let block_border = if state.is_focused {
-            Style::default().fg(self.colors.bright.magenta.into())
+            Style::default().fg(self.colors.bright.magenta)
         } else {
             // TODO: we need better border colors
-            Style::default().fg(self.colors.primary.hover.into())
+            Style::default().fg(self.colors.primary.hover)
         };
 
         let block = Block::default()
@@ -111,10 +111,10 @@ fn build_lines(
 
                 let dir_style = match is_hovered {
                     true => Style::default()
-                        .fg(colors.normal.white.into())
-                        .bg(colors.primary.hover.into())
+                        .fg(colors.normal.white)
+                        .bg(colors.primary.hover)
                         .bold(),
-                    false => Style::default().fg(colors.normal.white.into()).bold(),
+                    false => Style::default().fg(colors.normal.white).bold(),
                 };
 
                 let gap = " ".repeat(level * 2);
@@ -152,15 +152,15 @@ fn build_lines(
 
                 let req_style = match (is_selected, is_hovered) {
                     (true, true) => Style::default()
-                        .fg(colors.normal.yellow.into())
-                        .bg(colors.primary.accent.into()),
+                        .fg(colors.normal.yellow)
+                        .bg(colors.primary.accent),
                     (true, _) => Style::default()
-                        .fg(colors.normal.white.into())
-                        .bg(colors.primary.accent.into()),
+                        .fg(colors.normal.white)
+                        .bg(colors.primary.accent),
                     (_, true) => Style::default()
-                        .fg(colors.normal.white.into())
-                        .bg(colors.primary.hover.into()),
-                    (false, false) => Style::default().fg(colors.normal.white.into()),
+                        .fg(colors.normal.white)
+                        .bg(colors.primary.hover),
+                    (false, false) => Style::default().fg(colors.normal.white),
                 };
 
                 let line: Line<'_> = vec![

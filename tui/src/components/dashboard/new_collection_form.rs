@@ -111,7 +111,7 @@ impl StatefulWidget for NewCollectionForm<'_> {
         let cancel_text = if state.focused_field.eq(&FormFocus::Cancel) {
             "Cancel"
                 .fg(self.colors.normal.white)
-                .bg(self.colors.normal.red.into())
+                .bg(self.colors.normal.red)
         } else {
             "Cancel".fg(self.colors.normal.white)
         };
@@ -119,14 +119,14 @@ impl StatefulWidget for NewCollectionForm<'_> {
         let cancel_button = Paragraph::new(Line::from(cancel_text).centered()).block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(self.colors.bright.red.into()))
+                .border_style(Style::default().fg(self.colors.bright.red))
                 .border_type(BorderType::Rounded),
         );
 
         let confirm_text = if state.focused_field.eq(&FormFocus::Confirm) {
             "Create"
                 .fg(self.colors.normal.white)
-                .bg(self.colors.normal.magenta.into())
+                .bg(self.colors.normal.magenta)
         } else {
             "Create".fg(self.colors.normal.white)
         };
@@ -134,13 +134,13 @@ impl StatefulWidget for NewCollectionForm<'_> {
         let confirm_button = Paragraph::new(Line::from(confirm_text).centered()).block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(self.colors.bright.magenta.into()))
+                .border_style(Style::default().fg(self.colors.bright.magenta))
                 .border_type(BorderType::Rounded),
         );
 
         let full_block = Block::default()
             .padding(Padding::uniform(1))
-            .style(Style::default().bg(self.colors.primary.background.into()));
+            .style(Style::default().bg(self.colors.primary.background));
 
         let hint = Paragraph::new("[Tab] to switch focus [Enter] to select a button")
             .centered()
