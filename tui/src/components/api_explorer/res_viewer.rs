@@ -7,7 +7,7 @@ use ratatui::{
     text::Line,
     widgets::{
         Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget,
-        Tabs, Widget,
+        Tabs, Widget, Wrap,
     },
 };
 use std::{
@@ -171,7 +171,26 @@ impl<'a> ResViewer<'a> {
 
     fn draw_preview_response(&self, state: &mut ResViewerState, buf: &mut Buffer, size: Rect) {
         if let Some(response) = state.response {
-            response.pretty_body.display.clone().render(size, buf);
+            let lines = response.pretty_body.display.clone();
+
+            // allow for scrolling down until theres only one line left into view
+            if state.raw_scroll.deref().ge(&lines.len().saturating_sub(1)) {
+                *state.raw_scroll = lines.len().saturating_sub(1);
+            }
+
+            let [request_pane, scrollbar_pane] = build_preview_layout(size);
+
+            self.draw_scrollbar(lines.len(), *state.raw_scroll, buf, scrollbar_pane);
+
+            let lines_in_view = lines
+                .into_iter()
+                .skip(*state.raw_scroll)
+                .chain(iter::repeat(Line::from("~".fg(self.colors.normal.magenta))))
+                .take(size.height.into())
+                .collect::<Vec<_>>();
+
+            let pretty_response = Paragraph::new(lines_in_view).wrap(Wrap { trim: false });
+            pretty_response.render(request_pane, buf);
         }
     }
 }

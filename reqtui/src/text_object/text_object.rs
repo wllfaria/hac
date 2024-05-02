@@ -16,13 +16,13 @@ pub struct Write;
 pub struct TextObject<State = Readonly> {
     content: Rope,
     state: std::marker::PhantomData<State>,
-    pub display: Paragraph<'static>,
+    pub display: Vec<Line<'static>>,
 }
 
 impl TextObject<Readonly> {
     pub fn from(content: &str) -> TextObject<Readonly> {
         TextObject::<Readonly> {
-            display: Paragraph::new(content.to_string()),
+            display: vec![Line::from(content.to_string())],
             content: Rope::from_str(content),
             state: std::marker::PhantomData::<Readonly>,
         }
@@ -39,7 +39,7 @@ impl TextObject<Readonly> {
 
 impl TextObject {
     pub fn with_highlight(self, colors: Vec<ColorInfo>) -> Self {
-        let mut lines: Vec<Line> = vec![];
+        let mut display: Vec<Line> = vec![];
         let mut current_line: Vec<Span> = vec![];
         for (idx, c) in self.to_string().chars().enumerate() {
             let style = colors
@@ -51,12 +51,10 @@ impl TextObject {
             current_line.push(c.to_string().set_style(style));
 
             if c.eq(&'\n') {
-                lines.push(current_line.clone().into());
+                display.push(current_line.clone().into());
                 current_line.clear();
             }
         }
-
-        let display = Paragraph::new(lines);
 
         Self {
             content: self.content,
