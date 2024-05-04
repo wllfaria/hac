@@ -22,6 +22,8 @@ use reqtui::{
 use std::{collections::HashMap, ops::Add};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
+use super::req_editor::{ReqEditor, ReqEditorState, ReqEditorTabs};
+
 #[derive(Debug, PartialEq)]
 pub struct ExplorerLayout {
     pub sidebar: Rect,
@@ -41,6 +43,7 @@ enum PaneFocus {
     Sidebar,
     ReqUri,
     Preview,
+    Editor,
 }
 
 #[derive(Debug)]
@@ -58,6 +61,8 @@ pub struct ApiExplorer<'a> {
 
     preview_tab: ResViewerTabs,
     raw_preview_scroll: usize,
+
+    editor_tab: ReqEditorTabs,
 
     responses_map: HashMap<Request, ReqtuiResponse>,
 }
@@ -97,6 +102,8 @@ impl<'a> ApiExplorer<'a> {
 
             preview_tab: ResViewerTabs::Preview,
             raw_preview_scroll: 0,
+
+            editor_tab: ReqEditorTabs::Request,
 
             response_rx,
             request_tx,
@@ -189,7 +196,7 @@ impl<'a> ApiExplorer<'a> {
         ReqUri::new(self.colors).render(self.layout.req_uri, frame.buffer_mut(), &mut state);
     }
 
-    fn draw_response_viewer(&mut self, frame: &mut Frame) {
+    fn draw_res_viewer(&mut self, frame: &mut Frame) {
         let current_response = self
             .selected_request
             .as_ref()
@@ -209,6 +216,25 @@ impl<'a> ApiExplorer<'a> {
         frame.render_stateful_widget(
             ResViewer::new(self.colors),
             self.layout.response_preview,
+            &mut state,
+        )
+    }
+
+    fn draw_req_editor(&mut self, frame: &mut Frame) {
+        let current_request = self.selected_request.as_ref();
+
+        let mut state = ReqEditorState::new(
+            self.focused_pane.eq(&PaneFocus::Editor),
+            self.selected_pane
+                .as_ref()
+                .map(|sel| sel.eq(&PaneFocus::Editor))
+                .unwrap_or(false),
+            &self.editor_tab,
+        );
+
+        frame.render_stateful_widget(
+            ReqEditor::new(self.colors),
+            self.layout.req_editor,
             &mut state,
         )
     }
@@ -245,9 +271,10 @@ impl Component for ApiExplorer<'_> {
 
         self.drain_response_rx();
 
-        self.draw_response_viewer(frame);
-        self.draw_sidebar(frame);
+        self.draw_res_viewer(frame);
+        self.draw_req_editor(frame);
         self.draw_req_uri(frame);
+        self.draw_sidebar(frame);
 
         Ok(())
     }
@@ -260,9 +287,9 @@ impl Component for ApiExplorer<'_> {
         if let KeyCode::Tab = key_event.code {
             match (&self.focused_pane, &self.selected_pane) {
                 (PaneFocus::Sidebar, None) => self.focused_pane = PaneFocus::ReqUri,
-                (PaneFocus::ReqUri, None) => self.focused_pane = PaneFocus::Preview,
+                (PaneFocus::ReqUri, None) => self.focused_pane = PaneFocus::Editor,
+                (PaneFocus::Editor, None) => self.focused_pane = PaneFocus::Preview,
                 (PaneFocus::Preview, None) => self.focused_pane = PaneFocus::Sidebar,
-
                 (PaneFocus::Preview, Some(_)) => {
                     self.handle_preview_key_event(key_event)?;
                 }
@@ -275,6 +302,7 @@ impl Component for ApiExplorer<'_> {
             PaneFocus::Sidebar => self.handle_sidebar_key_event(key_event),
             PaneFocus::ReqUri => self.handle_req_uri_key_event(key_event),
             PaneFocus::Preview => self.handle_preview_key_event(key_event),
+            PaneFocus::Editor => todo!(),
         }
     }
 }

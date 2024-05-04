@@ -1,28 +1,32 @@
-use crate::components::Component;
-
 use ratatui::{
-    layout::Rect,
-    style::{Color, Style, Stylize},
-    symbols,
-    widgets::{Block, BorderType, Borders, Tabs},
-    Frame,
+    buffer::Buffer,
+    layout::{Constraint, Direction, Layout, Rect},
+    style::Style,
+    widgets::{Block, Borders, StatefulWidget, Tabs, Widget},
 };
-use std::fmt::Display;
+use std::{fmt::Display, ops::Add};
 
-#[derive(Default)]
-enum ReqEditorTabs {
+#[derive(Debug, Default, Clone)]
+pub enum ReqEditorTabs {
     #[default]
     Request,
     Headers,
-    Cookies,
+    Query,
+    Auth,
 }
 
-impl From<&ReqEditorTabs> for usize {
-    fn from(value: &ReqEditorTabs) -> Self {
+pub struct ReqEditorLayout {
+    tabs_pane: Rect,
+    content_pane: Rect,
+}
+
+impl From<ReqEditorTabs> for usize {
+    fn from(value: ReqEditorTabs) -> Self {
         match value {
             ReqEditorTabs::Request => 0,
             ReqEditorTabs::Headers => 1,
-            ReqEditorTabs::Cookies => 2,
+            ReqEditorTabs::Query => 2,
+            ReqEditorTabs::Auth => 3,
         }
     }
 }
@@ -32,7 +36,8 @@ impl Display for ReqEditorTabs {
         match self {
             ReqEditorTabs::Request => f.write_str("Request"),
             ReqEditorTabs::Headers => f.write_str("Headers"),
-            ReqEditorTabs::Cookies => f.write_str("Cookied"),
+            ReqEditorTabs::Query => f.write_str("Query"),
+            ReqEditorTabs::Auth => f.write_str("Auth"),
         }
     }
 }
@@ -43,47 +48,113 @@ impl AsRef<ReqEditorTabs> for ReqEditorTabs {
     }
 }
 
-pub struct ReqEditor {
-    curr_tab: ReqEditorTabs,
-    tab_selector: Tabs<'static>,
+pub struct ReqEditorState<'a> {
+    is_focused: bool,
+    is_selected: bool,
+    curr_tab: &'a ReqEditorTabs,
 }
 
-impl Default for ReqEditor {
-    fn default() -> Self {
-        Self {
-            curr_tab: ReqEditorTabs::default(),
-            tab_selector: make_tab_selector(ReqEditorTabs::default()),
+impl<'a> ReqEditorState<'a> {
+    pub fn new(is_focused: bool, is_selected: bool, curr_tab: &'a ReqEditorTabs) -> Self {
+        ReqEditorState {
+            is_focused,
+            curr_tab,
+            is_selected,
         }
     }
 }
 
-impl Component for ReqEditor {
-    fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
-        frame.render_widget(&self.tab_selector, size);
-        match self.curr_tab {
-            // TODO: we should actually render the proper components
-            ReqEditorTabs::Request => (),
-            ReqEditorTabs::Headers => (),
-            ReqEditorTabs::Cookies => (),
-        }
-        Ok(())
-    }
+pub struct ReqEditor<'a> {
+    colors: &'a colors::Colors,
 }
 
-fn make_tab_selector(curr_tab: ReqEditorTabs) -> Tabs<'static> {
-    Tabs::new([
-        ReqEditorTabs::Request.to_string(),
-        ReqEditorTabs::Headers.to_string(),
-        ReqEditorTabs::Cookies.to_string(),
-    ])
-    .block(
-        Block::default()
-            .title(curr_tab.to_string())
+impl<'a> ReqEditor<'a> {
+    pub fn new(colors: &'a colors::Colors) -> Self {
+        Self { colors }
+    }
+
+    fn draw_editor(&self, state: &mut ReqEditorState, buf: &mut Buffer, size: Rect) {}
+
+    fn draw_current_tab(&self, state: &mut ReqEditorState, buf: &mut Buffer, size: Rect) {
+        match state.curr_tab {
+            ReqEditorTabs::Request => self.draw_editor(state, buf, size),
+            ReqEditorTabs::Headers => {}
+            ReqEditorTabs::Query => {}
+            ReqEditorTabs::Auth => {}
+        }
+    }
+
+    fn draw_tabs(&self, buf: &mut Buffer, state: &ReqEditorState, size: Rect) {
+        let tabs = Tabs::new(["Request", "Headers", "Query", "Auth"])
+            .style(Style::default().fg(self.colors.primary.hover))
+            .select(state.curr_tab.clone().into())
+            .highlight_style(
+                Style::default()
+                    .fg(self.colors.bright.magenta)
+                    .bg(self.colors.primary.hover),
+            );
+        tabs.render(size, buf);
+    }
+
+    fn draw_container(&self, size: Rect, buf: &mut Buffer, state: &mut ReqEditorState) {
+        let block_border = match (state.is_focused, state.is_selected) {
+            (true, false) => Style::default().fg(self.colors.bright.magenta),
+            (true, true) => Style::default().fg(self.colors.bright.yellow),
+            (_, _) => Style::default().fg(self.colors.primary.hover),
+        };
+
+        let block = Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().gray().dim())
-            .border_type(BorderType::Rounded),
-    )
-    .highlight_style(Style::default().fg(Color::Rgb(255, 0, 0)))
-    .select(curr_tab.as_ref().into())
-    .divider(symbols::DOT)
+            .border_style(block_border);
+
+        block.render(size, buf);
+    }
+}
+
+impl<'a> StatefulWidget for ReqEditor<'a> {
+    type State = ReqEditorState<'a>;
+
+    fn render(self, size: Rect, buf: &mut Buffer, state: &mut Self::State) {
+        let layout = build_layout(size);
+
+        self.draw_container(size, buf, state);
+        self.draw_tabs(buf, state, layout.tabs_pane);
+        self.draw_current_tab(state, buf, layout.content_pane);
+    }
+}
+
+fn build_layout(size: Rect) -> ReqEditorLayout {
+    let size = Rect::new(
+        size.x.add(1),
+        size.y.add(1),
+        size.width.saturating_sub(2),
+        size.height.saturating_sub(2),
+    );
+
+    let [tabs_pane, _, content_pane] = Layout::default()
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Fill(1),
+        ])
+        .direction(Direction::Vertical)
+        .areas(size);
+
+    ReqEditorLayout {
+        tabs_pane,
+        content_pane,
+    }
+}
+
+fn build_preview_layout(size: Rect) -> [Rect; 2] {
+    let [request_pane, _, scrollbar_pane] = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Fill(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
+        .areas(size);
+
+    [request_pane, scrollbar_pane]
 }
