@@ -1,7 +1,6 @@
 use crate::components::{
     api_explorer::{
-        req_uri::ReqUri,
-        req_uri::ReqUriState,
+        req_uri::{ReqUri, ReqUriState},
         res_viewer::{ResViewer, ResViewerState, ResViewerTabs},
         sidebar::{Sidebar, SidebarState},
     },
@@ -152,12 +151,16 @@ impl<'a> ApiExplorer<'a> {
         Ok(None)
     }
 
-    fn handle_req_uri_key_event(&self, _key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
-        reqtui::net::handle_request(
-            self.selected_request.as_ref().unwrap().clone(),
-            self.request_tx.clone(),
-            self.colors.tokens.clone(),
-        );
+    fn handle_req_uri_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
+        match key_event.code {
+            KeyCode::Char('i') => self.selected_pane = Some(PaneFocus::Preview),
+            KeyCode::Enter => reqtui::net::handle_request(
+                self.selected_request.as_ref().unwrap().clone(),
+                self.request_tx.clone(),
+                self.colors.tokens.clone(),
+            ),
+            _ => {}
+        }
         Ok(None)
     }
 

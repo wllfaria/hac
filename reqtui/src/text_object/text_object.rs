@@ -1,7 +1,6 @@
 use ratatui::{
     style::Styled,
     text::{Line, Span},
-    widgets::Paragraph,
 };
 use ropey::Rope;
 
