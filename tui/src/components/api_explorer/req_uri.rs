@@ -37,9 +37,9 @@ impl<'a> StatefulWidget for ReqUri<'a> {
 
     fn render(self, size: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let block_border = if state.is_focused {
-            Style::default().fg(self.colors.bright.magenta)
+            Style::default().fg(self.colors.bright.blue)
         } else {
-            Style::default().fg(self.colors.primary.hover)
+            Style::default().fg(self.colors.bright.black)
         };
 
         if let Some(req) = state.selected_request {
@@ -50,7 +50,7 @@ impl<'a> StatefulWidget for ReqUri<'a> {
                         .borders(Borders::ALL)
                         .border_style(block_border),
                 )
-                .render(size, buf);
+                .render(size, buf)
         }
     }
 }

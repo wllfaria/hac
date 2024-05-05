@@ -73,10 +73,10 @@ impl<'a> StatefulWidget for Sidebar<'a> {
             .collect::<Vec<Paragraph>>();
 
         let block_border = if state.is_focused {
-            Style::default().fg(self.colors.bright.magenta)
+            Style::default().fg(self.colors.bright.blue)
         } else {
             // TODO: we need better border colors
-            Style::default().fg(self.colors.primary.hover)
+            Style::default().fg(self.colors.bright.black)
         };
 
         let block = Block::default()
@@ -153,10 +153,10 @@ fn build_lines(
                 let req_style = match (is_selected, is_hovered) {
                     (true, true) => Style::default()
                         .fg(colors.normal.yellow)
-                        .bg(colors.primary.accent),
+                        .bg(colors.normal.blue),
                     (true, _) => Style::default()
                         .fg(colors.normal.white)
-                        .bg(colors.primary.accent),
+                        .bg(colors.normal.blue),
                     (_, true) => Style::default()
                         .fg(colors.normal.white)
                         .bg(colors.primary.hover),
@@ -183,9 +183,9 @@ fn build_lines(
 fn colored_method(method: RequestMethod, colors: &colors::Colors) -> Span<'static> {
     match method {
         RequestMethod::Get => "GET   ".fg(colors.normal.green).bold(),
-        RequestMethod::Post => "POST  ".fg(colors.normal.blue).bold(),
+        RequestMethod::Post => "POST  ".fg(colors.normal.magenta).bold(),
         RequestMethod::Put => "PUT   ".fg(colors.normal.yellow).bold(),
-        RequestMethod::Patch => "PATCH ".fg(colors.normal.cyan).bold(),
+        RequestMethod::Patch => "PATCH ".fg(colors.normal.orange).bold(),
         RequestMethod::Delete => "DELETE".fg(colors.normal.red).bold(),
     }
 }

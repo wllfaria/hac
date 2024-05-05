@@ -503,7 +503,7 @@ impl<'a> Dashboard<'a> {
     fn draw_title(&self, frame: &mut Frame) -> anyhow::Result<()> {
         let title = BigText::builder()
             .pixel_size(PixelSize::Quadrant)
-            .style(Style::default().fg(self.colors.bright.magenta))
+            .style(Style::default().fg(self.colors.normal.red))
             .lines(vec!["Select a collection".into()])
             .alignment(Alignment::Center)
             .build()?;

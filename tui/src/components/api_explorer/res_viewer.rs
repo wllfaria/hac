@@ -7,7 +7,7 @@ use ratatui::{
     text::Line,
     widgets::{
         Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget,
-        Tabs, Widget, Wrap,
+        Tabs, Widget,
     },
 };
 use std::{
@@ -87,9 +87,9 @@ impl<'a> ResViewer<'a> {
 
     fn draw_container(&self, size: Rect, buf: &mut Buffer, state: &mut ResViewerState) {
         let block_border = match (state.is_focused, state.is_selected) {
-            (true, false) => Style::default().fg(self.colors.bright.magenta),
-            (true, true) => Style::default().fg(self.colors.bright.yellow),
-            (_, _) => Style::default().fg(self.colors.primary.hover),
+            (true, false) => Style::default().fg(self.colors.bright.blue),
+            (true, true) => Style::default().fg(self.colors.normal.red),
+            (_, _) => Style::default().fg(self.colors.bright.black),
         };
 
         let block = Block::default()
@@ -101,19 +101,19 @@ impl<'a> ResViewer<'a> {
 
     fn draw_tabs(&self, buf: &mut Buffer, state: &ResViewerState, size: Rect) {
         let tabs = Tabs::new(["Pretty", "Raw", "Cookies", "Headers"])
-            .style(Style::default().fg(self.colors.primary.hover))
+            .style(Style::default().fg(self.colors.bright.black))
             .select(state.curr_tab.clone().into())
             .highlight_style(
                 Style::default()
-                    .fg(self.colors.bright.magenta)
-                    .bg(self.colors.primary.hover),
+                    .fg(self.colors.normal.white)
+                    .bg(self.colors.normal.blue),
             );
         tabs.render(size, buf);
     }
 
-    fn draw_preview_tab(&self, state: &mut ResViewerState, buf: &mut Buffer, size: Rect) {
+    fn draw_current_tab(&self, state: &mut ResViewerState, buf: &mut Buffer, size: Rect) {
         match state.curr_tab {
-            ResViewerTabs::Preview => self.draw_preview_response(state, buf, size),
+            ResViewerTabs::Preview => self.draw_pretty_response(state, buf, size),
             ResViewerTabs::Raw => self.draw_raw_response(state, buf, size),
             ResViewerTabs::Cookies => {}
             ResViewerTabs::Headers => {}
@@ -143,7 +143,7 @@ impl<'a> ResViewer<'a> {
             let lines_in_view = lines
                 .into_iter()
                 .skip(*state.raw_scroll)
-                .chain(iter::repeat(Line::from("~".fg(self.colors.normal.magenta))))
+                .chain(iter::repeat(Line::from("~".fg(self.colors.bright.black))))
                 .take(size.height.into())
                 .collect::<Vec<_>>();
 
@@ -162,18 +162,17 @@ impl<'a> ResViewer<'a> {
         let mut scrollbar_state = ScrollbarState::new(total_ines).position(current_scroll);
 
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .style(Style::default().fg(self.colors.normal.magenta))
+            .style(Style::default().fg(self.colors.normal.red))
             .begin_symbol(Some("↑"))
             .end_symbol(Some("↓"));
 
         scrollbar.render(size, buf, &mut scrollbar_state);
     }
 
-    fn draw_preview_response(&self, state: &mut ResViewerState, buf: &mut Buffer, size: Rect) {
+    fn draw_pretty_response(&self, state: &mut ResViewerState, buf: &mut Buffer, size: Rect) {
         if let Some(response) = state.response {
             let lines = response.pretty_body.display.clone();
 
-            // allow for scrolling down until theres only one line left into view
             if state.raw_scroll.deref().ge(&lines.len().saturating_sub(1)) {
                 *state.raw_scroll = lines.len().saturating_sub(1);
             }
@@ -185,11 +184,11 @@ impl<'a> ResViewer<'a> {
             let lines_in_view = lines
                 .into_iter()
                 .skip(*state.raw_scroll)
-                .chain(iter::repeat(Line::from("~".fg(self.colors.normal.magenta))))
+                .chain(iter::repeat(Line::from("~".fg(self.colors.bright.black))))
                 .take(size.height.into())
                 .collect::<Vec<_>>();
 
-            let pretty_response = Paragraph::new(lines_in_view).wrap(Wrap { trim: false });
+            let pretty_response = Paragraph::new(lines_in_view);
             pretty_response.render(request_pane, buf);
         }
     }
@@ -203,7 +202,7 @@ impl<'a> StatefulWidget for ResViewer<'a> {
 
         self.draw_container(size, buf, state);
         self.draw_tabs(buf, state, layout.tabs_pane);
-        self.draw_preview_tab(state, buf, layout.content_pane);
+        self.draw_current_tab(state, buf, layout.content_pane);
     }
 }
 

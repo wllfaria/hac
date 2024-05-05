@@ -86,21 +86,21 @@ impl<'a> ReqEditor<'a> {
 
     fn draw_tabs(&self, buf: &mut Buffer, state: &ReqEditorState, size: Rect) {
         let tabs = Tabs::new(["Request", "Headers", "Query", "Auth"])
-            .style(Style::default().fg(self.colors.primary.hover))
+            .style(Style::default().fg(self.colors.bright.black))
             .select(state.curr_tab.clone().into())
             .highlight_style(
                 Style::default()
-                    .fg(self.colors.bright.magenta)
-                    .bg(self.colors.primary.hover),
+                    .fg(self.colors.normal.white)
+                    .bg(self.colors.normal.blue),
             );
         tabs.render(size, buf);
     }
 
     fn draw_container(&self, size: Rect, buf: &mut Buffer, state: &mut ReqEditorState) {
         let block_border = match (state.is_focused, state.is_selected) {
-            (true, false) => Style::default().fg(self.colors.bright.magenta),
-            (true, true) => Style::default().fg(self.colors.bright.yellow),
-            (_, _) => Style::default().fg(self.colors.primary.hover),
+            (true, false) => Style::default().fg(self.colors.bright.blue),
+            (true, true) => Style::default().fg(self.colors.normal.red),
+            (_, _) => Style::default().fg(self.colors.bright.black),
         };
 
         let block = Block::default()
