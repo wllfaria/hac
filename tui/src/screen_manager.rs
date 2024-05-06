@@ -1,7 +1,7 @@
 use crate::{
     components::{
         api_explorer::ApiExplorer, dashboard::Dashboard, terminal_too_small::TerminalTooSmall,
-        Component,
+        Component, Eventful,
     },
     event_pool::Event,
 };
@@ -101,6 +101,22 @@ impl Component for ScreenManager<'_> {
         Ok(())
     }
 
+    fn register_command_handler(&mut self, sender: UnboundedSender<Command>) -> anyhow::Result<()> {
+        self.dashboard.register_command_handler(sender.clone())?;
+        Ok(())
+    }
+
+    fn resize(&mut self, new_size: Rect) {
+        self.size = new_size;
+        self.dashboard.resize(new_size);
+
+        if let Some(e) = self.api_explorer.as_mut() {
+            e.resize(new_size)
+        }
+    }
+}
+
+impl Eventful for ScreenManager<'_> {
     fn handle_event(&mut self, event: Option<Event>) -> anyhow::Result<Option<Command>> {
         if let Some(Event::Key(KeyEvent {
             code: KeyCode::Char('c'),
@@ -118,21 +134,7 @@ impl Component for ScreenManager<'_> {
                 .context("should never be able to switch to editor screen without having a schema")?
                 .handle_event(event),
             Screens::Dashboard => self.dashboard.handle_event(event),
-            Screens::TerminalTooSmall => self.terminal_too_small.handle_event(event),
-        }
-    }
-
-    fn register_command_handler(&mut self, sender: UnboundedSender<Command>) -> anyhow::Result<()> {
-        self.dashboard.register_command_handler(sender.clone())?;
-        Ok(())
-    }
-
-    fn resize(&mut self, new_size: Rect) {
-        self.size = new_size;
-        self.dashboard.resize(new_size);
-
-        if let Some(e) = self.api_explorer.as_mut() {
-            e.resize(new_size)
+            Screens::TerminalTooSmall => Ok(None),
         }
     }
 }

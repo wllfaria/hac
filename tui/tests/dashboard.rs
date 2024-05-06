@@ -6,7 +6,7 @@ use std::{
     io::Write,
 };
 use tempfile::{tempdir, TempDir};
-use tui::components::{dashboard::Dashboard, Component};
+use tui::components::{dashboard::Dashboard, Component, Eventful};
 
 fn setup_temp_schemas(amount: usize) -> (TempDir, String) {
     let tmp_data_dir = tempdir().expect("Failed to create temp data dir");

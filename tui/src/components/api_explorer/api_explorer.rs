@@ -4,7 +4,7 @@ use crate::components::{
         res_viewer::{ResViewer, ResViewerState, ResViewerTabs},
         sidebar::{Sidebar, SidebarState},
     },
-    Component,
+    Component, Eventful,
 };
 use anyhow::Context;
 use crossterm::event::{KeyCode, KeyEvent};
@@ -38,12 +38,6 @@ enum VisitNode {
     Prev,
 }
 
-#[derive(PartialEq, Debug)]
-enum EditorMode {
-    Insert,
-    Normal,
-}
-
 #[derive(Debug, PartialEq)]
 enum PaneFocus {
     Sidebar,
@@ -71,7 +65,6 @@ pub struct ApiExplorer<'a> {
     editor: ReqEditor<'a>,
     editor_tab: ReqEditorTabs,
     editor_body_scroll: usize,
-    editor_mode: EditorMode,
 
     responses_map: HashMap<Request, ReqtuiResponse>,
 }
@@ -107,7 +100,6 @@ impl<'a> ApiExplorer<'a> {
             editor: ReqEditor::new(colors, selected_request.clone()),
             editor_tab: ReqEditorTabs::Request,
             editor_body_scroll: 0,
-            editor_mode: EditorMode::Normal,
 
             hovered_request,
             selected_request,
@@ -190,26 +182,11 @@ impl<'a> ApiExplorer<'a> {
     }
 
     fn handle_editor_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
-        match key_event.code {
-            KeyCode::Char(c) => {
-                if let Some(req) = self.selected_request.as_mut() {
-                    req.borrow_mut()
-                        .body
-                        .as_mut()
-                        .map(|body| body.push(c))
-                        .or_else(|| {
-                            req.borrow_mut().body = Some(c.to_string());
-                            Some(())
-                        });
-
-                    tracing::debug!("{:#?}", self.selected_request);
-                };
-            }
-            KeyCode::Enter => {}
-            _ => {}
-        };
-
-        Ok(None)
+        if key_event.code.eq(&KeyCode::Enter) && self.selected_pane.is_none() {
+            self.selected_pane = Some(PaneFocus::Editor);
+            return Ok(None);
+        }
+        self.editor.handle_key_event(key_event)
     }
 
     fn draw_background(&self, size: Rect, frame: &mut Frame) {
@@ -311,13 +288,27 @@ impl Component for ApiExplorer<'_> {
         self.draw_req_uri(frame);
         self.draw_sidebar(frame);
 
+        if self
+            .selected_pane
+            .as_ref()
+            .is_some_and(|pane| pane.eq(&PaneFocus::Editor))
+        {
+            let editor_position = self.layout.req_editor;
+            let cursor = self.editor.cursor();
+            let row_with_offset = editor_position.y.add(cursor.row() as u16).add(3);
+            let col_with_offset = editor_position.x.add(cursor.col() as u16).add(1);
+            frame.set_cursor(col_with_offset, row_with_offset);
+        }
+
         Ok(())
     }
 
     fn resize(&mut self, new_size: Rect) {
         self.layout = build_layout(new_size);
     }
+}
 
+impl Eventful for ApiExplorer<'_> {
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         if let KeyCode::Tab = key_event.code {
             match (&self.focused_pane, &self.selected_pane) {

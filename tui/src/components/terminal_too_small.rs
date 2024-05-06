@@ -7,6 +7,8 @@ use ratatui::{
     Frame,
 };
 
+use super::Eventful;
+
 pub struct TerminalTooSmall<'a> {
     colors: &'a colors::Colors,
 }

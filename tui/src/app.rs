@@ -1,5 +1,5 @@
 use crate::{
-    components::Component,
+    components::{Component, Eventful},
     event_pool::{Event, EventPool},
     screen_manager::ScreenManager,
 };

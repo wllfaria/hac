@@ -1,3 +1,4 @@
+pub mod cursor;
 #[allow(clippy::module_inception)]
 mod text_object;
 

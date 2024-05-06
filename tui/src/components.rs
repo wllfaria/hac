@@ -12,9 +12,7 @@ use crossterm::event::KeyEvent;
 use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;
 
-pub trait Component {
-    fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()>;
-
+pub trait Eventful {
     fn handle_event(&mut self, event: Option<Event>) -> anyhow::Result<Option<Command>> {
         let action = match event {
             Some(Event::Key(key_event)) => self.handle_key_event(key_event)?,
@@ -25,12 +23,16 @@ pub trait Component {
     }
 
     #[allow(unused_variables)]
-    fn resize(&mut self, new_size: Rect) {}
-
-    #[allow(unused_variables)]
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         Ok(None)
     }
+}
+
+pub trait Component {
+    fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()>;
+
+    #[allow(unused_variables)]
+    fn resize(&mut self, new_size: Rect) {}
 
     #[allow(unused_variables)]
     fn register_command_handler(&mut self, sender: UnboundedSender<Command>) -> anyhow::Result<()> {

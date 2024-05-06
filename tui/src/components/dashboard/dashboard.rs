@@ -5,7 +5,7 @@ use crate::components::{
         schema_list::{SchemaList, SchemaListState},
     },
     error_popup::ErrorPopup,
-    Component,
+    Component, Eventful,
 };
 use reqtui::{command::Command, schema::types::Schema};
 
@@ -538,6 +538,17 @@ impl Component for Dashboard<'_> {
         Ok(())
     }
 
+    fn register_command_handler(&mut self, sender: UnboundedSender<Command>) -> anyhow::Result<()> {
+        self.command_sender = Some(sender.clone());
+        Ok(())
+    }
+
+    fn resize(&mut self, new_size: Rect) {
+        self.layout = build_layout(new_size);
+    }
+}
+
+impl Eventful for Dashboard<'_> {
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         match self.pane_focus {
             PaneFocus::List => self.handle_list_key_event(key_event),
@@ -550,15 +561,6 @@ impl Component for Dashboard<'_> {
                 Ok(None)
             }
         }
-    }
-
-    fn register_command_handler(&mut self, sender: UnboundedSender<Command>) -> anyhow::Result<()> {
-        self.command_sender = Some(sender.clone());
-        Ok(())
-    }
-
-    fn resize(&mut self, new_size: Rect) {
-        self.layout = build_layout(new_size);
     }
 }
 
