@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -8,12 +10,12 @@ use reqtui::schema::types::Request;
 
 #[derive(Debug)]
 pub struct ReqUriState<'a> {
-    selected_request: Option<&'a Request>,
+    selected_request: &'a Option<Rc<RefCell<Request>>>,
     is_focused: bool,
 }
 
 impl<'a> ReqUriState<'a> {
-    pub fn new(selected_request: Option<&'a Request>, is_focused: bool) -> Self {
+    pub fn new(selected_request: &'a Option<Rc<RefCell<Request>>>, is_focused: bool) -> Self {
         Self {
             selected_request,
             is_focused,
@@ -43,7 +45,7 @@ impl<'a> StatefulWidget for ReqUri<'a> {
         };
 
         if let Some(req) = state.selected_request {
-            Paragraph::new(req.uri.clone())
+            Paragraph::new(req.borrow().uri.clone())
                 .fg(self.colors.normal.white)
                 .block(
                     Block::default()

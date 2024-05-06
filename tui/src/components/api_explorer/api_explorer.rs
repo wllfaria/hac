@@ -19,7 +19,7 @@ use reqtui::{
     net::request_manager::{ReqtuiNetRequest, ReqtuiResponse},
     schema::types::{Directory, Request, RequestKind, Schema},
 };
-use std::{collections::HashMap, ops::Add};
+use std::{cell::RefCell, collections::HashMap, ops::Add, rc::Rc};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use super::req_editor::{ReqEditor, ReqEditorState, ReqEditorTabs};
@@ -38,6 +38,12 @@ enum VisitNode {
     Prev,
 }
 
+#[derive(PartialEq, Debug)]
+enum EditorMode {
+    Insert,
+    Normal,
+}
+
 #[derive(Debug, PartialEq)]
 enum PaneFocus {
     Sidebar,
@@ -53,7 +59,7 @@ pub struct ApiExplorer<'a> {
     layout: ExplorerLayout,
     response_rx: UnboundedReceiver<ReqtuiNetRequest>,
     request_tx: UnboundedSender<ReqtuiNetRequest>,
-    selected_request: Option<Request>,
+    selected_request: Option<Rc<RefCell<Request>>>,
     hovered_request: Option<RequestKind>,
     dirs_expanded: HashMap<Directory, bool>,
     focused_pane: PaneFocus,
@@ -62,7 +68,10 @@ pub struct ApiExplorer<'a> {
     preview_tab: ResViewerTabs,
     raw_preview_scroll: usize,
 
+    editor: ReqEditor<'a>,
     editor_tab: ReqEditorTabs,
+    editor_body_scroll: usize,
+    editor_mode: EditorMode,
 
     responses_map: HashMap<Request, ReqtuiResponse>,
 }
@@ -74,7 +83,7 @@ impl<'a> ApiExplorer<'a> {
         let selected_request = schema.requests.as_ref().and_then(|requests| {
             requests.first().and_then(|req| {
                 if let RequestKind::Single(req) = req {
-                    Some(req.clone())
+                    Some(Rc::new(RefCell::new(req.clone())))
                 } else {
                     None
                 }
@@ -95,6 +104,11 @@ impl<'a> ApiExplorer<'a> {
             layout,
             colors,
 
+            editor: ReqEditor::new(colors, selected_request.clone()),
+            editor_tab: ReqEditorTabs::Request,
+            editor_body_scroll: 0,
+            editor_mode: EditorMode::Normal,
+
             hovered_request,
             selected_request,
             dirs_expanded: HashMap::default(),
@@ -102,8 +116,6 @@ impl<'a> ApiExplorer<'a> {
 
             preview_tab: ResViewerTabs::Preview,
             raw_preview_scroll: 0,
-
-            editor_tab: ReqEditorTabs::Request,
 
             response_rx,
             request_tx,
@@ -121,7 +133,9 @@ impl<'a> ApiExplorer<'a> {
                             *entry = !*entry;
                         }
                         RequestKind::Single(req) => {
-                            self.selected_request = Some(req.clone());
+                            self.selected_request = Some(Rc::new(RefCell::new(req.clone())));
+                            self.editor =
+                                ReqEditor::new(self.colors, self.selected_request.clone());
                         }
                     }
                 }
@@ -161,13 +175,40 @@ impl<'a> ApiExplorer<'a> {
     fn handle_req_uri_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         match key_event.code {
             KeyCode::Char('i') => self.selected_pane = Some(PaneFocus::Preview),
-            KeyCode::Enter => reqtui::net::handle_request(
-                self.selected_request.as_ref().unwrap().clone(),
-                self.request_tx.clone(),
-                self.colors.tokens.clone(),
-            ),
+            KeyCode::Enter => {
+                if let Some(req) = self.selected_request.as_ref() {
+                    reqtui::net::handle_request(
+                        req.clone().borrow().clone(),
+                        self.request_tx.clone(),
+                        self.colors.tokens.clone(),
+                    )
+                }
+            }
             _ => {}
         }
+        Ok(None)
+    }
+
+    fn handle_editor_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
+        match key_event.code {
+            KeyCode::Char(c) => {
+                if let Some(req) = self.selected_request.as_mut() {
+                    req.borrow_mut()
+                        .body
+                        .as_mut()
+                        .map(|body| body.push(c))
+                        .or_else(|| {
+                            req.borrow_mut().body = Some(c.to_string());
+                            Some(())
+                        });
+
+                    tracing::debug!("{:#?}", self.selected_request);
+                };
+            }
+            KeyCode::Enter => {}
+            _ => {}
+        };
+
         Ok(None)
     }
 
@@ -179,7 +220,7 @@ impl<'a> ApiExplorer<'a> {
     fn draw_sidebar(&mut self, frame: &mut Frame) {
         let mut state = SidebarState::new(
             self.schema.requests.as_deref(),
-            self.selected_request.as_ref(),
+            &self.selected_request,
             self.hovered_request.as_ref(),
             &mut self.dirs_expanded,
             self.focused_pane == PaneFocus::Sidebar,
@@ -190,7 +231,7 @@ impl<'a> ApiExplorer<'a> {
 
     fn draw_req_uri(&mut self, frame: &mut Frame) {
         let mut state = ReqUriState::new(
-            self.selected_request.as_ref(),
+            &self.selected_request,
             self.focused_pane == PaneFocus::ReqUri,
         );
         ReqUri::new(self.colors).render(self.layout.req_uri, frame.buffer_mut(), &mut state);
@@ -200,7 +241,7 @@ impl<'a> ApiExplorer<'a> {
         let current_response = self
             .selected_request
             .as_ref()
-            .and_then(|selected| self.responses_map.get(selected));
+            .and_then(|selected| self.responses_map.get(&*selected.borrow()));
 
         let mut state = ResViewerState::new(
             self.focused_pane.eq(&PaneFocus::Preview),
@@ -221,8 +262,6 @@ impl<'a> ApiExplorer<'a> {
     }
 
     fn draw_req_editor(&mut self, frame: &mut Frame) {
-        let current_request = self.selected_request.as_ref();
-
         let mut state = ReqEditorState::new(
             self.focused_pane.eq(&PaneFocus::Editor),
             self.selected_pane
@@ -230,20 +269,16 @@ impl<'a> ApiExplorer<'a> {
                 .map(|sel| sel.eq(&PaneFocus::Editor))
                 .unwrap_or(false),
             &self.editor_tab,
+            &mut self.editor_body_scroll,
         );
 
-        frame.render_stateful_widget(
-            ReqEditor::new(self.colors),
-            self.layout.req_editor,
-            &mut state,
-        )
+        frame.render_stateful_widget(self.editor.clone(), self.layout.req_editor, &mut state)
     }
 
     fn drain_response_rx(&mut self) {
         while let Ok(ReqtuiNetRequest::Response(res)) = self.response_rx.try_recv() {
             if let Some(ref req) = self.selected_request {
-                tracing::debug!("{req:?}");
-                self.responses_map.insert(req.clone(), res);
+                self.responses_map.insert(req.borrow().clone(), res);
             }
         }
     }
@@ -302,7 +337,7 @@ impl Component for ApiExplorer<'_> {
             PaneFocus::Sidebar => self.handle_sidebar_key_event(key_event),
             PaneFocus::ReqUri => self.handle_req_uri_key_event(key_event),
             PaneFocus::Preview => self.handle_preview_key_event(key_event),
-            PaneFocus::Editor => todo!(),
+            PaneFocus::Editor => self.handle_editor_key_event(key_event),
         }
     }
 }
@@ -416,6 +451,8 @@ mod tests {
             method: RequestMethod::Get,
             name: "Root1".to_string(),
             uri: "/root1".to_string(),
+            body_type: None,
+            body: None,
         })
     }
 
@@ -424,6 +461,8 @@ mod tests {
             method: RequestMethod::Post,
             name: "Child1".to_string(),
             uri: "/nested1/child1".to_string(),
+            body_type: None,
+            body: None,
         })
     }
 
@@ -432,6 +471,8 @@ mod tests {
             method: RequestMethod::Put,
             name: "Child2".to_string(),
             uri: "/nested1/child2".to_string(),
+            body_type: None,
+            body: None,
         })
     }
 
@@ -440,6 +481,8 @@ mod tests {
             method: RequestMethod::Put,
             name: "NotUsed".to_string(),
             uri: "/not/used".to_string(),
+            body_type: None,
+            body: None,
         })
     }
 
@@ -459,6 +502,8 @@ mod tests {
             method: RequestMethod::Delete,
             name: "Root2".to_string(),
             uri: "/root2".to_string(),
+            body_type: None,
+            body: None,
         })
     }
 

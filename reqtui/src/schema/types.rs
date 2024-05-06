@@ -1,7 +1,6 @@
 use std::{hash::Hash, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Schema {
@@ -54,7 +53,9 @@ pub struct Request {
     pub method: RequestMethod,
     pub name: String,
     pub uri: String,
-    pub body: Option<Value>,
+    pub body: Option<String>,
+    #[serde(rename = "bodyType")]
+    pub body_type: Option<String>,
 }
 
 impl Hash for Request {

@@ -1757,6 +1757,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "tree-sitter",
  "tui-big-text",
 ]
 

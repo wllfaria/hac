@@ -15,6 +15,7 @@ tracing.workspace = true
 reqwest.workspace = true
 serde_json.workspace = true
 ratatui.workspace = true
+tree-sitter.workspace = true
 
 futures = "0.3.30"
 tui-big-text = { version = "0.4.3" }

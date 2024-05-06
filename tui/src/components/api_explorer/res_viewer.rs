@@ -171,7 +171,9 @@ impl<'a> ResViewer<'a> {
 
     fn draw_pretty_response(&self, state: &mut ResViewerState, buf: &mut Buffer, size: Rect) {
         if let Some(response) = state.response {
-            let lines = response.pretty_body.display.clone();
+            // let lines = response.pretty_body.display.clone();
+            //
+            let lines = vec![];
 
             if state.raw_scroll.deref().ge(&lines.len().saturating_sub(1)) {
                 *state.raw_scroll = lines.len().saturating_sub(1);

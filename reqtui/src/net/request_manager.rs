@@ -54,10 +54,9 @@ pub fn handle_request(
 
                 let mut highlighter = HIGHLIGHTER.write().unwrap();
                 let body = body.to_string();
-
                 let tree = highlighter.parse(&pretty_body);
-                let highlight = highlighter.apply(&pretty_body, tree.as_ref(), &tokens);
-                let pretty_body = TextObject::from(&pretty_body).with_highlight(highlight);
+                let _highlight = highlighter.apply(&pretty_body, tree.as_ref(), &tokens);
+                let pretty_body = TextObject::from(&pretty_body);
 
                 response_tx
                     .send(ReqtuiNetRequest::Response(ReqtuiResponse {

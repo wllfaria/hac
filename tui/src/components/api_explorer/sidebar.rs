@@ -7,11 +7,11 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, StatefulWidget, Widget},
 };
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 pub struct SidebarState<'a> {
     requests: Option<&'a [RequestKind]>,
-    selected_request: Option<&'a Request>,
+    selected_request: &'a Option<Rc<RefCell<Request>>>,
     hovered_requet: Option<&'a RequestKind>,
     dirs_expanded: &'a mut HashMap<Directory, bool>,
     is_focused: bool,
@@ -20,7 +20,7 @@ pub struct SidebarState<'a> {
 impl<'a> SidebarState<'a> {
     pub fn new(
         requests: Option<&'a [RequestKind]>,
-        selected_request: Option<&'a Request>,
+        selected_request: &'a Option<Rc<RefCell<Request>>>,
         hovered_requet: Option<&'a RequestKind>,
         dirs_expanded: &'a mut HashMap<Directory, bool>,
         is_focused: bool,
@@ -59,7 +59,7 @@ impl<'a> StatefulWidget for Sidebar<'a> {
         let lines = build_lines(
             state.requests,
             0,
-            state.selected_request,
+            &state.selected_request,
             state.hovered_requet,
             state.dirs_expanded,
             self.colors,
@@ -96,7 +96,7 @@ impl<'a> StatefulWidget for Sidebar<'a> {
 fn build_lines(
     requests: Option<&[RequestKind]>,
     level: usize,
-    selected_request: Option<&Request>,
+    selected_request: &Option<Rc<RefCell<Request>>>,
     hovered_request: Option<&RequestKind>,
     dirs_expanded: &mut HashMap<Directory, bool>,
     colors: &colors::Colors,
@@ -147,7 +147,9 @@ fn build_lines(
             }
             RequestKind::Single(req) => {
                 let gap = " ".repeat(level * 2);
-                let is_selected = selected_request.is_some_and(|selected| *selected == *req);
+                let is_selected = selected_request
+                    .as_ref()
+                    .is_some_and(|selected| &*selected.borrow() == req);
                 let is_hovered = hovered_request.is_some_and(|req| *req == *item);
 
                 let req_style = match (is_selected, is_hovered) {

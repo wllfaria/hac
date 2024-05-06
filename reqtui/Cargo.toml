@@ -12,9 +12,9 @@ tokio.workspace = true
 reqwest.workspace = true
 serde_json.workspace = true
 ratatui.workspace = true
+tree-sitter.workspace = true
+tree-sitter-json.workspace = true
 
-tree-sitter = "0.22.5"
-tree-sitter-json = "0.21"
 ropey = "1.6.1"
 lazy_static = "1.4"
 
