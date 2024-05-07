@@ -1,11 +1,7 @@
-use std::collections::HashMap;
-
-use ratatui::style::Style;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     schema::types::Request,
-    syntax::highlighter::HIGHLIGHTER,
     text_object::{Readonly, TextObject},
 };
 
@@ -23,11 +19,7 @@ pub enum ReqtuiNetRequest {
 }
 
 #[tracing::instrument(skip(response_tx))]
-pub fn handle_request(
-    request: Request,
-    response_tx: UnboundedSender<ReqtuiNetRequest>,
-    tokens: HashMap<String, Style>,
-) {
+pub fn handle_request(request: Request, response_tx: UnboundedSender<ReqtuiNetRequest>) {
     tracing::debug!("starting to handle user request");
     tokio::spawn(async move {
         let client = reqwest::Client::new();
@@ -52,15 +44,12 @@ pub fn handle_request(
                     })
                     .expect("failed to send response through channel");
 
-                let mut highlighter = HIGHLIGHTER.write().unwrap();
                 let body = body.to_string();
-                let tree = highlighter.parse(&pretty_body);
-                let _highlight = highlighter.apply(&pretty_body, tree.as_ref(), &tokens);
                 let pretty_body = TextObject::from(&pretty_body);
 
                 response_tx
                     .send(ReqtuiNetRequest::Response(ReqtuiResponse {
-                        body: body.to_string(),
+                        body,
                         pretty_body,
                     }))
                     .expect("failed to send response through channel");

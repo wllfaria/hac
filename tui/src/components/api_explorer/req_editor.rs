@@ -1,18 +1,15 @@
-use crate::components::Eventful;
+use crate::{components::Eventful, utils::build_styled_content};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Style, Styled, Stylize},
+    style::{Style, Stylize},
     text::{Line, Span},
-    widgets::{
-        Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget,
-        Tabs, Widget,
-    },
+    widgets::{Block, Borders, Paragraph, StatefulWidget, Tabs, Widget},
 };
 use reqtui::{
     schema::types::Request,
-    syntax::highlighter::{ColorInfo, HIGHLIGHTER},
+    syntax::highlighter::HIGHLIGHTER,
     text_object::{cursor::Cursor, TextObject, Write},
 };
 use std::{
@@ -106,39 +103,11 @@ impl<'a> ReqEditorState<'a> {
 #[derive(Debug, Clone)]
 pub struct ReqEditor<'a> {
     colors: &'a colors::Colors,
-    request: Option<Rc<RefCell<Request>>>,
     body: TextObject<Write>,
     tree: Option<Tree>,
     cursor: Cursor,
     styled_display: Vec<Line<'static>>,
     editor_mode: EditorMode,
-}
-
-fn build_styled_content(
-    content: String,
-    tree: Option<&Tree>,
-    colors: &colors::Colors,
-) -> Vec<Line<'static>> {
-    let highlights = HIGHLIGHTER
-        .read()
-        .unwrap()
-        .apply(&content, tree, &colors.tokens);
-    let mut styled_display: Vec<Line> = vec![];
-    let mut current_line: Vec<Span> = vec![];
-
-    content.chars().enumerate().for_each(|(i, c)| match c {
-        '\n' => {
-            styled_display.push(current_line.clone().into());
-            current_line.clear();
-        }
-        _ => current_line.push(build_stylized_line(c, i, &highlights)),
-    });
-
-    if !content.ends_with('\n') {
-        styled_display.push(current_line.into());
-    }
-
-    styled_display
 }
 
 impl<'a> ReqEditor<'a> {
@@ -154,11 +123,10 @@ impl<'a> ReqEditor<'a> {
             };
 
         let content = body.to_string();
-        let styled_display = build_styled_content(content, tree.as_ref(), colors);
+        let styled_display = build_styled_content(&content, tree.as_ref(), colors);
 
         Self {
             colors,
-            request,
             body,
             tree,
             styled_display,
@@ -187,7 +155,7 @@ impl<'a> ReqEditor<'a> {
             .add(percentage.content.len());
 
         let padding = Span::from(" ".repeat(size.width.sub(content_len as u16).into()))
-            .bg(self.colors.primary.hover);
+            .bg(self.colors.normal.black);
 
         match self.editor_mode {
             EditorMode::Insert => {
@@ -199,7 +167,7 @@ impl<'a> ReqEditor<'a> {
                     .bg(self.colors.normal.green);
                 percentage = percentage
                     .fg(self.colors.normal.green)
-                    .bg(self.colors.normal.black);
+                    .bg(self.colors.primary.hover);
             }
             EditorMode::Normal => {
                 mode = mode
@@ -344,6 +312,13 @@ impl Eventful for ReqEditor<'_> {
                     }
                 }
             }
+            (EditorMode::Normal, KeyCode::Char('0'), KeyModifiers::NONE) => {
+                self.cursor.move_to_line_start();
+            }
+            (EditorMode::Normal, KeyCode::Char('$'), KeyModifiers::NONE) => {
+                let current_line_len = self.body.line_len(self.cursor.row());
+                self.cursor.move_to_line_end(current_line_len);
+            }
             (EditorMode::Normal, KeyCode::Char('h'), KeyModifiers::NONE)
             | (EditorMode::Insert, KeyCode::Left, KeyModifiers::NONE) => {
                 self.cursor.move_left(1);
@@ -370,6 +345,10 @@ impl Eventful for ReqEditor<'_> {
                     self.cursor.move_right(1);
                 }
             }
+            (EditorMode::Normal, KeyCode::Char('a'), KeyModifiers::NONE) => {
+                self.cursor.move_right(1);
+                self.editor_mode = EditorMode::Insert;
+            }
             (EditorMode::Normal, KeyCode::Char('i'), KeyModifiers::NONE) => {
                 self.editor_mode = EditorMode::Insert;
             }
@@ -380,7 +359,7 @@ impl Eventful for ReqEditor<'_> {
         };
 
         self.styled_display =
-            build_styled_content(self.body.to_string(), self.tree.as_ref(), self.colors);
+            build_styled_content(&self.body.to_string(), self.tree.as_ref(), self.colors);
 
         Ok(None)
     }
@@ -416,14 +395,4 @@ fn build_preview_layout(size: Rect) -> [Rect; 2] {
         .areas(size);
 
     [request_pane, statusline_pane]
-}
-
-fn build_stylized_line(c: char, i: usize, colors: &[ColorInfo]) -> Span<'static> {
-    c.to_string().set_style(
-        colors
-            .iter()
-            .find(|color| color.start <= i && color.end >= i)
-            .map(|c| c.style)
-            .unwrap_or_default(),
-    )
 }

@@ -1,4 +1,4 @@
-use reqtui::net::request_manager::ReqtuiResponse;
+use reqtui::{net::request_manager::ReqtuiResponse, syntax::highlighter::HIGHLIGHTER};
 
 use ratatui::{
     buffer::Buffer,
@@ -11,14 +11,18 @@ use ratatui::{
     },
 };
 use std::{
+    cell::RefCell,
     iter,
     ops::{Add, Deref},
+    rc::Rc,
 };
+use tree_sitter::Tree;
+
+use crate::utils::build_styled_content;
 
 pub struct ResViewerState<'a> {
     is_focused: bool,
     is_selected: bool,
-    response: Option<&'a ReqtuiResponse>,
     curr_tab: &'a ResViewerTabs,
     raw_scroll: &'a mut usize,
 }
@@ -62,13 +66,11 @@ impl<'a> ResViewerState<'a> {
     pub fn new(
         is_focused: bool,
         is_selected: bool,
-        response: Option<&'a ReqtuiResponse>,
         curr_tab: &'a ResViewerTabs,
         raw_scroll: &'a mut usize,
     ) -> Self {
         ResViewerState {
             is_focused,
-            response,
             curr_tab,
             is_selected,
             raw_scroll,
@@ -76,13 +78,35 @@ impl<'a> ResViewerState<'a> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct ResViewer<'a> {
     colors: &'a colors::Colors,
+    response: Option<Rc<RefCell<ReqtuiResponse>>>,
+    tree: Option<Tree>,
 }
 
 impl<'a> ResViewer<'a> {
-    pub fn new(colors: &'a colors::Colors) -> Self {
-        ResViewer { colors }
+    pub fn new(colors: &'a colors::Colors, response: Option<Rc<RefCell<ReqtuiResponse>>>) -> Self {
+        let tree = response.as_ref().and_then(|response| {
+            let pretty_body = response.borrow().pretty_body.to_string();
+            let mut highlighter = HIGHLIGHTER.write().unwrap();
+            highlighter.parse(&pretty_body)
+        });
+
+        ResViewer {
+            colors,
+            response,
+            tree,
+        }
+    }
+
+    pub fn update(&mut self, response: Option<Rc<RefCell<ReqtuiResponse>>>) {
+        self.tree = response.as_ref().and_then(|response| {
+            let pretty_body = response.borrow().pretty_body.to_string();
+            let mut highlighter = HIGHLIGHTER.write().unwrap();
+            highlighter.parse(&pretty_body)
+        });
+        self.response = response;
     }
 
     fn draw_container(&self, size: Rect, buf: &mut Buffer, state: &mut ResViewerState) {
@@ -121,8 +145,9 @@ impl<'a> ResViewer<'a> {
     }
 
     fn draw_raw_response(&self, state: &mut ResViewerState, buf: &mut Buffer, size: Rect) {
-        if let Some(response) = state.response {
+        if let Some(response) = self.response.as_ref() {
             let lines = response
+                .borrow()
                 .body
                 .chars()
                 .collect::<Vec<_>>()
@@ -170,11 +195,9 @@ impl<'a> ResViewer<'a> {
     }
 
     fn draw_pretty_response(&self, state: &mut ResViewerState, buf: &mut Buffer, size: Rect) {
-        if let Some(response) = state.response {
-            // let lines = response.pretty_body.display.clone();
-            //
-            let lines = vec![];
-
+        if let Some(response) = self.response.as_ref() {
+            let pretty_body = response.borrow().pretty_body.to_string();
+            let lines = build_styled_content(&pretty_body, self.tree.as_ref(), self.colors);
             if state.raw_scroll.deref().ge(&lines.len().saturating_sub(1)) {
                 *state.raw_scroll = lines.len().saturating_sub(1);
             }

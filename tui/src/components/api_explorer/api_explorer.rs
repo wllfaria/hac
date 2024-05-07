@@ -59,6 +59,7 @@ pub struct ApiExplorer<'a> {
     focused_pane: PaneFocus,
     selected_pane: Option<PaneFocus>,
 
+    res_viewer: ResViewer<'a>,
     preview_tab: ResViewerTabs,
     raw_preview_scroll: usize,
 
@@ -66,7 +67,7 @@ pub struct ApiExplorer<'a> {
     editor_tab: ReqEditorTabs,
     editor_body_scroll: usize,
 
-    responses_map: HashMap<Request, ReqtuiResponse>,
+    responses_map: HashMap<Request, Rc<RefCell<ReqtuiResponse>>>,
 }
 
 impl<'a> ApiExplorer<'a> {
@@ -100,6 +101,8 @@ impl<'a> ApiExplorer<'a> {
             editor: ReqEditor::new(colors, selected_request.clone()),
             editor_tab: ReqEditorTabs::Request,
             editor_body_scroll: 0,
+
+            res_viewer: ResViewer::new(colors, None),
 
             hovered_request,
             selected_request,
@@ -172,7 +175,6 @@ impl<'a> ApiExplorer<'a> {
                     reqtui::net::handle_request(
                         req.clone().borrow().clone(),
                         self.request_tx.clone(),
-                        self.colors.tokens.clone(),
                     )
                 }
             }
@@ -215,24 +217,18 @@ impl<'a> ApiExplorer<'a> {
     }
 
     fn draw_res_viewer(&mut self, frame: &mut Frame) {
-        let current_response = self
-            .selected_request
-            .as_ref()
-            .and_then(|selected| self.responses_map.get(&*selected.borrow()));
-
         let mut state = ResViewerState::new(
             self.focused_pane.eq(&PaneFocus::Preview),
             self.selected_pane
                 .as_ref()
                 .map(|sel| sel.eq(&PaneFocus::Preview))
                 .unwrap_or(false),
-            current_response,
             &self.preview_tab,
             &mut self.raw_preview_scroll,
         );
 
         frame.render_stateful_widget(
-            ResViewer::new(self.colors),
+            self.res_viewer.clone(),
             self.layout.response_preview,
             &mut state,
         )
@@ -254,9 +250,12 @@ impl<'a> ApiExplorer<'a> {
 
     fn drain_response_rx(&mut self) {
         while let Ok(ReqtuiNetRequest::Response(res)) = self.response_rx.try_recv() {
-            if let Some(ref req) = self.selected_request {
-                self.responses_map.insert(req.borrow().clone(), res);
-            }
+            let res = Rc::new(RefCell::new(res));
+            self.selected_request.as_ref().and_then(|req| {
+                self.responses_map
+                    .insert(req.borrow().clone(), Rc::clone(&res))
+            });
+            self.res_viewer.update(Some(Rc::clone(&res)));
         }
     }
 

@@ -1,5 +1,3 @@
-use std::ops::Sub;
-
 use crate::text_object::cursor::Cursor;
 use ropey::Rope;
 

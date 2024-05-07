@@ -59,7 +59,7 @@ impl<'a> StatefulWidget for Sidebar<'a> {
         let lines = build_lines(
             state.requests,
             0,
-            &state.selected_request,
+            state.selected_request,
             state.hovered_requet,
             state.dirs_expanded,
             self.colors,
