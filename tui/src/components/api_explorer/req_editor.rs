@@ -350,15 +350,25 @@ impl Eventful for ReqEditor<'_> {
             }
             (EditorMode::Normal, KeyCode::Char('j'), KeyModifiers::NONE)
             | (EditorMode::Insert, KeyCode::Down, KeyModifiers::NONE) => {
-                self.cursor.move_down(1);
+                let len_lines = self.body.len_lines();
+                if self.cursor.row().lt(&len_lines.saturating_sub(1)) {
+                    self.cursor.move_down(1);
+                }
+                let current_line_len = self.body.line_len(self.cursor.row());
+                self.cursor.maybe_snap_to_col(current_line_len);
             }
             (EditorMode::Normal, KeyCode::Char('k'), KeyModifiers::NONE)
             | (EditorMode::Insert, KeyCode::Up, KeyModifiers::NONE) => {
                 self.cursor.move_up(1);
+                let current_line_len = self.body.line_len(self.cursor.row());
+                self.cursor.maybe_snap_to_col(current_line_len);
             }
             (EditorMode::Normal, KeyCode::Char('l'), KeyModifiers::NONE)
             | (EditorMode::Insert, KeyCode::Right, KeyModifiers::NONE) => {
-                self.cursor.move_right(1);
+                let current_line_len = self.body.line_len(self.cursor.row());
+                if self.cursor.col().lt(&current_line_len.saturating_sub(1)) {
+                    self.cursor.move_right(1);
+                }
             }
             (EditorMode::Normal, KeyCode::Char('i'), KeyModifiers::NONE) => {
                 self.editor_mode = EditorMode::Insert;

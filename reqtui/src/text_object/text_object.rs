@@ -61,6 +61,18 @@ impl TextObject<Write> {
         self.content.line(cursor.row()).as_str()
     }
 
+    pub fn line_len(&self, line: usize) -> usize {
+        let mut line_len = 0;
+        if let Some(line) = self.content.line(line).as_str() {
+            line_len = line.len();
+            line.contains('\r')
+                .then(|| line_len = line_len.saturating_sub(1));
+            line.contains('\n')
+                .then(|| line_len = line_len.saturating_sub(1));
+        }
+        line_len
+    }
+
     pub fn len_lines(&self) -> usize {
         self.content.len_lines()
     }
