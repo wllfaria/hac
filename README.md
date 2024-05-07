@@ -6,4 +6,4 @@ Terminal HTTP Client UI to test APis.
 
 # Demo
 
-![demo](./extra/examples/list.gif)
+![demo](./extra/examples/editor.gif)
