@@ -1,5 +1,6 @@
 use crate::components::{
     api_explorer::{
+        req_editor::{ReqEditor, ReqEditorState, ReqEditorTabs},
         req_uri::{ReqUri, ReqUriState},
         res_viewer::{ResViewer, ResViewerState, ResViewerTabs},
         sidebar::{Sidebar, SidebarState},
@@ -7,7 +8,7 @@ use crate::components::{
     Component, Eventful,
 };
 use anyhow::Context;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Stylize,
@@ -21,8 +22,6 @@ use reqtui::{
 };
 use std::{cell::RefCell, collections::HashMap, ops::Add, rc::Rc};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-
-use super::req_editor::{ReqEditor, ReqEditorState, ReqEditorTabs};
 
 #[derive(Debug, PartialEq)]
 pub struct ExplorerLayout {
@@ -244,7 +243,6 @@ impl<'a> ApiExplorer<'a> {
             &self.editor_tab,
             &mut self.editor_body_scroll,
         );
-
         frame.render_stateful_widget(self.editor.clone(), self.layout.req_editor, &mut state)
     }
 
@@ -310,18 +308,45 @@ impl Component for ApiExplorer<'_> {
 impl Eventful for ApiExplorer<'_> {
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         if let KeyCode::Tab = key_event.code {
-            match (&self.focused_pane, &self.selected_pane) {
-                (PaneFocus::Sidebar, None) => self.focused_pane = PaneFocus::ReqUri,
-                (PaneFocus::ReqUri, None) => self.focused_pane = PaneFocus::Editor,
-                (PaneFocus::Editor, None) => self.focused_pane = PaneFocus::Preview,
-                (PaneFocus::Preview, None) => self.focused_pane = PaneFocus::Sidebar,
-                (PaneFocus::Preview, Some(_)) => {
+            match (&self.focused_pane, &self.selected_pane, key_event.modifiers) {
+                (PaneFocus::Sidebar, None, KeyModifiers::NONE) => {
+                    self.focused_pane = PaneFocus::ReqUri
+                }
+                (PaneFocus::ReqUri, None, KeyModifiers::NONE) => {
+                    self.focused_pane = PaneFocus::Editor
+                }
+                (PaneFocus::Editor, None, KeyModifiers::NONE) => {
+                    self.focused_pane = PaneFocus::Preview
+                }
+                (PaneFocus::Preview, None, KeyModifiers::NONE) => {
+                    self.focused_pane = PaneFocus::Sidebar
+                }
+                (PaneFocus::Preview, Some(_), _) => {
                     self.handle_preview_key_event(key_event)?;
                 }
                 _ => {}
             }
             return Ok(None);
-        };
+        }
+
+        if let KeyCode::BackTab = key_event.code {
+            match (&self.focused_pane, &self.selected_pane, key_event.modifiers) {
+                (PaneFocus::Sidebar, None, KeyModifiers::SHIFT) => {
+                    self.focused_pane = PaneFocus::Preview
+                }
+                (PaneFocus::ReqUri, None, KeyModifiers::SHIFT) => {
+                    self.focused_pane = PaneFocus::Sidebar
+                }
+                (PaneFocus::Editor, None, KeyModifiers::SHIFT) => {
+                    self.focused_pane = PaneFocus::ReqUri
+                }
+                (PaneFocus::Preview, None, KeyModifiers::SHIFT) => {
+                    self.focused_pane = PaneFocus::Editor
+                }
+                _ => {}
+            }
+            return Ok(None);
+        }
 
         match self.focused_pane {
             PaneFocus::Sidebar => self.handle_sidebar_key_event(key_event),
