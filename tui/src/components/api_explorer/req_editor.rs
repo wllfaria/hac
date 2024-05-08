@@ -6,6 +6,7 @@ use ratatui::{
     style::{Style, Stylize},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, StatefulWidget, Tabs, Widget},
+    Frame,
 };
 use reqtui::{
     schema::types::Request,
@@ -15,7 +16,7 @@ use reqtui::{
 use std::{
     cell::RefCell,
     fmt::Display,
-    ops::{Add, Deref, Div, Mul, Sub},
+    ops::{Add, Div, Mul, Sub},
     rc::Rc,
 };
 use tree_sitter::Tree;
@@ -44,6 +45,7 @@ pub enum ReqEditorTabs {
     Auth,
 }
 
+#[derive(Debug)]
 pub struct ReqEditorLayout {
     tabs_pane: Rect,
     content_pane: Rect,
@@ -81,26 +83,19 @@ pub struct ReqEditorState<'a> {
     is_focused: bool,
     is_selected: bool,
     curr_tab: &'a ReqEditorTabs,
-    body_scroll: &'a mut usize,
 }
 
 impl<'a> ReqEditorState<'a> {
-    pub fn new(
-        is_focused: bool,
-        is_selected: bool,
-        curr_tab: &'a ReqEditorTabs,
-        body_scroll: &'a mut usize,
-    ) -> Self {
+    pub fn new(is_focused: bool, is_selected: bool, curr_tab: &'a ReqEditorTabs) -> Self {
         ReqEditorState {
             is_focused,
             curr_tab,
             is_selected,
-            body_scroll,
         }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ReqEditor<'a> {
     colors: &'a colors::Colors,
     body: TextObject<Write>,
@@ -108,10 +103,17 @@ pub struct ReqEditor<'a> {
     cursor: Cursor,
     styled_display: Vec<Line<'static>>,
     editor_mode: EditorMode,
+    row_scroll: usize,
+    layout: ReqEditorLayout,
 }
 
 impl<'a> ReqEditor<'a> {
-    pub fn new(colors: &'a colors::Colors, request: Option<Rc<RefCell<Request>>>) -> Self {
+    pub fn new(
+        colors: &'a colors::Colors,
+        request: Option<Rc<RefCell<Request>>>,
+        size: Rect,
+    ) -> Self {
+        tracing::debug!("should only run once");
         let (body, tree) =
             if let Some(body) = request.as_ref().and_then(|req| req.borrow().body.clone()) {
                 let mut highlighter = HIGHLIGHTER.write().unwrap();
@@ -132,7 +134,17 @@ impl<'a> ReqEditor<'a> {
             styled_display,
             cursor: Cursor::default(),
             editor_mode: EditorMode::Normal,
+            row_scroll: 0,
+            layout: build_layout(size),
         }
+    }
+
+    pub fn row_scroll(&self) -> usize {
+        self.row_scroll
+    }
+
+    pub fn resize(&mut self, new_size: Rect) {
+        self.layout = build_layout(new_size);
     }
 
     pub fn mode(&self) -> &EditorMode {
@@ -189,24 +201,16 @@ impl<'a> ReqEditor<'a> {
         Paragraph::new(Line::from(vec![mode, padding, percentage, cursor])).render(size, buf);
     }
 
-    fn draw_editor(&self, state: &mut ReqEditorState, buf: &mut Buffer, size: Rect) {
+    fn draw_editor(&self, buf: &mut Buffer, size: Rect) {
         let [request_pane, statusline_pane] = build_preview_layout(size);
 
         self.draw_statusline(buf, statusline_pane);
-
-        if state
-            .body_scroll
-            .deref()
-            .ge(&self.styled_display.len().saturating_sub(1))
-        {
-            *state.body_scroll = self.styled_display.len().saturating_sub(1);
-        }
 
         let lines_in_view = self
             .styled_display
             .clone()
             .into_iter()
-            .skip(*state.body_scroll)
+            .skip(self.row_scroll)
             .chain(std::iter::repeat(Line::from(
                 "~".fg(self.colors.bright.black),
             )))
@@ -223,7 +227,7 @@ impl<'a> ReqEditor<'a> {
         size: Rect,
     ) -> anyhow::Result<()> {
         match state.curr_tab {
-            ReqEditorTabs::Request => self.draw_editor(state, buf, size),
+            ReqEditorTabs::Request => self.draw_editor(buf, size),
             ReqEditorTabs::Headers => {}
             ReqEditorTabs::Query => {}
             ReqEditorTabs::Auth => {}
@@ -261,16 +265,12 @@ impl<'a> ReqEditor<'a> {
     pub fn cursor(&self) -> &Cursor {
         &self.cursor
     }
-}
 
-impl<'a> StatefulWidget for ReqEditor<'a> {
-    type State = ReqEditorState<'a>;
-
-    fn render(self, size: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let layout = build_layout(size);
-        self.draw_container(size, buf, state);
-        self.draw_tabs(buf, state, layout.tabs_pane);
-        self.draw_current_tab(state, buf, layout.content_pane).ok();
+    pub fn get_components(&self, size: Rect, frame: &mut Frame, state: &mut ReqEditorState) {
+        self.draw_container(size, frame.buffer_mut(), state);
+        self.draw_tabs(frame.buffer_mut(), state, self.layout.tabs_pane);
+        self.draw_current_tab(state, frame.buffer_mut(), self.layout.content_pane)
+            .ok();
     }
 }
 
@@ -332,6 +332,13 @@ impl Eventful for ReqEditor<'_> {
                 let len_lines = self.body.len_lines();
                 if self.cursor.row().lt(&len_lines.saturating_sub(1)) {
                     self.cursor.move_down(1);
+                }
+                if self
+                    .cursor
+                    .row()
+                    .gt(&self.layout.content_pane.height.into())
+                {
+                    self.row_scroll += 1;
                 }
                 let current_line_len = self.body.line_len(self.cursor.row());
                 self.cursor.maybe_snap_to_col(current_line_len);

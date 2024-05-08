@@ -75,7 +75,6 @@ impl<'a> StatefulWidget for Sidebar<'a> {
         let block_border = if state.is_focused {
             Style::default().fg(self.colors.bright.blue)
         } else {
-            // TODO: we need better border colors
             Style::default().fg(self.colors.bright.black)
         };
 

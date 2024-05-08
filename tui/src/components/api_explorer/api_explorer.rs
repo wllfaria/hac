@@ -69,7 +69,6 @@ pub struct ApiExplorer<'a> {
 
     editor: ReqEditor<'a>,
     editor_tab: ReqEditorTabs,
-    editor_body_scroll: usize,
 
     responses_map: HashMap<Request, Rc<RefCell<ReqtuiResponse>>>,
 }
@@ -99,12 +98,10 @@ impl<'a> ApiExplorer<'a> {
             schema,
             focused_pane: PaneFocus::ReqUri,
             selected_pane: None,
-            layout,
             colors,
 
-            editor: ReqEditor::new(colors, selected_request.clone()),
+            editor: ReqEditor::new(colors, selected_request.clone(), layout.req_editor),
             editor_tab: ReqEditorTabs::Request,
-            editor_body_scroll: 0,
 
             res_viewer: ResViewer::new(colors, None),
 
@@ -121,6 +118,7 @@ impl<'a> ApiExplorer<'a> {
 
             response_rx,
             request_tx,
+            layout,
         }
     }
 
@@ -136,8 +134,11 @@ impl<'a> ApiExplorer<'a> {
                         }
                         RequestKind::Single(req) => {
                             self.selected_request = Some(Rc::new(RefCell::new(req.clone())));
-                            self.editor =
-                                ReqEditor::new(self.colors, self.selected_request.clone());
+                            self.editor = ReqEditor::new(
+                                self.colors,
+                                self.selected_request.clone(),
+                                self.layout.req_editor,
+                            );
                         }
                     }
                 }
@@ -262,9 +263,9 @@ impl<'a> ApiExplorer<'a> {
                 .map(|sel| sel.eq(&PaneFocus::Editor))
                 .unwrap_or(false),
             &self.editor_tab,
-            &mut self.editor_body_scroll,
         );
-        frame.render_stateful_widget(self.editor.clone(), self.layout.req_editor, &mut state)
+        self.editor
+            .get_components(self.layout.req_editor, frame, &mut state);
     }
 
     fn drain_response_rx(&mut self) {
@@ -283,6 +284,12 @@ impl<'a> ApiExplorer<'a> {
             KeyCode::Enter => self.selected_pane = Some(PaneFocus::Preview),
             KeyCode::Tab => self.preview_tab = ResViewerTabs::next(&self.preview_tab),
             KeyCode::Esc => self.selected_pane = None,
+            KeyCode::Char('0') if self.preview_tab.eq(&ResViewerTabs::Headers) => {
+                self.preview_header_scroll_x = 0;
+            }
+            KeyCode::Char('$') if self.preview_tab.eq(&ResViewerTabs::Headers) => {
+                self.preview_header_scroll_x = usize::MAX;
+            }
             KeyCode::Char('h') => {
                 if let ResViewerTabs::Headers = self.preview_tab {
                     self.preview_header_scroll_x = self.preview_header_scroll_x.saturating_sub(1)
@@ -344,6 +351,7 @@ impl Component for ApiExplorer<'_> {
             let row_with_offset = editor_position
                 .y
                 .add(cursor.row_with_offset() as u16)
+                .saturating_sub(self.editor.row_scroll() as u16)
                 .add(3);
             let col_with_offset = editor_position
                 .x
@@ -356,7 +364,9 @@ impl Component for ApiExplorer<'_> {
     }
 
     fn resize(&mut self, new_size: Rect) {
-        self.layout = build_layout(new_size);
+        let new_layout = build_layout(new_size);
+        self.editor.resize(new_layout.req_editor);
+        self.layout = new_layout;
     }
 }
 

@@ -30,7 +30,7 @@ pub struct ResViewerState<'a> {
     headers_scroll_x: &'a mut usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ResViewerTabs {
     Preview,
     Raw,
@@ -200,7 +200,7 @@ impl<'a> ResViewer<'a> {
                 // we add a blank line after every entry, we account for that here
                 .ge(&lines.len().saturating_sub(2))
             {
-                *state.headers_scroll_y = lines.len().saturating_sub(1);
+                *state.headers_scroll_y = lines.len().saturating_sub(2);
             }
 
             if state
