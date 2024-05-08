@@ -1,3 +1,4 @@
+use reqwest::header::{HeaderMap, HeaderValue};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
@@ -9,6 +10,7 @@ use crate::{
 pub struct ReqtuiResponse {
     pub body: String,
     pub pretty_body: TextObject<Readonly>,
+    pub headers: HeaderMap<HeaderValue>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -26,6 +28,9 @@ pub fn handle_request(request: Request, response_tx: UnboundedSender<ReqtuiNetRe
         match client.get(request.uri).send().await {
             Ok(res) => {
                 tracing::debug!("request handled successfully, sending response");
+
+                let headers = res.headers().to_owned();
+
                 let body: serde_json::Value = res
                     .json()
                     .await
@@ -51,6 +56,7 @@ pub fn handle_request(request: Request, response_tx: UnboundedSender<ReqtuiNetRe
                     .send(ReqtuiNetRequest::Response(ReqtuiResponse {
                         body,
                         pretty_body,
+                        headers,
                     }))
                     .expect("failed to send response through channel");
             }

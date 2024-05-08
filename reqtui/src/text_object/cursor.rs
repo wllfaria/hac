@@ -5,6 +5,10 @@ pub struct Cursor {
     row: usize,
     col: usize,
     snapback_col: usize,
+    // offsets are used for commands that visually should move the cursor but shouldn't influence in
+    // the actual cursor position on the content
+    col_offset: usize,
+    row_offset: usize,
 }
 
 impl Cursor {
@@ -53,6 +57,22 @@ impl Cursor {
 
     pub fn col(&self) -> usize {
         self.col
+    }
+
+    pub fn row_with_offset(&self) -> usize {
+        self.row + self.row_offset
+    }
+
+    pub fn col_with_offset(&self) -> usize {
+        self.col + self.col_offset
+    }
+
+    pub fn set_col_offset(&mut self, offset: usize) {
+        self.col_offset = offset;
+    }
+
+    pub fn set_row_offset(&mut self, offset: usize) {
+        self.row_offset = offset;
     }
 
     pub fn readable_position(&self) -> (usize, usize) {

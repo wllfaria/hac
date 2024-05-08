@@ -23,6 +23,8 @@ use reqtui::{
 use std::{cell::RefCell, collections::HashMap, ops::Add, rc::Rc};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
+use super::req_editor::EditorMode;
+
 #[derive(Debug, PartialEq)]
 pub struct ExplorerLayout {
     pub sidebar: Rect,
@@ -61,6 +63,9 @@ pub struct ApiExplorer<'a> {
     res_viewer: ResViewer<'a>,
     preview_tab: ResViewerTabs,
     raw_preview_scroll: usize,
+    preview_header_scroll_y: usize,
+    preview_header_scroll_x: usize,
+    pretty_preview_scroll: usize,
 
     editor: ReqEditor<'a>,
     editor_tab: ReqEditorTabs,
@@ -110,6 +115,9 @@ impl<'a> ApiExplorer<'a> {
 
             preview_tab: ResViewerTabs::Preview,
             raw_preview_scroll: 0,
+            preview_header_scroll_y: 0,
+            preview_header_scroll_x: 0,
+            pretty_preview_scroll: 0,
 
             response_rx,
             request_tx,
@@ -183,8 +191,18 @@ impl<'a> ApiExplorer<'a> {
     }
 
     fn handle_editor_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
+        match (key_event.code, &self.selected_pane) {
+            (KeyCode::Enter, None) => {
+                self.selected_pane = Some(PaneFocus::Editor);
+                return Ok(None);
+            }
+            (KeyCode::Esc, Some(_)) if self.editor.mode().eq(&EditorMode::Normal) => {
+                self.selected_pane = None;
+                return Ok(None);
+            }
+            _ => {}
+        }
         if key_event.code.eq(&KeyCode::Enter) && self.selected_pane.is_none() {
-            self.selected_pane = Some(PaneFocus::Editor);
             return Ok(None);
         }
         self.editor.handle_key_event(key_event)
@@ -224,6 +242,9 @@ impl<'a> ApiExplorer<'a> {
                 .unwrap_or(false),
             &self.preview_tab,
             &mut self.raw_preview_scroll,
+            &mut self.pretty_preview_scroll,
+            &mut self.preview_header_scroll_y,
+            &mut self.preview_header_scroll_x,
         );
 
         frame.render_stateful_widget(
@@ -262,10 +283,38 @@ impl<'a> ApiExplorer<'a> {
             KeyCode::Enter => self.selected_pane = Some(PaneFocus::Preview),
             KeyCode::Tab => self.preview_tab = ResViewerTabs::next(&self.preview_tab),
             KeyCode::Esc => self.selected_pane = None,
-            KeyCode::Char('k') => {
-                self.raw_preview_scroll = self.raw_preview_scroll.saturating_sub(1)
+            KeyCode::Char('h') => {
+                if let ResViewerTabs::Headers = self.preview_tab {
+                    self.preview_header_scroll_x = self.preview_header_scroll_x.saturating_sub(1)
+                }
             }
-            KeyCode::Char('j') => self.raw_preview_scroll = self.raw_preview_scroll.add(1),
+            KeyCode::Char('j') => match self.preview_tab {
+                ResViewerTabs::Preview => {
+                    self.pretty_preview_scroll = self.pretty_preview_scroll.add(1)
+                }
+                ResViewerTabs::Raw => self.raw_preview_scroll = self.raw_preview_scroll.add(1),
+                ResViewerTabs::Headers => {
+                    self.preview_header_scroll_y = self.preview_header_scroll_y.add(1)
+                }
+                ResViewerTabs::Cookies => {}
+            },
+            KeyCode::Char('k') => match self.preview_tab {
+                ResViewerTabs::Preview => {
+                    self.pretty_preview_scroll = self.pretty_preview_scroll.saturating_sub(1)
+                }
+                ResViewerTabs::Raw => {
+                    self.raw_preview_scroll = self.raw_preview_scroll.saturating_sub(1)
+                }
+                ResViewerTabs::Headers => {
+                    self.preview_header_scroll_y = self.preview_header_scroll_y.saturating_sub(1)
+                }
+                ResViewerTabs::Cookies => {}
+            },
+            KeyCode::Char('l') => {
+                if let ResViewerTabs::Headers = self.preview_tab {
+                    self.preview_header_scroll_x = self.preview_header_scroll_x.add(1)
+                }
+            }
             _ => {}
         }
 
@@ -292,8 +341,14 @@ impl Component for ApiExplorer<'_> {
         {
             let editor_position = self.layout.req_editor;
             let cursor = self.editor.cursor();
-            let row_with_offset = editor_position.y.add(cursor.row() as u16).add(3);
-            let col_with_offset = editor_position.x.add(cursor.col() as u16).add(1);
+            let row_with_offset = editor_position
+                .y
+                .add(cursor.row_with_offset() as u16)
+                .add(3);
+            let col_with_offset = editor_position
+                .x
+                .add(cursor.col_with_offset() as u16)
+                .add(1);
             frame.set_cursor(col_with_offset, row_with_offset);
         }
 

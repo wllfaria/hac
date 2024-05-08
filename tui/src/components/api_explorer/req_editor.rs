@@ -21,7 +21,7 @@ use std::{
 use tree_sitter::Tree;
 
 #[derive(PartialEq, Debug, Clone)]
-enum EditorMode {
+pub enum EditorMode {
     Insert,
     Normal,
 }
@@ -133,6 +133,10 @@ impl<'a> ReqEditor<'a> {
             cursor: Cursor::default(),
             editor_mode: EditorMode::Normal,
         }
+    }
+
+    pub fn mode(&self) -> &EditorMode {
+        &self.editor_mode
     }
 
     fn draw_statusline(&self, buf: &mut Buffer, size: Rect) {
@@ -346,13 +350,20 @@ impl Eventful for ReqEditor<'_> {
                 }
             }
             (EditorMode::Normal, KeyCode::Char('a'), KeyModifiers::NONE) => {
-                self.cursor.move_right(1);
+                let current_line_len = self.body.line_len(self.cursor.row());
+                if current_line_len.gt(&0) {
+                    self.cursor.move_right(1);
+                }
                 self.editor_mode = EditorMode::Insert;
             }
             (EditorMode::Normal, KeyCode::Char('i'), KeyModifiers::NONE) => {
                 self.editor_mode = EditorMode::Insert;
             }
             (EditorMode::Insert, KeyCode::Esc, KeyModifiers::NONE) => {
+                let current_line_len = self.body.line_len(self.cursor.row());
+                if self.cursor.col().ge(&current_line_len) {
+                    self.cursor.move_left(1);
+                }
                 self.editor_mode = EditorMode::Normal;
             }
             _ => {}

@@ -44,15 +44,19 @@ impl<'a> StatefulWidget for ReqUri<'a> {
             Style::default().fg(self.colors.bright.black)
         };
 
-        if let Some(req) = state.selected_request {
-            Paragraph::new(req.borrow().uri.clone())
-                .fg(self.colors.normal.white)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_style(block_border),
-                )
-                .render(size, buf)
-        }
+        let uri = state
+            .selected_request
+            .as_ref()
+            .map(|req| req.borrow().uri.to_string())
+            .unwrap_or_default();
+
+        Paragraph::new(uri)
+            .fg(self.colors.normal.white)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(block_border),
+            )
+            .render(size, buf);
     }
 }
