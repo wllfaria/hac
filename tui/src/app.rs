@@ -21,7 +21,7 @@ impl<'a> App<'a> {
         let terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
         Ok(Self {
             screen_manager: ScreenManager::new(terminal.size()?, colors, schemas)?,
-            event_pool: EventPool::new(30f64, 60f64),
+            event_pool: EventPool::new(60f64),
             should_quit: false,
             terminal,
         })

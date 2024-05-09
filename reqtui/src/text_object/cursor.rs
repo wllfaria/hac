@@ -51,6 +51,10 @@ impl Cursor {
         self.snapback_col = col;
     }
 
+    pub fn move_to_row(&mut self, row: usize) {
+        self.row = row;
+    }
+
     pub fn row(&self) -> usize {
         self.row
     }

@@ -14,9 +14,9 @@ serde_json.workspace = true
 ratatui.workspace = true
 tree-sitter.workspace = true
 tree-sitter-json.workspace = true
+lazy_static.workspace = true
 
 ropey = "1.6.1"
-lazy_static = "1.4"
 
 [build-dependencies]
 cc="*"

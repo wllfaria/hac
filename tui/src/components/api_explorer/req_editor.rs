@@ -5,7 +5,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Style, Stylize},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, StatefulWidget, Tabs, Widget},
+    widgets::{Block, Borders, Paragraph, Tabs, Widget},
     Frame,
 };
 use reqtui::{
@@ -155,7 +155,7 @@ impl<'a> ReqEditor<'a> {
         let cursor_pos = self.cursor.readable_position();
 
         let mut mode = Span::from(format!(" {} ", self.editor_mode));
-        let mut cursor = Span::from(format!(" {}:{} ", cursor_pos.0, cursor_pos.1));
+        let mut cursor = Span::from(format!(" {}:{} ", cursor_pos.1, cursor_pos.0));
 
         let mut percentage = Span::from(format!(
             " {}% ",
@@ -284,13 +284,11 @@ impl Eventful for ReqEditor<'_> {
                 self.body.insert_char(c, &self.cursor);
                 self.cursor.move_right(1);
                 self.tree = HIGHLIGHTER.write().unwrap().parse(&self.body.to_string());
-                // if let Some(tree) = self.tree.as_mut() {}
             }
             (EditorMode::Insert, KeyCode::Enter, KeyModifiers::NONE) => {
                 self.body.insert_char('\n', &self.cursor);
                 self.cursor.move_to_newline_start();
                 self.tree = HIGHLIGHTER.write().unwrap().parse(&self.body.to_string());
-                // if let Some(tree) = self.tree.as_mut() {}
             }
             (EditorMode::Insert, KeyCode::Backspace, KeyModifiers::NONE) => {
                 match (self.cursor.col(), self.cursor.row()) {
@@ -315,6 +313,13 @@ impl Eventful for ReqEditor<'_> {
                         self.tree = HIGHLIGHTER.write().unwrap().parse(&self.body.to_string());
                     }
                 }
+            }
+            (EditorMode::Insert, KeyCode::Esc, KeyModifiers::NONE) => {
+                let current_line_len = self.body.line_len(self.cursor.row());
+                if self.cursor.col().ge(&current_line_len) {
+                    self.cursor.move_left(1);
+                }
+                self.editor_mode = EditorMode::Normal;
             }
             (EditorMode::Normal, KeyCode::Char('0'), KeyModifiers::NONE) => {
                 self.cursor.move_to_line_start();
@@ -363,15 +368,20 @@ impl Eventful for ReqEditor<'_> {
                 }
                 self.editor_mode = EditorMode::Insert;
             }
-            (EditorMode::Normal, KeyCode::Char('i'), KeyModifiers::NONE) => {
+            (EditorMode::Normal, KeyCode::Char('A'), KeyModifiers::SHIFT) => {
+                let current_line_len = self.body.line_len(self.cursor.row());
+                if current_line_len.gt(&0) {
+                    self.cursor.move_to_line_end(current_line_len);
+                    self.cursor.move_right(1);
+                }
                 self.editor_mode = EditorMode::Insert;
             }
-            (EditorMode::Insert, KeyCode::Esc, KeyModifiers::NONE) => {
-                let current_line_len = self.body.line_len(self.cursor.row());
-                if self.cursor.col().ge(&current_line_len) {
-                    self.cursor.move_left(1);
-                }
-                self.editor_mode = EditorMode::Normal;
+            (EditorMode::Normal, KeyCode::Char('G'), KeyModifiers::SHIFT) => {
+                let len_lines = self.body.len_lines();
+                self.cursor.move_to_row(len_lines.saturating_sub(1));
+            }
+            (EditorMode::Normal, KeyCode::Char('i'), KeyModifiers::NONE) => {
+                self.editor_mode = EditorMode::Insert;
             }
             _ => {}
         };

@@ -18,3 +18,5 @@ reqwest = { version = "0.12", features = ["json"] }
 ratatui = { version = "0.26.1", features = ["all-widgets", "crossterm"] }
 tree-sitter = "0.22.5"
 tree-sitter-json = "0.21"
+divan = "0.1.14"
+lazy_static = "1.4"

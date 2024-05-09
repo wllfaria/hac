@@ -16,6 +16,8 @@ reqwest.workspace = true
 serde_json.workspace = true
 ratatui.workspace = true
 tree-sitter.workspace = true
+divan.workspace = true
+lazy_static.workspace = true
 
 futures = "0.3.30"
 tui-big-text = { version = "0.4.3" }
@@ -31,3 +33,7 @@ name = "rqt"
 test = false
 bench = false
 path = "src/main.rs"
+
+[[bench]]
+name = "api_explorer"
+harness = false

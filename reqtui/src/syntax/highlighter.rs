@@ -1,7 +1,11 @@
 use lazy_static::lazy_static;
 use ratatui::style::Style;
 
-use std::{collections::HashMap, fmt::Debug, sync::RwLock};
+use std::{
+    collections::{HashMap, VecDeque},
+    fmt::Debug,
+    sync::RwLock,
+};
 
 use tree_sitter::{Parser, Query, QueryCursor, Tree};
 
@@ -52,8 +56,8 @@ impl Highlighter {
         buffer: &str,
         tree: Option<&Tree>,
         tokens: &HashMap<String, Style>,
-    ) -> Vec<ColorInfo> {
-        let mut colors = Vec::new();
+    ) -> VecDeque<ColorInfo> {
+        let mut colors = VecDeque::new();
 
         if let Some(tree) = tree {
             let mut cursor = QueryCursor::new();
@@ -66,7 +70,7 @@ impl Highlighter {
                     let end = node.end_byte();
                     let capture_name = self.query.capture_names()[cap.index as usize];
                     if let Some(style) = tokens.get(capture_name) {
-                        colors.push(ColorInfo {
+                        colors.push_back(ColorInfo {
                             start,
                             end,
                             style: *style,

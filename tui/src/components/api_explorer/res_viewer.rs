@@ -1,5 +1,6 @@
 use reqtui::{net::request_manager::ReqtuiResponse, syntax::highlighter::HIGHLIGHTER};
 
+use crate::utils::build_styled_content;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
@@ -17,8 +18,6 @@ use std::{
     rc::Rc,
 };
 use tree_sitter::Tree;
-
-use crate::utils::build_styled_content;
 
 pub struct ResViewerState<'a> {
     is_focused: bool,
