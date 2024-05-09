@@ -105,6 +105,7 @@ pub struct ReqEditor<'a> {
     editor_mode: EditorMode,
     row_scroll: usize,
     layout: ReqEditorLayout,
+    buffered_keys: String,
 }
 
 impl<'a> ReqEditor<'a> {
@@ -136,6 +137,7 @@ impl<'a> ReqEditor<'a> {
             editor_mode: EditorMode::Normal,
             row_scroll: 0,
             layout: build_layout(size),
+            buffered_keys: String::default(),
         }
     }
 
@@ -360,6 +362,9 @@ impl Eventful for ReqEditor<'_> {
                 if self.cursor.col().lt(&current_line_len.saturating_sub(1)) {
                     self.cursor.move_right(1);
                 }
+            }
+            (EditorMode::Normal, KeyCode::Char('x'), KeyModifiers::NONE) => {
+                self.body.erase_current_char(&self.cursor);
             }
             (EditorMode::Normal, KeyCode::Char('a'), KeyModifiers::NONE) => {
                 let current_line_len = self.body.line_len(self.cursor.row());

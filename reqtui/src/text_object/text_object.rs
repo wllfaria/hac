@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 use crate::text_object::cursor::Cursor;
 use ropey::Rope;
 
@@ -53,6 +55,12 @@ impl TextObject<Write> {
         self.content
             .try_remove(col_offset.saturating_sub(1)..col_offset)
             .ok();
+    }
+
+    pub fn erase_current_char(&mut self, cursor: &Cursor) {
+        let line = self.content.line_to_char(cursor.row());
+        let col_offset = line + cursor.col();
+        self.content.try_remove(col_offset..col_offset.add(1)).ok();
     }
 
     pub fn current_line(&self, cursor: &Cursor) -> Option<&str> {
