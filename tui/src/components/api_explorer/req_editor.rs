@@ -285,12 +285,10 @@ impl Eventful for ReqEditor<'_> {
             (EditorMode::Insert, KeyCode::Char(c), KeyModifiers::NONE) => {
                 self.body.insert_char(c, &self.cursor);
                 self.cursor.move_right(1);
-                self.tree = HIGHLIGHTER.write().unwrap().parse(&self.body.to_string());
             }
             (EditorMode::Insert, KeyCode::Enter, KeyModifiers::NONE) => {
                 self.body.insert_char('\n', &self.cursor);
                 self.cursor.move_to_newline_start();
-                self.tree = HIGHLIGHTER.write().unwrap().parse(&self.body.to_string());
             }
             (EditorMode::Insert, KeyCode::Backspace, KeyModifiers::NONE) => {
                 match (self.cursor.col(), self.cursor.row()) {
@@ -306,15 +304,17 @@ impl Eventful for ReqEditor<'_> {
 
                         self.cursor
                             .move_to_col(current_line.len().saturating_sub(3));
-
-                        self.tree = HIGHLIGHTER.write().unwrap().parse(&self.body.to_string());
                     }
                     (_, _) => {
                         self.body.erase_previous_char(&self.cursor);
                         self.cursor.move_left(1);
-                        self.tree = HIGHLIGHTER.write().unwrap().parse(&self.body.to_string());
                     }
                 }
+            }
+            (EditorMode::Insert, KeyCode::Tab, KeyModifiers::NONE) => {
+                self.body.insert_char(' ', &self.cursor);
+                self.body.insert_char(' ', &self.cursor);
+                self.cursor.move_right(2);
             }
             (EditorMode::Insert, KeyCode::Esc, KeyModifiers::NONE) => {
                 let current_line_len = self.body.line_len(self.cursor.row());
@@ -366,6 +366,10 @@ impl Eventful for ReqEditor<'_> {
             (EditorMode::Normal, KeyCode::Char('x'), KeyModifiers::NONE) => {
                 self.body.erase_current_char(&self.cursor);
             }
+            (EditorMode::Normal, KeyCode::Char('X'), KeyModifiers::SHIFT) => {
+                self.body.erase_backwards_up_to_line_start(&self.cursor);
+                self.cursor.move_left(1);
+            }
             (EditorMode::Normal, KeyCode::Char('a'), KeyModifiers::NONE) => {
                 let current_line_len = self.body.line_len(self.cursor.row());
                 if current_line_len.gt(&0) {
@@ -391,6 +395,7 @@ impl Eventful for ReqEditor<'_> {
             _ => {}
         };
 
+        self.tree = HIGHLIGHTER.write().unwrap().parse(&self.body.to_string());
         self.styled_display =
             build_styled_content(&self.body.to_string(), self.tree.as_ref(), self.colors);
 

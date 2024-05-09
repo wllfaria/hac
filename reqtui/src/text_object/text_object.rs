@@ -49,6 +49,17 @@ impl TextObject<Write> {
         self.content.insert_char(col_offset, c);
     }
 
+    pub fn erase_backwards_up_to_line_start(&mut self, cursor: &Cursor) {
+        if cursor.col().eq(&0) {
+            return;
+        }
+        let line = self.content.line_to_char(cursor.row());
+        let col_offset = line + cursor.col();
+        self.content
+            .try_remove(col_offset.saturating_sub(1)..col_offset)
+            .ok();
+    }
+
     pub fn erase_previous_char(&mut self, cursor: &Cursor) {
         let line = self.content.line_to_char(cursor.row());
         let col_offset = line + cursor.col();

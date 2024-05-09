@@ -386,6 +386,9 @@ impl Eventful for ApiExplorer<'_> {
                 (PaneFocus::Preview, None, KeyModifiers::NONE) => {
                     self.focused_pane = PaneFocus::Sidebar
                 }
+                (PaneFocus::Editor, Some(_), KeyModifiers::NONE) => {
+                    self.editor.handle_key_event(key_event)?;
+                }
                 (PaneFocus::Preview, Some(_), _) => {
                     self.handle_preview_key_event(key_event)?;
                 }
