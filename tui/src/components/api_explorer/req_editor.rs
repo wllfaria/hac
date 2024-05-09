@@ -280,7 +280,7 @@ impl Eventful for ReqEditor<'_> {
         key_event: KeyEvent,
     ) -> anyhow::Result<Option<reqtui::command::Command>> {
         match (&self.editor_mode, key_event.code, key_event.modifiers) {
-            (EditorMode::Insert, KeyCode::Char(c), KeyModifiers::NONE) => {
+            (EditorMode::Insert, KeyCode::Char(c), _) => {
                 self.body.insert_char(c, &self.cursor);
                 self.cursor.move_right(1);
             }

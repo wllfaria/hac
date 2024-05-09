@@ -25,13 +25,11 @@ Hide
     Sleep 3s
 Show
 Sleep 1s
-Type "j"
-Sleep 1s
-Type@500ms "jj"
-Sleep 1s
-Type@500ms "kk"
 Enter
-Sleep 1s
+Sleep 500ms
+Type@200ms "jj"
+Enter
+Sleep 3s
 Tab
 Sleep 1s
 Enter
@@ -41,7 +39,13 @@ Tab
 Sleep 0.5s
 Enter
 Sleep 1s
+Type@100ms "jjjjjjjjjj"
+Sleep 1s
 Tab
+Sleep 1s
+Tab
+Sleep 1s
+Type@100ms "jjjjjjjjjj"
 Sleep 1s
 Escape
 Sleep 1s
@@ -52,23 +56,25 @@ Sleep 0.5s
 Tab
 Sleep 0.5s
 Enter
-Type@100ms "jllllllllllllllllllllll"
+Type@100ms "WWWWWW"
 Sleep 1s
 Type "i"
 Sleep 1s
 Backspace
-Sleep 0.5s
+Sleep 0.1s
 Backspace
-Sleep 0.5s
+Sleep 0.1s
 Backspace
-Sleep 0.5s
+Sleep 0.1s
 Backspace
-Sleep 0.5s
+Sleep 0.1s
 Backspace
-Sleep 0.5s
+Sleep 0.1s
 Backspace
-Sleep 0.5s
+Sleep 0.1s
 Backspace
-Sleep 0.5s
-Type@100ms "hello_"
+Sleep 0.1s
+Type@100ms "Hello "
+Sleep 0.2s
+Escape
 Sleep 3s
