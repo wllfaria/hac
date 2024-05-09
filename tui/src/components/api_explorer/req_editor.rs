@@ -389,6 +389,28 @@ impl Eventful for ReqEditor<'_> {
                 let len_lines = self.body.len_lines();
                 self.cursor.move_to_row(len_lines.saturating_sub(1));
             }
+            (EditorMode::Normal, KeyCode::Char('D'), KeyModifiers::SHIFT) => {
+                self.body.erase_until_eol(&self.cursor);
+            }
+            (EditorMode::Normal, KeyCode::Char('B'), KeyModifiers::SHIFT) => {
+                let (col, row) = self.body.find_char_before_whitespace(&self.cursor);
+                self.cursor.move_to_row(row);
+                self.cursor.move_to_col(col);
+            }
+            (EditorMode::Normal, KeyCode::Char('w'), KeyModifiers::NONE) => {
+                let (col, row) = self.body.find_char_after_separator(&self.cursor);
+                self.cursor.move_to_row(row);
+                self.cursor.move_to_col(col);
+                let current_line_len = self.body.line_len(self.cursor.row());
+                self.cursor.maybe_snap_to_col(current_line_len);
+            }
+            (EditorMode::Normal, KeyCode::Char('W'), KeyModifiers::SHIFT) => {
+                let (col, row) = self.body.find_char_after_whitespace(&self.cursor);
+                self.cursor.move_to_row(row);
+                self.cursor.move_to_col(col);
+                let current_line_len = self.body.line_len(self.cursor.row());
+                self.cursor.maybe_snap_to_col(current_line_len);
+            }
             (EditorMode::Normal, KeyCode::Char('i'), KeyModifiers::NONE) => {
                 self.editor_mode = EditorMode::Insert;
             }
