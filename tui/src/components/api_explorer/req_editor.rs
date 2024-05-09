@@ -105,7 +105,6 @@ pub struct ReqEditor<'a> {
     editor_mode: EditorMode,
     row_scroll: usize,
     layout: ReqEditorLayout,
-    buffered_keys: String,
 }
 
 impl<'a> ReqEditor<'a> {
@@ -137,7 +136,6 @@ impl<'a> ReqEditor<'a> {
             editor_mode: EditorMode::Normal,
             row_scroll: 0,
             layout: build_layout(size),
-            buffered_keys: String::default(),
         }
     }
 

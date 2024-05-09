@@ -179,7 +179,3 @@ impl<State> std::fmt::Display for TextObject<State> {
         f.write_str(&self.content.to_string())
     }
 }
-
-fn is_separator(c: char) -> bool {
-    c.is_whitespace() || matches!(c, '.' | '/' | '\'' | '"')
-}
