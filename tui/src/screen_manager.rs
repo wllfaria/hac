@@ -19,21 +19,23 @@ pub enum Screens {
     TerminalTooSmall,
 }
 
-pub struct ScreenManager<'a> {
+pub struct ScreenManager<'sm> {
     curr_screen: Screens,
-    api_explorer: Option<ApiExplorer<'a>>,
-    dashboard: Dashboard<'a>,
-    terminal_too_small: TerminalTooSmall<'a>,
+    api_explorer: Option<ApiExplorer<'sm>>,
+    dashboard: Dashboard<'sm>,
+    terminal_too_small: TerminalTooSmall<'sm>,
     prev_screen: Screens,
     size: Rect,
-    colors: &'a colors::Colors,
+    colors: &'sm colors::Colors,
+    config: &'sm config::Config,
 }
 
-impl<'a> ScreenManager<'a> {
+impl<'sm> ScreenManager<'sm> {
     pub fn new(
         size: Rect,
-        colors: &'a colors::Colors,
+        colors: &'sm colors::Colors,
         schemas: Vec<Schema>,
+        config: &'sm config::Config,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             curr_screen: Screens::Dashboard,
@@ -43,6 +45,7 @@ impl<'a> ScreenManager<'a> {
             dashboard: Dashboard::new(size, colors, schemas)?,
             size,
             colors,
+            config,
         })
     }
 
@@ -70,7 +73,12 @@ impl<'a> ScreenManager<'a> {
             Command::SelectSchema(schema) | Command::CreateSchema(schema) => {
                 tracing::debug!("changing to api explorer: {}", schema.info.name);
                 self.switch_screen(Screens::Editor);
-                self.api_explorer = Some(ApiExplorer::new(self.size, schema, self.colors));
+                self.api_explorer = Some(ApiExplorer::new(
+                    self.size,
+                    schema,
+                    self.colors,
+                    self.config,
+                ));
             }
             Command::Error(msg) => {
                 self.dashboard.display_error(msg);
@@ -181,7 +189,8 @@ mod tests {
         let colors = colors::Colors::default();
         let (_guard, path) = setup_temp_schemas(10);
         let schemas = schema::schema::get_schemas(path).unwrap();
-        let mut sm = ScreenManager::new(small_in_width, &colors, schemas).unwrap();
+        let config = config::load_config();
+        let mut sm = ScreenManager::new(small_in_width, &colors, schemas, &config).unwrap();
         let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
 
         sm.draw(&mut terminal.get_frame(), small_in_width).unwrap();
@@ -198,7 +207,8 @@ mod tests {
         let colors = colors::Colors::default();
         let (_guard, path) = setup_temp_schemas(10);
         let schemas = schema::schema::get_schemas(path).unwrap();
-        let mut sm = ScreenManager::new(small, &colors, schemas).unwrap();
+        let config = config::load_config();
+        let mut sm = ScreenManager::new(small, &colors, schemas, &config).unwrap();
         let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
 
         terminal.resize(small).unwrap();
@@ -219,7 +229,8 @@ mod tests {
         let colors = colors::Colors::default();
         let (_guard, path) = setup_temp_schemas(10);
         let schemas = schema::schema::get_schemas(path).unwrap();
-        let mut sm = ScreenManager::new(initial, &colors, schemas).unwrap();
+        let config = config::load_config();
+        let mut sm = ScreenManager::new(initial, &colors, schemas, &config).unwrap();
 
         sm.resize(expected);
 
@@ -241,8 +252,8 @@ mod tests {
         let command = Command::SelectSchema(schema.clone());
         let (_guard, path) = setup_temp_schemas(10);
         let schemas = schema::schema::get_schemas(path).unwrap();
-
-        let mut sm = ScreenManager::new(initial, &colors, schemas).unwrap();
+        let config = config::load_config();
+        let mut sm = ScreenManager::new(initial, &colors, schemas, &config).unwrap();
         assert_eq!(sm.curr_screen, Screens::Dashboard);
 
         sm.handle_command(command);
@@ -255,7 +266,8 @@ mod tests {
         let colors = colors::Colors::default();
         let (_guard, path) = setup_temp_schemas(10);
         let schemas = schema::schema::get_schemas(path).unwrap();
-        let mut sm = ScreenManager::new(initial, &colors, schemas).unwrap();
+        let config = config::load_config();
+        let mut sm = ScreenManager::new(initial, &colors, schemas, &config).unwrap();
 
         let (tx, _) = tokio::sync::mpsc::unbounded_channel::<Command>();
 
@@ -270,7 +282,8 @@ mod tests {
         let colors = colors::Colors::default();
         let (_guard, path) = setup_temp_schemas(10);
         let schemas = schema::schema::get_schemas(path).unwrap();
-        let mut sm = ScreenManager::new(initial, &colors, schemas).unwrap();
+        let config = config::load_config();
+        let mut sm = ScreenManager::new(initial, &colors, schemas, &config).unwrap();
 
         let event = Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
 

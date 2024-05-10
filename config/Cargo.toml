@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow.workspace = true
 tracing.workspace = true
+serde.workspace = true
 
-directories = "5.0.1"
-
+dirs = "5.0.1"
+toml = "0.8.12"

@@ -3,24 +3,27 @@ use crate::{
     event_pool::{Event, EventPool},
     screen_manager::ScreenManager,
 };
-use reqtui::{command::Command, schema::Schema};
-
 use ratatui::{backend::CrosstermBackend, Terminal};
+use reqtui::{command::Command, schema::Schema};
 use std::io::Stdout;
 use tokio::sync::mpsc;
 
-pub struct App<'a> {
+pub struct App<'app> {
     event_pool: EventPool,
     terminal: Terminal<CrosstermBackend<Stdout>>,
     should_quit: bool,
-    screen_manager: ScreenManager<'a>,
+    screen_manager: ScreenManager<'app>,
 }
 
-impl<'a> App<'a> {
-    pub fn new(colors: &'a colors::Colors, schemas: Vec<Schema>) -> anyhow::Result<Self> {
+impl<'app> App<'app> {
+    pub fn new(
+        colors: &'app colors::Colors,
+        schemas: Vec<Schema>,
+        config: &'app config::Config,
+    ) -> anyhow::Result<Self> {
         let terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
         Ok(Self {
-            screen_manager: ScreenManager::new(terminal.size()?, colors, schemas)?,
+            screen_manager: ScreenManager::new(terminal.size()?, colors, schemas, config)?,
             event_pool: EventPool::new(60f64),
             should_quit: false,
             terminal,

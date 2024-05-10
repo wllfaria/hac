@@ -20,7 +20,6 @@ where
     T: AsRef<Path>,
 {
     let items = std::fs::read_dir(&schemas_dir)?;
-    tracing::debug!("{:?}", schemas_dir.as_ref());
 
     let mut collections = vec![];
 

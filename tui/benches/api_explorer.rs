@@ -62,7 +62,8 @@ fn handling_key_events() {
     let colors = colors::Colors::default();
     let schema = create_sample_schema();
     let size = Rect::new(0, 0, 80, 24);
-    let mut api_explorer = ApiExplorer::new(size, schema, &colors);
+    let config = config::load_config();
+    let mut api_explorer = ApiExplorer::new(size, schema, &colors, &config);
     let mut terminal = Terminal::new(TestBackend::new(size.width, size.height)).unwrap();
     let mut frame = terminal.get_frame();
 
@@ -89,7 +90,8 @@ fn creating_with_highlight() {
     let colors = colors::Colors::default();
     let schema = create_sample_schema();
     let size = Rect::new(0, 0, 80, 24);
-    let mut api_explorer = ApiExplorer::new(size, schema, &colors);
+    let config = config::load_config();
+    let mut api_explorer = ApiExplorer::new(size, schema, &colors, &config);
     let mut terminal = Terminal::new(TestBackend::new(size.width, size.height)).unwrap();
     let _frame = terminal.get_frame();
 

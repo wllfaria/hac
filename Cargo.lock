@@ -196,7 +196,9 @@ name = "config"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "directories",
+ "dirs",
+ "serde",
+ "toml",
  "tracing",
 ]
 
@@ -333,10 +335,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "directories"
+name = "dirs"
 version = "5.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a49173b84e034382284f27f1af4dcbbd231ffa358c0fe316541a7337f376a35"
+checksum = "44c45a9d03d6676652bcb5e724c7e988de1acad23a711b5217ab9cbecbec2225"
 dependencies = [
  "dirs-sys",
 ]

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 fn setup_tracing(
     data_dir: &PathBuf,
 ) -> anyhow::Result<tracing_appender::non_blocking::WorkerGuard> {
-    let logfile = config::get_logfile();
+    let logfile = config::LOG_FILE;
     let appender = tracing_appender::rolling::never(data_dir, logfile);
     let (writer, guard) = tracing_appender::non_blocking(appender);
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
@@ -23,12 +23,13 @@ fn setup_tracing(
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let data_dir = config::setup_data_dir()?;
+    let config = config::load_config();
     let _guard = setup_tracing(&data_dir)?;
 
     let colors = colors::Colors::default();
     let mut schemas = schema::get_schemas_from_config()?;
     schemas.sort_by_key(|k| k.info.name.clone());
-    let mut app = app::App::new(&colors, schemas)?;
+    let mut app = app::App::new(&colors, schemas, &config)?;
     app.run().await?;
 
     Ok(())

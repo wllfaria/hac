@@ -1,9 +1,10 @@
 use crate::{components::Eventful, utils::build_styled_content};
+use config::{Action, EditorMode, KeyAction};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Style, Styled, Stylize},
+    style::{Style, Stylize},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Tabs, Widget},
     Frame,
@@ -20,21 +21,6 @@ use std::{
     rc::Rc,
 };
 use tree_sitter::Tree;
-
-#[derive(PartialEq, Debug, Clone)]
-pub enum EditorMode {
-    Insert,
-    Normal,
-}
-
-impl std::fmt::Display for EditorMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Normal => f.write_str("NORMAL"),
-            Self::Insert => f.write_str("INSERT"),
-        }
-    }
-}
 
 #[derive(Debug, Default, Clone)]
 pub enum ReqEditorTabs {
@@ -79,14 +65,14 @@ impl AsRef<ReqEditorTabs> for ReqEditorTabs {
     }
 }
 
-pub struct ReqEditorState<'a> {
+pub struct ReqEditorState<'re> {
     is_focused: bool,
     is_selected: bool,
-    curr_tab: &'a ReqEditorTabs,
+    curr_tab: &'re ReqEditorTabs,
 }
 
-impl<'a> ReqEditorState<'a> {
-    pub fn new(is_focused: bool, is_selected: bool, curr_tab: &'a ReqEditorTabs) -> Self {
+impl<'re> ReqEditorState<'re> {
+    pub fn new(is_focused: bool, is_selected: bool, curr_tab: &'re ReqEditorTabs) -> Self {
         ReqEditorState {
             is_focused,
             curr_tab,
@@ -96,8 +82,8 @@ impl<'a> ReqEditorState<'a> {
 }
 
 #[derive(Debug)]
-pub struct ReqEditor<'a> {
-    colors: &'a colors::Colors,
+pub struct ReqEditor<'re> {
+    colors: &'re colors::Colors,
     body: TextObject<Write>,
     tree: Option<Tree>,
     cursor: Cursor,
@@ -106,13 +92,22 @@ pub struct ReqEditor<'a> {
     row_scroll: usize,
     col_scroll: usize,
     layout: ReqEditorLayout,
+    config: &'re config::Config,
+
+    /// whenever we press a key that is a subset of any keymap, we buffer the keymap until we can
+    /// determine which keymap was pressed or cancel if no matches.
+    ///
+    /// Only KeyAction::Complex are stored here as any other kind of key action can be acted upon
+    /// instantly
+    keymap_buffer: Option<KeyAction>,
 }
 
-impl<'a> ReqEditor<'a> {
+impl<'re> ReqEditor<'re> {
     pub fn new(
-        colors: &'a colors::Colors,
+        colors: &'re colors::Colors,
         request: Option<Rc<RefCell<Request>>>,
         size: Rect,
+        config: &'re config::Config,
     ) -> Self {
         tracing::debug!("should only run once");
         let (body, tree) =
@@ -130,6 +125,7 @@ impl<'a> ReqEditor<'a> {
 
         Self {
             colors,
+            config,
             body,
             tree,
             styled_display,
@@ -138,6 +134,8 @@ impl<'a> ReqEditor<'a> {
             row_scroll: 0,
             col_scroll: 0,
             layout: build_layout(size),
+
+            keymap_buffer: None,
         }
     }
 
@@ -283,6 +281,233 @@ impl<'a> ReqEditor<'a> {
         self.draw_current_tab(state, frame.buffer_mut(), self.layout.content_pane)
             .ok();
     }
+
+    fn handle_action(&mut self, action: &Action) {
+        match action {
+            Action::InsertChar(c) => self.insert_char(*c),
+            Action::DeletePreviousChar => self.erase_previous_char(),
+            Action::InsertLine => self.insert_newline(),
+            Action::InsertTab => self.insert_tab(),
+            Action::EnterMode(EditorMode::Normal) => self.enter_normal_mode(),
+            Action::EnterMode(EditorMode::Insert) => self.enter_insert_mode(),
+            Action::MoveToLineStart => self.move_to_line_start(),
+            Action::MoveToLineEnd => self.move_to_line_end(),
+            Action::MoveLeft => self.move_left(),
+            Action::MoveDown => self.move_down(),
+            Action::MoveUp => self.move_up(),
+            Action::MoveRight => self.move_right(),
+            Action::DeleteCurrentChar => self.erase_current_char(),
+            Action::NextWord => self.move_to_next_word(),
+            Action::InsertAhead => self.insert_ahead(),
+            Action::MoveToBottom => self.move_to_bottom(),
+            Action::DeleteUntilEOL => self.erase_until_eol(),
+            Action::InsertAtEOL => self.insert_at_eol(),
+            Action::MoveAfterWhitespaceReverse => self.move_after_whitespace_reverse(),
+            Action::MoveAfterWhitespace => self.move_after_whitespace(),
+            Action::DeletePreviousNonWrapping => self.erase_backwards_up_to_line_start(),
+            Action::Undo => todo!(),
+            Action::FindNext => todo!(),
+            Action::FindPrevious => todo!(),
+            Action::PreviousWord => todo!(),
+            Action::MoveToTop => self.move_to_top(),
+            Action::PageDown => todo!(),
+            Action::PageUp => todo!(),
+            Action::DeleteWord => todo!(),
+            Action::DeleteLine => todo!(),
+            Action::DeleteBack => todo!(),
+            Action::InsertLineBelow => todo!(),
+            Action::InsertLineAbove => todo!(),
+            Action::PasteBelow => todo!(),
+        }
+    }
+
+    fn maybe_scroll_view(&mut self) {
+        self.cursor
+            .row()
+            .saturating_sub(self.row_scroll)
+            .gt(&self.layout.content_pane.height.sub(2).into())
+            .then(|| {
+                self.row_scroll = self
+                    .cursor
+                    .row()
+                    .sub(self.layout.content_pane.height.sub(2) as usize)
+            });
+
+        self.cursor
+            .row()
+            .saturating_sub(self.row_scroll)
+            .eq(&0)
+            .then(|| {
+                self.row_scroll = self
+                    .row_scroll
+                    .saturating_sub(self.row_scroll.saturating_sub(self.cursor.row()))
+            });
+
+        self.cursor
+            .col()
+            .saturating_sub(self.col_scroll)
+            .eq(&0)
+            .then(|| self.col_scroll = self.col_scroll.saturating_sub(1));
+    }
+
+    fn insert_char(&mut self, c: char) {
+        self.body.insert_char(c, &self.cursor);
+        self.cursor.move_right(1);
+    }
+
+    fn erase_until_eol(&mut self) {
+        self.body.erase_until_eol(&self.cursor);
+    }
+
+    fn insert_at_eol(&mut self) {
+        let current_line_len = self.body.line_len(self.cursor.row());
+        if current_line_len.gt(&0) {
+            self.cursor.move_to_line_end(current_line_len);
+            self.cursor.move_right(1);
+        }
+        self.editor_mode = EditorMode::Insert;
+    }
+
+    fn move_to_bottom(&mut self) {
+        let len_lines = self.body.len_lines();
+        self.cursor.move_to_row(len_lines.saturating_sub(1));
+        self.maybe_scroll_view();
+        let current_line_len = self.body.line_len(self.cursor.row());
+        self.cursor.maybe_snap_to_col(current_line_len);
+    }
+
+    fn move_to_top(&mut self) {
+        self.cursor.move_to_row(0);
+        self.maybe_scroll_view();
+        let current_line_len = self.body.line_len(self.cursor.row());
+        self.cursor.maybe_snap_to_col(current_line_len);
+    }
+
+    fn insert_ahead(&mut self) {
+        let current_line_len = self.body.line_len(self.cursor.row());
+        if current_line_len.gt(&0) {
+            self.cursor.move_right(1);
+        }
+        self.editor_mode = EditorMode::Insert;
+    }
+
+    fn move_to_next_word(&mut self) {
+        let (col, row) = self.body.find_char_after_separator(&self.cursor);
+        self.cursor.move_to_row(row);
+        self.cursor.move_to_col(col);
+        let current_line_len = self.body.line_len(self.cursor.row());
+        self.cursor.maybe_snap_to_col(current_line_len);
+    }
+
+    fn move_after_whitespace(&mut self) {
+        let (col, row) = self.body.find_char_after_whitespace(&self.cursor);
+        self.cursor.move_to_row(row);
+        self.cursor.move_to_col(col);
+        self.maybe_scroll_view();
+        let current_line_len = self.body.line_len(self.cursor.row());
+        self.cursor.maybe_snap_to_col(current_line_len);
+    }
+
+    fn move_after_whitespace_reverse(&mut self) {
+        let (col, row) = self.body.find_char_before_whitespace(&self.cursor);
+        self.cursor.move_to_row(row);
+        self.cursor.move_to_col(col);
+        self.maybe_scroll_view();
+    }
+
+    fn erase_backwards_up_to_line_start(&mut self) {
+        self.body.erase_backwards_up_to_line_start(&self.cursor);
+        self.cursor.move_left(1);
+    }
+
+    fn move_left(&mut self) {
+        self.cursor.move_left(1);
+    }
+
+    fn move_down(&mut self) {
+        let len_lines = self.body.len_lines();
+        if self.cursor.row().lt(&len_lines.saturating_sub(1)) {
+            self.maybe_scroll_view();
+            self.cursor.move_down(1);
+        }
+        let current_line_len = self.body.line_len(self.cursor.row());
+        self.cursor.maybe_snap_to_col(current_line_len);
+    }
+
+    fn move_up(&mut self) {
+        self.cursor.move_up(1);
+        let current_line_len = self.body.line_len(self.cursor.row());
+        self.maybe_scroll_view();
+        self.cursor.maybe_snap_to_col(current_line_len);
+    }
+
+    fn move_right(&mut self) {
+        let current_line_len = self.body.line_len(self.cursor.row());
+        if self.cursor.col().lt(&current_line_len.saturating_sub(1)) {
+            self.cursor.move_right(1);
+            self.maybe_scroll_view();
+        }
+    }
+
+    fn erase_current_char(&mut self) {
+        self.body.erase_current_char(&self.cursor);
+    }
+
+    fn move_to_line_start(&mut self) {
+        self.cursor.move_to_line_start();
+        self.maybe_scroll_view();
+    }
+
+    fn move_to_line_end(&mut self) {
+        let current_line_len = self.body.line_len(self.cursor.row());
+        self.cursor.move_to_line_end(current_line_len);
+        self.maybe_scroll_view();
+    }
+
+    fn enter_normal_mode(&mut self) {
+        let current_line_len = self.body.line_len(self.cursor.row());
+        if self.cursor.col().ge(&current_line_len) {
+            self.cursor.move_left(1);
+        }
+        self.editor_mode = EditorMode::Normal;
+    }
+
+    fn enter_insert_mode(&mut self) {
+        self.editor_mode = EditorMode::Insert;
+    }
+
+    fn insert_tab(&mut self) {
+        self.body.insert_char(' ', &self.cursor);
+        self.body.insert_char(' ', &self.cursor);
+        self.cursor.move_right(2);
+    }
+
+    fn insert_newline(&mut self) {
+        self.body.insert_newline(&self.cursor);
+        self.cursor.move_to_newline_start();
+    }
+
+    fn erase_previous_char(&mut self) {
+        match (self.cursor.col(), self.cursor.row()) {
+            (0, 0) => {}
+            (0, _) => {
+                self.body.erase_previous_char(&self.cursor);
+                self.cursor.move_up(1);
+
+                let current_line = self
+                    .body
+                    .current_line(&self.cursor)
+                    .expect("cursor should never be on a non-existing row");
+
+                self.cursor
+                    .move_to_col(current_line.len().saturating_sub(3));
+            }
+            (_, _) => {
+                self.body.erase_previous_char(&self.cursor);
+                self.cursor.move_left(1);
+            }
+        }
+    }
 }
 
 impl Eventful for ReqEditor<'_> {
@@ -290,189 +515,46 @@ impl Eventful for ReqEditor<'_> {
         &mut self,
         key_event: KeyEvent,
     ) -> anyhow::Result<Option<reqtui::command::Command>> {
-        match (&self.editor_mode, key_event.code, key_event.modifiers) {
-            (EditorMode::Insert, KeyCode::Char(c), _) => {
-                self.body.insert_char(c, &self.cursor);
-                self.cursor.move_right(1);
-            }
-            (EditorMode::Insert, KeyCode::Enter, KeyModifiers::NONE) => {
-                self.body.insert_newline(&self.cursor);
-                self.cursor.move_to_newline_start();
-            }
-            (EditorMode::Insert, KeyCode::Backspace, KeyModifiers::NONE) => {
-                match (self.cursor.col(), self.cursor.row()) {
-                    (0, 0) => {}
-                    (0, _) => {
-                        self.body.erase_previous_char(&self.cursor);
-                        self.cursor.move_up(1);
+        let key_str = keycode_as_string(key_event);
 
-                        let current_line = self
-                            .body
-                            .current_line(&self.cursor)
-                            .expect("cursor should never be on a non-existing row");
+        if let Some(buffered_keymap) = self.keymap_buffer.to_owned() {
+            match buffered_keymap {
+                KeyAction::Complex(key_action) => match key_action.get(&key_str) {
+                    Some(KeyAction::Simple(action)) => {
+                        self.handle_action(action);
+                        self.keymap_buffer = None;
+                    }
+                    Some(KeyAction::Multiple(actions)) => {
+                        actions.iter().for_each(|a| self.handle_action(a));
+                        self.keymap_buffer = None;
+                    }
+                    Some(key_action) => self.keymap_buffer = Some(key_action.clone()),
+                    _ => self.keymap_buffer = None,
+                },
+                _ => self.keymap_buffer = None,
+            }
 
-                        self.cursor
-                            .move_to_col(current_line.len().saturating_sub(3));
-                    }
-                    (_, _) => {
-                        self.body.erase_previous_char(&self.cursor);
-                        self.cursor.move_left(1);
-                    }
+            return Ok(None);
+        }
+
+        match self.editor_mode {
+            EditorMode::Normal => match self.config.editor_keys.normal.get(&key_str) {
+                Some(KeyAction::Simple(action)) => self.handle_action(action),
+                Some(KeyAction::Multiple(actions)) => {
+                    actions.iter().for_each(|a| self.handle_action(a))
                 }
-            }
-            (EditorMode::Insert, KeyCode::Tab, KeyModifiers::NONE) => {
-                self.body.insert_char(' ', &self.cursor);
-                self.body.insert_char(' ', &self.cursor);
-                self.cursor.move_right(2);
-            }
-            (EditorMode::Insert, KeyCode::Esc, KeyModifiers::NONE) => {
-                let current_line_len = self.body.line_len(self.cursor.row());
-                if self.cursor.col().ge(&current_line_len) {
-                    self.cursor.move_left(1);
+                Some(key_action) => self.keymap_buffer = Some(key_action.clone()),
+                None => {}
+            },
+            EditorMode::Insert => match self.config.editor_keys.insert.get(&key_str) {
+                Some(KeyAction::Simple(action)) => self.handle_action(action),
+                Some(KeyAction::Multiple(actions)) => {
+                    actions.iter().for_each(|a| self.handle_action(a))
                 }
-                self.editor_mode = EditorMode::Normal;
-            }
-            (EditorMode::Normal, KeyCode::Char('0'), KeyModifiers::NONE) => {
-                self.cursor.move_to_line_start();
-                if self.cursor.col().saturating_sub(self.col_scroll).le(&0) {
-                    self.col_scroll = self
-                        .col_scroll
-                        .saturating_sub(self.col_scroll.sub(self.cursor.col()));
-                }
-            }
-            (EditorMode::Normal, KeyCode::Char('$'), KeyModifiers::NONE) => {
-                let current_line_len = self.body.line_len(self.cursor.row());
-                self.cursor.move_to_line_end(current_line_len);
-                if self.cursor.col().saturating_sub(self.col_scroll).gt(&self
-                    .layout
-                    .content_pane
-                    .width
-                    .sub(1)
-                    .into())
-                {
-                    self.col_scroll = self.col_scroll.add(
-                        self.cursor
-                            .col()
-                            .sub(self.layout.content_pane.width.sub(1) as usize),
-                    );
-                }
-            }
-            (EditorMode::Normal, KeyCode::Char('h'), KeyModifiers::NONE)
-            | (EditorMode::Insert, KeyCode::Left, KeyModifiers::NONE) => {
-                if self.cursor.col().saturating_sub(self.col_scroll).eq(&0) {
-                    self.col_scroll = self.col_scroll.saturating_sub(1);
-                }
-                self.cursor.move_left(1);
-            }
-            (EditorMode::Normal, KeyCode::Char('j'), KeyModifiers::NONE)
-            | (EditorMode::Insert, KeyCode::Down, KeyModifiers::NONE) => {
-                let len_lines = self.body.len_lines();
-                if self.cursor.row().lt(&len_lines.saturating_sub(1)) {
-                    self.cursor.move_down(1);
-                }
-                if self.cursor.row().saturating_sub(self.row_scroll).gt(&self
-                    .layout
-                    .content_pane
-                    .height
-                    .sub(2)
-                    .into())
-                {
-                    self.row_scroll = self.row_scroll.add(1);
-                }
-                let current_line_len = self.body.line_len(self.cursor.row());
-                self.cursor.maybe_snap_to_col(current_line_len);
-            }
-            (EditorMode::Normal, KeyCode::Char('k'), KeyModifiers::NONE)
-            | (EditorMode::Insert, KeyCode::Up, KeyModifiers::NONE) => {
-                if self.cursor.row().saturating_sub(self.row_scroll).eq(&0) {
-                    self.row_scroll = self.row_scroll.saturating_sub(1);
-                }
-                self.cursor.move_up(1);
-                let current_line_len = self.body.line_len(self.cursor.row());
-                self.cursor.maybe_snap_to_col(current_line_len);
-            }
-            (EditorMode::Normal, KeyCode::Char('l'), KeyModifiers::NONE)
-            | (EditorMode::Insert, KeyCode::Right, KeyModifiers::NONE) => {
-                let current_line_len = self.body.line_len(self.cursor.row());
-                if self.cursor.col().lt(&current_line_len.saturating_sub(1)) {
-                    self.cursor.move_right(1);
-                    if self.cursor.col().saturating_sub(self.col_scroll).gt(&self
-                        .layout
-                        .content_pane
-                        .width
-                        .sub(1)
-                        .into())
-                    {
-                        self.col_scroll = self.col_scroll.add(1);
-                    }
-                }
-            }
-            (EditorMode::Normal, KeyCode::Char('x'), KeyModifiers::NONE) => {
-                self.body.erase_current_char(&self.cursor);
-            }
-            (EditorMode::Normal, KeyCode::Char('X'), KeyModifiers::SHIFT) => {
-                self.body.erase_backwards_up_to_line_start(&self.cursor);
-                self.cursor.move_left(1);
-            }
-            (EditorMode::Normal, KeyCode::Char('a'), KeyModifiers::NONE) => {
-                let current_line_len = self.body.line_len(self.cursor.row());
-                if current_line_len.gt(&0) {
-                    self.cursor.move_right(1);
-                }
-                self.editor_mode = EditorMode::Insert;
-            }
-            (EditorMode::Normal, KeyCode::Char('A'), KeyModifiers::SHIFT) => {
-                let current_line_len = self.body.line_len(self.cursor.row());
-                if current_line_len.gt(&0) {
-                    self.cursor.move_to_line_end(current_line_len);
-                    self.cursor.move_right(1);
-                }
-                self.editor_mode = EditorMode::Insert;
-            }
-            (EditorMode::Normal, KeyCode::Char('G'), KeyModifiers::SHIFT) => {
-                let len_lines = self.body.len_lines();
-                self.cursor.move_to_row(len_lines.saturating_sub(1));
-                if self.cursor.row().saturating_sub(self.row_scroll).gt(&self
-                    .layout
-                    .content_pane
-                    .height
-                    .sub(2)
-                    .into())
-                {
-                    self.row_scroll = self.row_scroll.add(
-                        self.cursor
-                            .row()
-                            .sub(self.layout.content_pane.height.sub(2) as usize),
-                    );
-                }
-            }
-            (EditorMode::Normal, KeyCode::Char('D'), KeyModifiers::SHIFT) => {
-                self.body.erase_until_eol(&self.cursor);
-            }
-            (EditorMode::Normal, KeyCode::Char('B'), KeyModifiers::SHIFT) => {
-                let (col, row) = self.body.find_char_before_whitespace(&self.cursor);
-                self.cursor.move_to_row(row);
-                self.cursor.move_to_col(col);
-            }
-            (EditorMode::Normal, KeyCode::Char('w'), KeyModifiers::NONE) => {
-                let (col, row) = self.body.find_char_after_separator(&self.cursor);
-                self.cursor.move_to_row(row);
-                self.cursor.move_to_col(col);
-                let current_line_len = self.body.line_len(self.cursor.row());
-                self.cursor.maybe_snap_to_col(current_line_len);
-            }
-            (EditorMode::Normal, KeyCode::Char('W'), KeyModifiers::SHIFT) => {
-                let (col, row) = self.body.find_char_after_whitespace(&self.cursor);
-                self.cursor.move_to_row(row);
-                self.cursor.move_to_col(col);
-                let current_line_len = self.body.line_len(self.cursor.row());
-                self.cursor.maybe_snap_to_col(current_line_len);
-            }
-            (EditorMode::Normal, KeyCode::Char('i'), KeyModifiers::NONE) => {
-                self.editor_mode = EditorMode::Insert;
-            }
-            _ => {}
-        };
+                Some(key_action) => self.keymap_buffer = Some(key_action.clone()),
+                None => self.handle_action(&Action::InsertChar(key_str.chars().nth(0).unwrap())),
+            },
+        }
 
         self.tree = HIGHLIGHTER.write().unwrap().parse(&self.body.to_string());
         self.styled_display =
@@ -531,4 +613,23 @@ fn get_visible_spans(line: &Line<'static>, scroll: usize) -> Line<'static> {
     }
 
     Line::from(new_spans)
+}
+
+fn keycode_as_string(key_event: KeyEvent) -> String {
+    match (key_event.code, key_event.modifiers) {
+        (KeyCode::Char(c), KeyModifiers::NONE) => c.into(),
+        (KeyCode::Char(c), KeyModifiers::SHIFT) => format!("S-{}", c),
+        (KeyCode::Char(c), KeyModifiers::CONTROL) => format!("C-{}", c),
+        (KeyCode::Backspace, _) => "Backspace".into(),
+        (KeyCode::Left, _) => "Left".into(),
+        (KeyCode::Down, _) => "Down".into(),
+        (KeyCode::Up, _) => "Up".into(),
+        (KeyCode::Right, _) => "Right".into(),
+        (KeyCode::Home, _) => "Home".into(),
+        (KeyCode::End, _) => "End".into(),
+        (KeyCode::Enter, _) => "Enter".into(),
+        (KeyCode::Tab, _) => "Tab".into(),
+        (KeyCode::Esc, _) => "Esc".into(),
+        _ => String::default(),
+    }
 }

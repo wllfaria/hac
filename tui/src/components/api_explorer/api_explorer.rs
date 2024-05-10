@@ -8,6 +8,7 @@ use crate::components::{
     Component, Eventful,
 };
 use anyhow::Context;
+use config::EditorMode;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -27,8 +28,6 @@ use std::{
     rc::Rc,
 };
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-
-use super::req_editor::EditorMode;
 
 #[derive(Debug, PartialEq)]
 pub struct ExplorerLayout {
@@ -53,9 +52,10 @@ enum PaneFocus {
 }
 
 #[derive(Debug)]
-pub struct ApiExplorer<'a> {
+pub struct ApiExplorer<'ae> {
     schema: Schema,
-    colors: &'a colors::Colors,
+    colors: &'ae colors::Colors,
+    config: &'ae config::Config,
     layout: ExplorerLayout,
     response_rx: UnboundedReceiver<ReqtuiNetRequest>,
     request_tx: UnboundedSender<ReqtuiNetRequest>,
@@ -65,21 +65,26 @@ pub struct ApiExplorer<'a> {
     focused_pane: PaneFocus,
     selected_pane: Option<PaneFocus>,
 
-    res_viewer: ResViewer<'a>,
+    res_viewer: ResViewer<'ae>,
     preview_tab: ResViewerTabs,
     raw_preview_scroll: usize,
     preview_header_scroll_y: usize,
     preview_header_scroll_x: usize,
     pretty_preview_scroll: usize,
 
-    editor: ReqEditor<'a>,
+    editor: ReqEditor<'ae>,
     editor_tab: ReqEditorTabs,
 
     responses_map: HashMap<Request, Rc<RefCell<ReqtuiResponse>>>,
 }
 
-impl<'a> ApiExplorer<'a> {
-    pub fn new(size: Rect, schema: Schema, colors: &'a colors::Colors) -> Self {
+impl<'ae> ApiExplorer<'ae> {
+    pub fn new(
+        size: Rect,
+        schema: Schema,
+        colors: &'ae colors::Colors,
+        config: &'ae config::Config,
+    ) -> Self {
         let layout = build_layout(size);
 
         let selected_request = schema.requests.as_ref().and_then(|requests| {
@@ -104,8 +109,9 @@ impl<'a> ApiExplorer<'a> {
             focused_pane: PaneFocus::ReqUri,
             selected_pane: None,
             colors,
+            config,
 
-            editor: ReqEditor::new(colors, selected_request.clone(), layout.req_editor),
+            editor: ReqEditor::new(colors, selected_request.clone(), layout.req_editor, config),
             editor_tab: ReqEditorTabs::Request,
 
             res_viewer: ResViewer::new(colors, None),
@@ -143,6 +149,7 @@ impl<'a> ApiExplorer<'a> {
                                 self.colors,
                                 self.selected_request.clone(),
                                 self.layout.req_editor,
+                                self.config,
                             );
                         }
                     }

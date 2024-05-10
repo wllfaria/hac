@@ -6,10 +6,9 @@ pub mod input;
 pub mod terminal_too_small;
 
 use crate::event_pool::Event;
-use reqtui::command::Command;
-
 use crossterm::event::KeyEvent;
 use ratatui::{layout::Rect, Frame};
+use reqtui::command::Command;
 use tokio::sync::mpsc::UnboundedSender;
 
 pub trait Eventful {

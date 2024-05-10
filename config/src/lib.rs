@@ -1,40 +1,31 @@
-use directories::ProjectDirs;
-use std::path::PathBuf;
+mod config;
+mod data;
+mod default_config;
 
-fn get_data_dir() -> anyhow::Result<PathBuf> {
-    let directory = if let Ok(s) = std::env::var("REQTUI_DATA") {
-        PathBuf::from(s)
-    } else if let Some(proj_dirs) = ProjectDirs::from("com", "reqtui", "reqtui") {
-        proj_dirs.data_local_dir().to_path_buf()
-    } else {
-        anyhow::bail!("data directory not found");
-    };
+pub use config::{load_config, Action, Config, KeyAction};
+pub use data::{get_schemas_dir, setup_data_dir};
+use serde::{Deserialize, Serialize};
 
-    Ok(directory)
+#[derive(PartialEq, Deserialize, Serialize, Debug, Clone)]
+pub enum EditorMode {
+    Insert,
+    Normal,
 }
 
-pub fn setup_data_dir() -> anyhow::Result<PathBuf> {
-    let data_dir = get_data_dir()?;
+pub static LOG_FILE: &str = "reqtui.log";
+pub static APP_NAME: &str = "reqtui";
+pub static SCHEMAS_DIR: &str = "schemas";
+pub static CONFIG_FILE: &str = "reqtui.toml";
+pub static THEMES_DIR: &str = "themes";
 
-    if !data_dir.exists() && !data_dir.is_dir() {
-        std::fs::create_dir(&data_dir)?;
-    }
+#[cfg(unix)]
+static XDG_ENV_VARS: [&str; 2] = ["XDG_CONFIG_HOME", "XDG_DATA_HOME"];
 
-    Ok(data_dir)
-}
+#[cfg(windows)]
+static XDG_ENV_VARS: [&str; 2] = ["LOCALAPPDATA", "LOCALAPPDATA"];
 
-pub fn get_logfile() -> &'static str {
-    "reqtui.log"
-}
+#[cfg(unix)]
+static XDG_DEFAULTS: [&str; 2] = [".config", ".local/share"];
 
-#[tracing::instrument(err)]
-pub fn get_schemas_dir() -> anyhow::Result<PathBuf> {
-    let data_dir = get_data_dir()?;
-    let schemas_dir = data_dir.join("schemas");
-
-    if !schemas_dir.exists() && !schemas_dir.is_dir() {
-        std::fs::create_dir(&schemas_dir)?;
-    }
-
-    Ok(schemas_dir)
-}
+#[cfg(windows)]
+static XDG_DEFAULTS: [&str; 2] = ["AppData\\Local", "AppData\\Local"];
