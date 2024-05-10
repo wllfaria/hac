@@ -9,6 +9,24 @@ pub enum LineBreak {
     Crlf,
 }
 
+impl From<LineBreak> for usize {
+    fn from(value: LineBreak) -> usize {
+        match value {
+            LineBreak::Lf => 1,
+            LineBreak::Crlf => 2,
+        }
+    }
+}
+
+impl std::fmt::Display for LineBreak {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Lf => f.write_str("\n"),
+            Self::Crlf => f.write_str("\r\n"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Readonly;
 #[derive(Debug, Clone, PartialEq)]
@@ -66,10 +84,8 @@ impl TextObject<Write> {
     pub fn insert_newline(&mut self, cursor: &Cursor) {
         let line = self.content.line_to_char(cursor.row());
         let col_offset = line + cursor.col();
-        match self.line_break {
-            LineBreak::Lf => self.content.insert_char(col_offset, '\n'),
-            LineBreak::Crlf => self.content.insert(col_offset, "\r\n"),
-        }
+        self.content
+            .insert(col_offset, &self.line_break.to_string());
     }
 
     pub fn erase_backwards_up_to_line_start(&mut self, cursor: &Cursor) {
@@ -101,15 +117,20 @@ impl TextObject<Write> {
         self.content.line(cursor.row()).as_str()
     }
 
+    pub fn line_len_with_linebreak(&self, line: usize) -> usize {
+        self.content
+            .line(line)
+            .as_str()
+            .map(|line| line.len())
+            .unwrap_or_default()
+    }
+
     pub fn line_len(&self, line: usize) -> usize {
-        let mut line_len = 0;
-        if let Some(line) = self.content.line(line).as_str() {
-            match self.line_break {
-                LineBreak::Lf => line_len = line.len().saturating_sub(1),
-                LineBreak::Crlf => line_len = line.len().saturating_sub(2),
-            }
-        }
-        line_len
+        self.content
+            .line(line)
+            .as_str()
+            .map(|line| line.len().saturating_sub(self.line_break.clone().into()))
+            .unwrap_or_default()
     }
 
     pub fn erase_until_eol(&mut self, cursor: &Cursor) {
@@ -193,6 +214,12 @@ impl TextObject<Write> {
 
     pub fn len_lines(&self) -> usize {
         self.content.len_lines()
+    }
+
+    pub fn delete_line(&mut self, cursor: &Cursor) {
+        let start = self.content.line_to_char(cursor.row());
+        let end = self.content.line_to_char(cursor.row().add(1));
+        self.content.try_remove(start..end).ok();
     }
 }
 

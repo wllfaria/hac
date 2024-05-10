@@ -305,15 +305,15 @@ impl<'re> ReqEditor<'re> {
             Action::MoveAfterWhitespaceReverse => self.move_after_whitespace_reverse(),
             Action::MoveAfterWhitespace => self.move_after_whitespace(),
             Action::DeletePreviousNonWrapping => self.erase_backwards_up_to_line_start(),
+            Action::MoveToTop => self.move_to_top(),
+            Action::DeleteLine => self.delete_current_line(),
             Action::Undo => todo!(),
             Action::FindNext => todo!(),
             Action::FindPrevious => todo!(),
             Action::PreviousWord => todo!(),
-            Action::MoveToTop => self.move_to_top(),
             Action::PageDown => todo!(),
             Action::PageUp => todo!(),
             Action::DeleteWord => todo!(),
-            Action::DeleteLine => todo!(),
             Action::DeleteBack => todo!(),
             Action::InsertLineBelow => todo!(),
             Action::InsertLineAbove => todo!(),
@@ -353,6 +353,16 @@ impl<'re> ReqEditor<'re> {
     fn insert_char(&mut self, c: char) {
         self.body.insert_char(c, &self.cursor);
         self.cursor.move_right(1);
+    }
+
+    fn delete_current_line(&mut self) {
+        self.body.delete_line(&self.cursor);
+        let len_lines = self.body.len_lines();
+        if self.cursor.row().ge(&len_lines.saturating_sub(1)) {
+            self.cursor.move_to_row(len_lines.saturating_sub(1));
+        }
+        let line_len = self.body.line_len(self.cursor.row());
+        self.cursor.move_to_line_end(line_len);
     }
 
     fn erase_until_eol(&mut self) {
@@ -534,6 +544,9 @@ impl Eventful for ReqEditor<'_> {
                 _ => self.keymap_buffer = None,
             }
 
+            self.tree = HIGHLIGHTER.write().unwrap().parse(&self.body.to_string());
+            self.styled_display =
+                build_styled_content(&self.body.to_string(), self.tree.as_ref(), self.colors);
             return Ok(None);
         }
 
