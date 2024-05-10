@@ -36,7 +36,8 @@ pub enum Action {
     MoveAfterWhitespaceReverse,
     MoveAfterWhitespace,
     DeletePreviousNonWrapping,
-
+    DeleteCurrAndBelow,
+    DeleteCurrAndAbove,
     InsertChar(char),
     InsertTab,
     InsertLine,

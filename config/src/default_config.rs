@@ -21,7 +21,7 @@ pub static DEFAULT_CONFIG: &str = r##"
 "0" = "MoveToLineStart"
 "C-d" = "PageDown"
 "C-u" = "PageUp"
-"d" = { "w" = "DeleteWord", "d" = "DeleteLine", "b" = "DeleteBack" }
+"d" = { "w" = "DeleteWord", "d" = "DeleteLine", "b" = "DeleteBack", "j" = "DeleteCurrAndBelow", "k" = "DeleteCurrAndAbove", "l" = "DeleteCurrentChar", "h" = "DeletePreviousChar" }
 "S-D" = "DeleteUntilEOL"
 "x" = "DeleteCurrentChar"
 "o" = "InsertLineBelow"

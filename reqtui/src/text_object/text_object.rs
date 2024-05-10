@@ -216,9 +216,9 @@ impl TextObject<Write> {
         self.content.len_lines()
     }
 
-    pub fn delete_line(&mut self, cursor: &Cursor) {
-        let start = self.content.line_to_char(cursor.row());
-        let end = self.content.line_to_char(cursor.row().add(1));
+    pub fn delete_line(&mut self, line: usize) {
+        let start = self.content.line_to_char(line);
+        let end = self.content.line_to_char(line.add(1));
         self.content.try_remove(start..end).ok();
     }
 }

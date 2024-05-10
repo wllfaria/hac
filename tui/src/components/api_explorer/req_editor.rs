@@ -307,6 +307,8 @@ impl<'re> ReqEditor<'re> {
             Action::DeletePreviousNonWrapping => self.erase_backwards_up_to_line_start(),
             Action::MoveToTop => self.move_to_top(),
             Action::DeleteLine => self.delete_current_line(),
+            Action::DeleteCurrAndBelow => self.delete_curr_line_and_below(),
+            Action::DeleteCurrAndAbove => self.delete_curr_line_and_above(),
             Action::Undo => todo!(),
             Action::FindNext => todo!(),
             Action::FindPrevious => todo!(),
@@ -355,14 +357,35 @@ impl<'re> ReqEditor<'re> {
         self.cursor.move_right(1);
     }
 
-    fn delete_current_line(&mut self) {
-        self.body.delete_line(&self.cursor);
+    fn delete_line(&mut self, line: usize) {
+        self.body.delete_line(line);
         let len_lines = self.body.len_lines();
         if self.cursor.row().ge(&len_lines.saturating_sub(1)) {
             self.cursor.move_to_row(len_lines.saturating_sub(1));
         }
-        let line_len = self.body.line_len(self.cursor.row());
-        self.cursor.move_to_line_end(line_len);
+    }
+
+    fn delete_current_line(&mut self) {
+        self.delete_line(self.cursor.row());
+    }
+
+    fn delete_curr_line_and_below(&mut self) {
+        let last_line = self.body.len_lines().saturating_sub(1);
+        self.cursor
+            .row()
+            .ne(&last_line)
+            .then(|| self.delete_line(self.cursor.row().add(1)));
+        self.move_down();
+        self.delete_line(self.cursor.row());
+    }
+
+    fn delete_curr_line_and_above(&mut self) {
+        self.cursor
+            .row()
+            .ne(&0)
+            .then(|| self.delete_line(self.cursor.row().sub(1)));
+        self.move_up();
+        self.delete_line(self.cursor.row());
     }
 
     fn erase_until_eol(&mut self) {
