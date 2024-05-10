@@ -20,7 +20,12 @@ use reqtui::{
     net::request_manager::{ReqtuiNetRequest, ReqtuiResponse},
     schema::types::{Directory, Request, RequestKind, Schema},
 };
-use std::{cell::RefCell, collections::HashMap, ops::Add, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    ops::{Add, Sub},
+    rc::Rc,
+};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use super::req_editor::EditorMode;
@@ -346,17 +351,23 @@ impl Component for ApiExplorer<'_> {
             .as_ref()
             .is_some_and(|pane| pane.eq(&PaneFocus::Editor))
         {
-            let editor_position = self.layout.req_editor;
+            let mut editor_position = self.editor.layout().content_pane;
+            editor_position.height = editor_position.height.sub(2);
             let cursor = self.editor.cursor();
-            let row_with_offset = editor_position
-                .y
-                .add(cursor.row_with_offset() as u16)
-                .saturating_sub(self.editor.row_scroll() as u16)
-                .add(3);
-            let col_with_offset = editor_position
-                .x
-                .add(cursor.col_with_offset() as u16)
-                .add(1);
+            let row_with_offset = u16::min(
+                editor_position
+                    .y
+                    .add(cursor.row_with_offset() as u16)
+                    .saturating_sub(self.editor.row_scroll() as u16),
+                editor_position.y.add(editor_position.height),
+            );
+            let col_with_offset = u16::min(
+                editor_position
+                    .x
+                    .add(cursor.col_with_offset() as u16)
+                    .saturating_sub(self.editor.col_scroll() as u16),
+                editor_position.x.add(editor_position.width),
+            );
             frame.set_cursor(col_with_offset, row_with_offset);
         }
 

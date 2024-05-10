@@ -3,6 +3,12 @@ use std::ops::{Add, Sub};
 use crate::text_object::cursor::Cursor;
 use ropey::Rope;
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum LineBreak {
+    Lf,
+    Crlf,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Readonly;
 #[derive(Debug, Clone, PartialEq)]
@@ -12,6 +18,7 @@ pub struct Write;
 pub struct TextObject<State = Readonly> {
     content: Rope,
     state: std::marker::PhantomData<State>,
+    line_break: LineBreak,
 }
 
 impl<State> Default for TextObject<State> {
@@ -21,6 +28,7 @@ impl<State> Default for TextObject<State> {
         TextObject {
             content: Rope::from_str(&content),
             state: std::marker::PhantomData,
+            line_break: LineBreak::Lf,
         }
     }
 }
@@ -28,9 +36,14 @@ impl<State> Default for TextObject<State> {
 impl TextObject<Readonly> {
     pub fn from(content: &str) -> TextObject<Readonly> {
         let content = Rope::from_str(content);
+        let line_break = match content.line(0).to_string().contains("\r\n") {
+            true => LineBreak::Crlf,
+            false => LineBreak::Lf,
+        };
         TextObject::<Readonly> {
             content,
             state: std::marker::PhantomData::<Readonly>,
+            line_break,
         }
     }
 
@@ -38,6 +51,7 @@ impl TextObject<Readonly> {
         TextObject::<Write> {
             content: self.content,
             state: std::marker::PhantomData,
+            line_break: self.line_break,
         }
     }
 }
@@ -47,6 +61,15 @@ impl TextObject<Write> {
         let line = self.content.line_to_char(cursor.row());
         let col_offset = line + cursor.col();
         self.content.insert_char(col_offset, c);
+    }
+
+    pub fn insert_newline(&mut self, cursor: &Cursor) {
+        let line = self.content.line_to_char(cursor.row());
+        let col_offset = line + cursor.col();
+        match self.line_break {
+            LineBreak::Lf => self.content.insert_char(col_offset, '\n'),
+            LineBreak::Crlf => self.content.insert(col_offset, "\r\n"),
+        }
     }
 
     pub fn erase_backwards_up_to_line_start(&mut self, cursor: &Cursor) {
@@ -81,11 +104,10 @@ impl TextObject<Write> {
     pub fn line_len(&self, line: usize) -> usize {
         let mut line_len = 0;
         if let Some(line) = self.content.line(line).as_str() {
-            line_len = line.len();
-            line.contains('\r')
-                .then(|| line_len = line_len.saturating_sub(1));
-            line.contains('\n')
-                .then(|| line_len = line_len.saturating_sub(1));
+            match self.line_break {
+                LineBreak::Lf => line_len = line.len().saturating_sub(1),
+                LineBreak::Crlf => line_len = line.len().saturating_sub(2),
+            }
         }
         line_len
     }
@@ -95,7 +117,7 @@ impl TextObject<Write> {
         let next_line = self.content.line_to_char(cursor.row().add(1));
         let col_offset = line + cursor.col();
         self.content
-            .try_remove(col_offset.saturating_sub(1)..next_line.saturating_sub(1))
+            .try_remove(col_offset..next_line.saturating_sub(1))
             .ok();
     }
 

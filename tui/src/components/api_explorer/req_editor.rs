@@ -3,7 +3,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Style, Stylize},
+    style::{Style, Styled, Stylize},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Tabs, Widget},
     Frame,
@@ -47,8 +47,8 @@ pub enum ReqEditorTabs {
 
 #[derive(Debug)]
 pub struct ReqEditorLayout {
-    tabs_pane: Rect,
-    content_pane: Rect,
+    pub tabs_pane: Rect,
+    pub content_pane: Rect,
 }
 
 impl From<ReqEditorTabs> for usize {
@@ -104,6 +104,7 @@ pub struct ReqEditor<'a> {
     styled_display: Vec<Line<'static>>,
     editor_mode: EditorMode,
     row_scroll: usize,
+    col_scroll: usize,
     layout: ReqEditorLayout,
 }
 
@@ -135,12 +136,21 @@ impl<'a> ReqEditor<'a> {
             cursor: Cursor::default(),
             editor_mode: EditorMode::Normal,
             row_scroll: 0,
+            col_scroll: 0,
             layout: build_layout(size),
         }
     }
 
+    pub fn layout(&self) -> &ReqEditorLayout {
+        &self.layout
+    }
+
     pub fn row_scroll(&self) -> usize {
         self.row_scroll
+    }
+
+    pub fn col_scroll(&self) -> usize {
+        self.col_scroll
     }
 
     pub fn resize(&mut self, new_size: Rect) {
@@ -215,7 +225,8 @@ impl<'a> ReqEditor<'a> {
                 "~".fg(self.colors.bright.black),
             )))
             .take(size.height.into())
-            .collect::<Vec<_>>();
+            .map(|line| get_visible_spans(&line, self.col_scroll))
+            .collect::<Vec<Line>>();
 
         Paragraph::new(lines_in_view).render(request_pane, buf);
     }
@@ -285,7 +296,7 @@ impl Eventful for ReqEditor<'_> {
                 self.cursor.move_right(1);
             }
             (EditorMode::Insert, KeyCode::Enter, KeyModifiers::NONE) => {
-                self.body.insert_char('\n', &self.cursor);
+                self.body.insert_newline(&self.cursor);
                 self.cursor.move_to_newline_start();
             }
             (EditorMode::Insert, KeyCode::Backspace, KeyModifiers::NONE) => {
@@ -323,13 +334,34 @@ impl Eventful for ReqEditor<'_> {
             }
             (EditorMode::Normal, KeyCode::Char('0'), KeyModifiers::NONE) => {
                 self.cursor.move_to_line_start();
+                if self.cursor.col().saturating_sub(self.col_scroll).le(&0) {
+                    self.col_scroll = self
+                        .col_scroll
+                        .saturating_sub(self.col_scroll.sub(self.cursor.col()));
+                }
             }
             (EditorMode::Normal, KeyCode::Char('$'), KeyModifiers::NONE) => {
                 let current_line_len = self.body.line_len(self.cursor.row());
                 self.cursor.move_to_line_end(current_line_len);
+                if self.cursor.col().saturating_sub(self.col_scroll).gt(&self
+                    .layout
+                    .content_pane
+                    .width
+                    .sub(1)
+                    .into())
+                {
+                    self.col_scroll = self.col_scroll.add(
+                        self.cursor
+                            .col()
+                            .sub(self.layout.content_pane.width.sub(1) as usize),
+                    );
+                }
             }
             (EditorMode::Normal, KeyCode::Char('h'), KeyModifiers::NONE)
             | (EditorMode::Insert, KeyCode::Left, KeyModifiers::NONE) => {
+                if self.cursor.col().saturating_sub(self.col_scroll).eq(&0) {
+                    self.col_scroll = self.col_scroll.saturating_sub(1);
+                }
                 self.cursor.move_left(1);
             }
             (EditorMode::Normal, KeyCode::Char('j'), KeyModifiers::NONE)
@@ -338,18 +370,23 @@ impl Eventful for ReqEditor<'_> {
                 if self.cursor.row().lt(&len_lines.saturating_sub(1)) {
                     self.cursor.move_down(1);
                 }
-                if self
-                    .cursor
-                    .row()
-                    .gt(&self.layout.content_pane.height.into())
+                if self.cursor.row().saturating_sub(self.row_scroll).gt(&self
+                    .layout
+                    .content_pane
+                    .height
+                    .sub(2)
+                    .into())
                 {
-                    self.row_scroll += 1;
+                    self.row_scroll = self.row_scroll.add(1);
                 }
                 let current_line_len = self.body.line_len(self.cursor.row());
                 self.cursor.maybe_snap_to_col(current_line_len);
             }
             (EditorMode::Normal, KeyCode::Char('k'), KeyModifiers::NONE)
             | (EditorMode::Insert, KeyCode::Up, KeyModifiers::NONE) => {
+                if self.cursor.row().saturating_sub(self.row_scroll).eq(&0) {
+                    self.row_scroll = self.row_scroll.saturating_sub(1);
+                }
                 self.cursor.move_up(1);
                 let current_line_len = self.body.line_len(self.cursor.row());
                 self.cursor.maybe_snap_to_col(current_line_len);
@@ -359,6 +396,15 @@ impl Eventful for ReqEditor<'_> {
                 let current_line_len = self.body.line_len(self.cursor.row());
                 if self.cursor.col().lt(&current_line_len.saturating_sub(1)) {
                     self.cursor.move_right(1);
+                    if self.cursor.col().saturating_sub(self.col_scroll).gt(&self
+                        .layout
+                        .content_pane
+                        .width
+                        .sub(1)
+                        .into())
+                    {
+                        self.col_scroll = self.col_scroll.add(1);
+                    }
                 }
             }
             (EditorMode::Normal, KeyCode::Char('x'), KeyModifiers::NONE) => {
@@ -386,6 +432,19 @@ impl Eventful for ReqEditor<'_> {
             (EditorMode::Normal, KeyCode::Char('G'), KeyModifiers::SHIFT) => {
                 let len_lines = self.body.len_lines();
                 self.cursor.move_to_row(len_lines.saturating_sub(1));
+                if self.cursor.row().saturating_sub(self.row_scroll).gt(&self
+                    .layout
+                    .content_pane
+                    .height
+                    .sub(2)
+                    .into())
+                {
+                    self.row_scroll = self.row_scroll.add(
+                        self.cursor
+                            .row()
+                            .sub(self.layout.content_pane.height.sub(2) as usize),
+                    );
+                }
             }
             (EditorMode::Normal, KeyCode::Char('D'), KeyModifiers::SHIFT) => {
                 self.body.erase_until_eol(&self.cursor);
@@ -453,4 +512,23 @@ fn build_preview_layout(size: Rect) -> [Rect; 2] {
         .areas(size);
 
     [request_pane, statusline_pane]
+}
+
+fn get_visible_spans(line: &Line<'static>, scroll: usize) -> Line<'static> {
+    let mut scroll_remaining = scroll;
+    let mut new_spans = vec![];
+
+    for span in line.spans.iter() {
+        let span_len = span.content.len();
+        if scroll_remaining >= span_len {
+            scroll_remaining -= span_len;
+            continue;
+        } else {
+            let visible_content = span.content[scroll_remaining..].to_string();
+            new_spans.push(Span::styled(visible_content, span.style));
+            scroll_remaining = 0;
+        }
+    }
+
+    Line::from(new_spans)
 }
