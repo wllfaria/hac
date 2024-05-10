@@ -8,7 +8,6 @@ use crate::{
 use reqtui::{command::Command, schema::Schema};
 
 use anyhow::Context;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -126,20 +125,11 @@ impl Component for ScreenManager<'_> {
 
 impl Eventful for ScreenManager<'_> {
     fn handle_event(&mut self, event: Option<Event>) -> anyhow::Result<Option<Command>> {
-        if let Some(Event::Key(KeyEvent {
-            code: KeyCode::Char('c'),
-            modifiers: KeyModifiers::CONTROL,
-            ..
-        })) = event
-        {
-            return Ok(Some(Command::Quit));
-        };
-
         match self.curr_screen {
             Screens::Editor => self
                 .api_explorer
                 .as_mut()
-                .context("should never be able to switch to editor screen without having a schema")?
+                .expect("should never be able to switch to editor screen without having a schema")
                 .handle_event(event),
             Screens::Dashboard => self.dashboard.handle_event(event),
             Screens::TerminalTooSmall => Ok(None),
@@ -150,10 +140,9 @@ impl Eventful for ScreenManager<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use reqtui::schema::types::*;
-
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::{backend::TestBackend, Terminal};
-    use reqtui::schema;
+    use reqtui::schema::{self, types::*};
     use std::{
         fs::{create_dir, File},
         io::Write,

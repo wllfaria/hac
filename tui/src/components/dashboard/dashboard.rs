@@ -550,6 +550,10 @@ impl Component for Dashboard<'_> {
 
 impl Eventful for Dashboard<'_> {
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
+        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            return Ok(Some(Command::Quit));
+        };
+
         match self.pane_focus {
             PaneFocus::List => self.handle_list_key_event(key_event),
             PaneFocus::Form => self.handle_form_key_event(key_event),

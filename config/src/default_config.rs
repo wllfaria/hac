@@ -21,7 +21,6 @@ pub static DEFAULT_CONFIG: &str = r##"
 "0" = "MoveToLineStart"
 "C-d" = "PageDown"
 "C-u" = "PageUp"
-"d" = { "w" = "DeleteWord", "d" = "DeleteLine", "b" = "DeleteBack", "j" = "DeleteCurrAndBelow", "k" = "DeleteCurrAndAbove", "l" = "DeleteCurrentChar", "h" = "DeletePreviousChar" }
 "S-D" = "DeleteUntilEOL"
 "x" = "DeleteCurrentChar"
 "o" = "InsertLineBelow"
@@ -31,11 +30,19 @@ pub static DEFAULT_CONFIG: &str = r##"
 #"/" = { EnterMode = "Search" }
 "i" = { EnterMode = "Insert" }
 "S-I" = ["MoveToLineStart", { EnterMode = "Insert" }]
-
 "S-A" = "InsertAtEOL"
 "S-B" = "MoveAfterWhitespaceReverse"
 "S-W" = "MoveAfterWhitespace"
 "S-X" = "DeletePreviousNonWrapping"
+
+[editor_keys.normal.d]
+"w" = "DeleteWord"
+"d" = "DeleteLine"
+"b" = "DeleteBack"
+"j" = "DeleteCurrAndBelow"
+"k" = "DeleteCurrAndAbove"
+"l" = "DeleteCurrentChar"
+"h" = "DeletePreviousChar"
 
 [editor_keys.insert]
 "Tab" = "InsertTab"

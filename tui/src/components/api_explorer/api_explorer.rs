@@ -135,6 +135,10 @@ impl<'ae> ApiExplorer<'ae> {
 
     #[tracing::instrument(skip_all, err)]
     fn handle_sidebar_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
+        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            return Ok(Some(Command::Quit));
+        };
+
         match key_event.code {
             KeyCode::Enter => {
                 if let Some(ref req) = self.hovered_request {
@@ -188,6 +192,9 @@ impl<'ae> ApiExplorer<'ae> {
     }
 
     fn handle_req_uri_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
+        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            return Ok(Some(Command::Quit));
+        };
         match key_event.code {
             KeyCode::Char('i') => self.selected_pane = Some(PaneFocus::Preview),
             KeyCode::Enter => {
@@ -292,6 +299,10 @@ impl<'ae> ApiExplorer<'ae> {
     }
 
     fn handle_preview_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
+        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            return Ok(Some(Command::Quit));
+        };
+
         match key_event.code {
             KeyCode::Enter => self.selected_pane = Some(PaneFocus::Preview),
             KeyCode::Tab => self.preview_tab = ResViewerTabs::next(&self.preview_tab),

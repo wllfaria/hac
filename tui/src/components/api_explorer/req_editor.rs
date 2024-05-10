@@ -10,6 +10,7 @@ use ratatui::{
     Frame,
 };
 use reqtui::{
+    command::Command,
     schema::types::Request,
     syntax::highlighter::HIGHLIGHTER,
     text_object::{cursor::Cursor, TextObject, Write},
@@ -460,8 +461,8 @@ impl<'re> ReqEditor<'re> {
     fn move_down(&mut self) {
         let len_lines = self.body.len_lines();
         if self.cursor.row().lt(&len_lines.saturating_sub(1)) {
-            self.maybe_scroll_view();
             self.cursor.move_down(1);
+            self.maybe_scroll_view();
         }
         let current_line_len = self.body.line_len(self.cursor.row());
         self.cursor.maybe_snap_to_col(current_line_len);
@@ -572,6 +573,12 @@ impl Eventful for ReqEditor<'_> {
                 build_styled_content(&self.body.to_string(), self.tree.as_ref(), self.colors);
             return Ok(None);
         }
+
+        if let (KeyCode::Char('c'), KeyModifiers::CONTROL, EditorMode::Normal) =
+            (key_event.code, key_event.modifiers, &self.editor_mode)
+        {
+            return Ok(Some(Command::Quit));
+        };
 
         match self.editor_mode {
             EditorMode::Normal => match self.config.editor_keys.normal.get(&key_str) {
