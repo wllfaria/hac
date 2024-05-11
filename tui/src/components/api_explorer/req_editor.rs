@@ -310,14 +310,14 @@ impl<'re> ReqEditor<'re> {
             Action::DeleteLine => self.delete_current_line(),
             Action::DeleteCurrAndBelow => self.delete_curr_line_and_below(),
             Action::DeleteCurrAndAbove => self.delete_curr_line_and_above(),
+            Action::DeleteWord => self.delete_word(),
+            Action::DeleteBack => self.delete_word_backwards(),
+            Action::PageDown => self.page_down(),
+            Action::PageUp => self.page_up(),
             Action::Undo => todo!(),
             Action::FindNext => todo!(),
             Action::FindPrevious => todo!(),
             Action::PreviousWord => todo!(),
-            Action::PageDown => todo!(),
-            Action::PageUp => todo!(),
-            Action::DeleteWord => todo!(),
-            Action::DeleteBack => todo!(),
             Action::InsertLineBelow => todo!(),
             Action::InsertLineAbove => todo!(),
             Action::PasteBelow => todo!(),
@@ -351,6 +351,33 @@ impl<'re> ReqEditor<'re> {
             .saturating_sub(self.col_scroll)
             .eq(&0)
             .then(|| self.col_scroll = self.col_scroll.saturating_sub(1));
+    }
+
+    fn page_up(&mut self) {
+        let half_height = self.layout.content_pane.height.saturating_sub(2).div(2);
+        self.cursor.move_up(half_height.into());
+        self.maybe_scroll_view();
+        let line_len = self.body.line_len(self.cursor.row());
+        self.cursor.maybe_snap_to_col(line_len);
+    }
+
+    fn page_down(&mut self) {
+        let half_height = self.layout.content_pane.height.saturating_sub(2).div(2);
+        let len_lines = self.body.len_lines().saturating_sub(1);
+        let increment = usize::min(len_lines, self.cursor.row().add(half_height as usize));
+        self.cursor.move_to_row(increment);
+        self.maybe_scroll_view();
+        let line_len = self.body.line_len(self.cursor.row());
+        self.cursor.maybe_snap_to_col(line_len);
+    }
+
+    fn delete_word(&mut self) {
+        self.body.delete_word(&self.cursor);
+    }
+
+    fn delete_word_backwards(&mut self) {
+        let walked = self.body.delete_word_backwards(&self.cursor);
+        self.cursor.move_left(walked);
     }
 
     fn insert_char(&mut self, c: char) {

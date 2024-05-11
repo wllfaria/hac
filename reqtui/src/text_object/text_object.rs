@@ -221,6 +221,80 @@ impl TextObject<Write> {
         let end = self.content.line_to_char(line.add(1));
         self.content.try_remove(start..end).ok();
     }
+
+    /// deletes a word forward in one of two ways:
+    ///
+    /// - if the current character is alphanumeric, then this delete up to the first non
+    /// alphanumeric character
+    /// - if the current character is non alphanumeric, then delete up to the first alphanumeric
+    /// character
+    pub fn delete_word(&mut self, cursor: &Cursor) {
+        let start_idx = self.content.line_to_char(cursor.row()).add(cursor.col());
+        let mut end_idx = start_idx.saturating_sub(1);
+
+        if let Some(initial_char) = self.content.get_char(start_idx) {
+            for char in self.content.chars_at(start_idx) {
+                match (initial_char.is_alphanumeric(), char.is_alphanumeric()) {
+                    (false, _) if self.line_break.to_string().contains(char) => break,
+                    (false, true) => {
+                        end_idx = end_idx.add(1);
+                        break;
+                    }
+                    (true, false) => {
+                        end_idx = end_idx.add(1);
+                        break;
+                    }
+                    _ => end_idx = end_idx.add(1),
+                }
+            }
+
+            self.content.try_remove(start_idx..end_idx).ok();
+        }
+    }
+
+    /// deletes a word backwards in one of two ways:
+    ///
+    /// - if the current character is alphanumeric, then this delete up to the first non
+    /// alphanumeric character
+    /// - if the current character is non alphanumeric, then delete up to the first alphanumeric
+    /// character
+    ///
+    /// will always return how many columns to advance the cursor
+    pub fn delete_word_backwards(&mut self, cursor: &Cursor) -> usize {
+        let start_idx = self.content.line_to_char(cursor.row()).add(cursor.col());
+        let mut end_idx = start_idx.saturating_sub(1);
+
+        if let Some(initial_char) = self.content.get_char(start_idx) {
+            for _ in (0..start_idx.saturating_sub(1)).rev() {
+                let char = self.content.char(end_idx);
+                match (initial_char.is_alphanumeric(), char.is_alphanumeric()) {
+                    (false, _) if self.line_break.to_string().contains(char) => break,
+                    (false, true) => break,
+                    (true, false) => break,
+                    _ => end_idx = end_idx.saturating_sub(1),
+                }
+            }
+        };
+
+        end_idx.sub(start_idx)
+
+        //     for char in self.content.chars_at(start_idx) {
+        //         match (initial_char.is_alphanumeric(), char.is_alphanumeric()) {
+        //             (false, _) if self.line_break.to_string().contains(char) => break,
+        //             (false, true) => break,
+        //             (true, false) => break,
+        //             _ => end_idx = end_idx.add(1),
+        //         }
+        //
+        //     self.content.try_remove(start_idx..end_idx).ok();
+        //
+        //
+        // let curr_row = self.content.char_to_line(index);
+        // let curr_row_start = self.content.line_to_char(curr_row);
+        // let curr_col = index - curr_row_start;
+        //
+        // (curr_col, curr_row)
+    }
 }
 
 impl<State> std::fmt::Display for TextObject<State> {
