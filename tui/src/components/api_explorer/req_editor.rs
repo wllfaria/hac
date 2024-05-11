@@ -298,7 +298,6 @@ impl<'re> ReqEditor<'re> {
             Action::MoveUp => self.move_up(),
             Action::MoveRight => self.move_right(),
             Action::DeleteCurrentChar => self.erase_current_char(),
-            Action::NextWord => self.move_to_next_word(),
             Action::InsertAhead => self.insert_ahead(),
             Action::MoveToBottom => self.move_to_bottom(),
             Action::DeleteUntilEOL => self.erase_until_eol(),
@@ -314,12 +313,13 @@ impl<'re> ReqEditor<'re> {
             Action::DeleteBack => self.delete_word_backwards(),
             Action::PageDown => self.page_down(),
             Action::PageUp => self.page_up(),
+            Action::NextWord => self.move_to_next_word(),
+            Action::PreviousWord => self.move_to_prev_word(),
+            Action::InsertLineBelow => self.insert_line_below(),
+            Action::InsertLineAbove => self.insert_line_above(),
             Action::Undo => todo!(),
             Action::FindNext => todo!(),
             Action::FindPrevious => todo!(),
-            Action::PreviousWord => todo!(),
-            Action::InsertLineBelow => todo!(),
-            Action::InsertLineAbove => todo!(),
             Action::PasteBelow => todo!(),
         }
     }
@@ -366,6 +366,21 @@ impl<'re> ReqEditor<'re> {
         let len_lines = self.body.len_lines().saturating_sub(1);
         let increment = usize::min(len_lines, self.cursor.row().add(half_height as usize));
         self.cursor.move_to_row(increment);
+        self.maybe_scroll_view();
+        let line_len = self.body.line_len(self.cursor.row());
+        self.cursor.maybe_snap_to_col(line_len);
+    }
+
+    fn insert_line_below(&mut self) {
+        self.body.insert_line_below(&self.cursor);
+        self.cursor.move_down(1);
+        self.maybe_scroll_view();
+        let line_len = self.body.line_len(self.cursor.row());
+        self.cursor.maybe_snap_to_col(line_len);
+    }
+
+    fn insert_line_above(&mut self) {
+        self.body.insert_line_above(&self.cursor);
         self.maybe_scroll_view();
         let line_len = self.body.line_len(self.cursor.row());
         self.cursor.maybe_snap_to_col(line_len);
@@ -458,6 +473,16 @@ impl<'re> ReqEditor<'re> {
         self.cursor.move_to_col(col);
         let current_line_len = self.body.line_len(self.cursor.row());
         self.cursor.maybe_snap_to_col(current_line_len);
+        self.maybe_scroll_view();
+    }
+
+    fn move_to_prev_word(&mut self) {
+        let (col, row) = self.body.find_char_before_separator(&self.cursor);
+        self.cursor.move_to_row(row);
+        self.cursor.move_to_col(col);
+        let current_line_len = self.body.line_len(self.cursor.row());
+        self.cursor.maybe_snap_to_col(current_line_len);
+        self.maybe_scroll_view();
     }
 
     fn move_after_whitespace(&mut self) {

@@ -145,21 +145,21 @@ impl TextObject<Write> {
     pub fn find_char_after_whitespace(&self, cursor: &Cursor) -> (usize, usize) {
         let line = self.content.line_to_char(cursor.row());
         let col_offset = line + cursor.col();
-        let mut walked = 0;
+        let mut end_idx = 0;
         let mut found = false;
 
         for char in self.content.chars_at(col_offset) {
             match (char, found) {
                 (c, false) if c.is_whitespace() => {
                     found = true;
-                    walked = walked.add(1);
+                    end_idx = end_idx.add(1);
                 }
                 (c, true) if !c.is_whitespace() => break,
-                _ => walked = walked.add(1),
+                _ => end_idx = end_idx.add(1),
             }
         }
-        let curr_idx = col_offset.add(walked);
-        let curr_row = self.content.char_to_line(col_offset.add(walked));
+        let curr_idx = col_offset.add(end_idx);
+        let curr_row = self.content.char_to_line(col_offset.add(end_idx));
         let curr_row_start = self.content.line_to_char(curr_row);
         let curr_col = curr_idx.sub(curr_row_start);
         (curr_col, curr_row)
@@ -189,26 +189,67 @@ impl TextObject<Write> {
     }
 
     pub fn find_char_after_separator(&self, cursor: &Cursor) -> (usize, usize) {
-        let line = self.content.line_to_char(cursor.row());
-        let col_offset = line + cursor.col();
-        let mut walked = 0;
-        let mut found = false;
+        let start_idx = self.content.line_to_char(cursor.row()).add(cursor.col());
+        let mut end_idx = 0;
+        let mut found_newline = false;
 
-        for char in self.content.chars_at(col_offset) {
-            match (char, found) {
-                (c, false) if !c.is_alphanumeric() => {
-                    found = true;
-                    walked = walked.add(1);
+        if let Some(initial_char) = self.content.get_char(start_idx) {
+            for char in self.content.chars_at(start_idx) {
+                match (
+                    initial_char.is_alphanumeric(),
+                    char.is_alphanumeric(),
+                    found_newline,
+                ) {
+                    (_, _, true) if !char.is_whitespace() => break,
+                    (false, true, _) => break,
+                    (true, false, _) => break,
+                    _ if char.is_whitespace() => {
+                        found_newline = true;
+                        end_idx = end_idx.add(1);
+                    }
+                    _ => end_idx = end_idx.add(1),
                 }
-                (c, true) if c.is_alphanumeric() => break,
-                _ => walked = walked.add(1),
             }
         }
 
-        let curr_idx = col_offset.add(walked);
-        let curr_row = self.content.char_to_line(col_offset.add(walked));
+        let curr_idx = start_idx.add(end_idx);
+        let curr_row = self.content.char_to_line(curr_idx);
         let curr_row_start = self.content.line_to_char(curr_row);
         let curr_col = curr_idx.sub(curr_row_start);
+
+        (curr_col, curr_row)
+    }
+
+    pub fn find_char_before_separator(&self, cursor: &Cursor) -> (usize, usize) {
+        let start_idx = self.content.line_to_char(cursor.row()).add(cursor.col());
+        let mut end_idx = start_idx;
+        let mut found_newline = false;
+
+        if let Some(initial_char) = self.content.get_char(start_idx) {
+            for _ in (0..start_idx.saturating_sub(1)).rev() {
+                let char = self.content.char(end_idx);
+
+                match (
+                    initial_char.is_alphanumeric(),
+                    char.is_alphanumeric(),
+                    found_newline,
+                ) {
+                    (_, _, true) if !self.line_break.to_string().contains(char) => break,
+                    (false, true, _) => break,
+                    (true, false, _) => break,
+                    _ if self.line_break.to_string().contains(char) => {
+                        found_newline = true;
+                        end_idx = end_idx.saturating_sub(1);
+                    }
+                    _ => end_idx = end_idx.saturating_sub(1),
+                }
+            }
+        };
+
+        let curr_row = self.content.char_to_line(end_idx);
+        let curr_row_start = self.content.line_to_char(curr_row);
+        let curr_col = end_idx.sub(curr_row_start);
+
         (curr_col, curr_row)
     }
 
@@ -277,23 +318,16 @@ impl TextObject<Write> {
         };
 
         end_idx.sub(start_idx)
+    }
 
-        //     for char in self.content.chars_at(start_idx) {
-        //         match (initial_char.is_alphanumeric(), char.is_alphanumeric()) {
-        //             (false, _) if self.line_break.to_string().contains(char) => break,
-        //             (false, true) => break,
-        //             (true, false) => break,
-        //             _ => end_idx = end_idx.add(1),
-        //         }
-        //
-        //     self.content.try_remove(start_idx..end_idx).ok();
-        //
-        //
-        // let curr_row = self.content.char_to_line(index);
-        // let curr_row_start = self.content.line_to_char(curr_row);
-        // let curr_col = index - curr_row_start;
-        //
-        // (curr_col, curr_row)
+    pub fn insert_line_below(&mut self, cursor: &Cursor) {
+        let next_line = self.content.line_to_char(cursor.row().add(1));
+        self.content.insert(next_line, &self.line_break.to_string());
+    }
+
+    pub fn insert_line_above(&mut self, cursor: &Cursor) {
+        let curr_line = self.content.line_to_char(cursor.row());
+        self.content.insert(curr_line, &self.line_break.to_string());
     }
 }
 
