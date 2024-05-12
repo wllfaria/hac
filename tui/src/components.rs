@@ -3,6 +3,7 @@ pub mod confirm_popup;
 pub mod dashboard;
 pub mod error_popup;
 pub mod input;
+mod overlay;
 pub mod terminal_too_small;
 
 use crate::event_pool::Event;

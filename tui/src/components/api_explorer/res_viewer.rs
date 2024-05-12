@@ -134,6 +134,7 @@ impl<'a> ResViewer<'a> {
 
         let block = Block::default()
             .borders(Borders::ALL)
+            .title("Preview")
             .border_style(block_border);
 
         block.render(size, buf);

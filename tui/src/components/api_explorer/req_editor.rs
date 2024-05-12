@@ -267,6 +267,7 @@ impl<'re> ReqEditor<'re> {
 
         let block = Block::default()
             .borders(Borders::ALL)
+            .title("Editor")
             .border_style(block_border);
 
         block.render(size, buf);

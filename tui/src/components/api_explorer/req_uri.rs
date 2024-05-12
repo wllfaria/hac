@@ -55,7 +55,8 @@ impl<'a> StatefulWidget for ReqUri<'a> {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(block_border),
+                    .border_style(block_border)
+                    .title("Request URI"),
             )
             .render(size, buf);
     }

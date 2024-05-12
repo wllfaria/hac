@@ -5,6 +5,7 @@ use crate::components::{
         schema_list::{SchemaList, SchemaListState},
     },
     error_popup::ErrorPopup,
+    overlay::draw_overlay,
     Component, Eventful,
 };
 use reqtui::{command::Command, schema::types::Schema};
@@ -326,21 +327,9 @@ impl<'a> Dashboard<'a> {
         frame.render_widget(hint, self.layout.hint_pane);
     }
 
-    fn draw_overlay(&self, size: Rect, fill_text: &str, frame: &mut Frame) {
-        let lines: Vec<Line<'_>> =
-            vec![fill_text.repeat(size.width.into()).into(); size.height.into()];
-
-        let overlay = Paragraph::new(lines)
-            .fg(self.colors.primary.hover)
-            .bg(self.colors.primary.background)
-            .bold();
-
-        frame.render_widget(overlay, size);
-    }
-
     fn draw_help_popup(&self, size: Rect, frame: &mut Frame) {
         frame.render_widget(Clear, size);
-        self.draw_overlay(size, "助ける", frame);
+        draw_overlay(self.colors, size, "助ける", frame);
 
         let lines = vec![
             Line::from(vec![
@@ -468,7 +457,7 @@ impl<'a> Dashboard<'a> {
 
     fn draw_form_popup(&mut self, size: Rect, frame: &mut Frame) {
         self.draw_background(size, frame);
-        self.draw_overlay(size, "新", frame);
+        draw_overlay(self.colors, size, "新", frame);
 
         let form = NewCollectionForm::new(self.colors);
         form.render(

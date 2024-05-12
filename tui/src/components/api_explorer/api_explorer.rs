@@ -5,6 +5,7 @@ use crate::components::{
         res_viewer::{ResViewer, ResViewerState, ResViewerTabs},
         sidebar::{Sidebar, SidebarState},
     },
+    overlay::draw_overlay,
     Component, Eventful,
 };
 use anyhow::Context;
@@ -31,10 +32,17 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 #[derive(Debug, PartialEq)]
 pub struct ExplorerLayout {
+    pub hint_pane: Rect,
     pub sidebar: Rect,
     pub req_uri: Rect,
     pub req_editor: Rect,
     pub response_preview: Rect,
+}
+
+#[derive(Debug)]
+pub enum Overlays {
+    None,
+    CreateRequest,
 }
 
 #[derive(PartialEq)]
@@ -71,6 +79,8 @@ pub struct ApiExplorer<'ae> {
     preview_header_scroll_y: usize,
     preview_header_scroll_x: usize,
     pretty_preview_scroll: usize,
+
+    curr_overlay: Overlays,
 
     editor: ReqEditor<'ae>,
     editor_tab: ReqEditorTabs,
@@ -126,6 +136,8 @@ impl<'ae> ApiExplorer<'ae> {
             preview_header_scroll_y: 0,
             preview_header_scroll_x: 0,
             pretty_preview_scroll: 0,
+
+            curr_overlay: Overlays::None,
 
             response_rx,
             request_tx,
@@ -185,6 +197,7 @@ impl<'ae> ApiExplorer<'ae> {
                     .or(Some(id.clone()));
                 };
             }
+            KeyCode::Char('n') => self.curr_overlay = Overlays::CreateRequest,
             _ => {}
         }
 
@@ -350,6 +363,61 @@ impl<'ae> ApiExplorer<'ae> {
 
         Ok(None)
     }
+
+    fn draw_req_uri_hint(&self, frame: &mut Frame) {
+        let hint = "[type anything -> edit] [enter -> execute request] [<C-c> -> quit]"
+            .fg(self.colors.normal.magenta)
+            .into_centered_line();
+
+        frame.render_widget(hint, self.layout.hint_pane);
+    }
+    fn draw_sidebar_hint(&self, frame: &mut Frame) {
+        let hint =
+            "[j/k -> navigate] [enter -> select item] [n -> create item] [? -> help] [<C-c> -> quit]"
+                .fg(self.colors.normal.magenta)
+                .into_centered_line();
+
+        frame.render_widget(hint, self.layout.hint_pane);
+    }
+    fn draw_preview_hint(&self, frame: &mut Frame) {
+        let hint = match self
+            .selected_pane
+            .as_ref()
+            .is_some_and(|selected| selected.eq(&PaneFocus::Preview))
+        {
+            false => "[j/k -> scroll] [enter -> interact] [? -> help] [<C-c> -> quit]"
+                .fg(self.colors.normal.magenta)
+                .into_centered_line(),
+            true => {
+                "[j/k -> scroll] [esc -> deselect] [tab -> switch tab] [? -> help] [<C-c> -> quit]"
+                    .fg(self.colors.normal.magenta)
+                    .into_centered_line()
+            }
+        };
+
+        frame.render_widget(hint, self.layout.hint_pane);
+    }
+
+    fn draw_editor_hint(&self, frame: &mut Frame) {
+        let hint = match self
+            .selected_pane
+            .as_ref()
+            .is_some_and(|selected| selected.eq(&PaneFocus::Editor))
+        {
+            false => "[enter -> interact] [? -> help] [<C-c> -> quit]"
+                .fg(self.colors.normal.magenta)
+                .into_centered_line(),
+            true => "[esc -> deselect] [tab -> switch tab] [? -> help] [<C-c> -> quit]"
+                .fg(self.colors.normal.magenta)
+                .into_centered_line(),
+        };
+
+        frame.render_widget(hint, self.layout.hint_pane);
+    }
+
+    fn draw_create_request_form(&self, frame: &mut Frame) {
+        draw_overlay(self.colors, frame.size(), "新", frame);
+    }
 }
 
 impl Component for ApiExplorer<'_> {
@@ -363,6 +431,18 @@ impl Component for ApiExplorer<'_> {
         self.draw_req_editor(frame);
         self.draw_req_uri(frame);
         self.draw_sidebar(frame);
+
+        match self.focused_pane {
+            PaneFocus::ReqUri => self.draw_req_uri_hint(frame),
+            PaneFocus::Sidebar => self.draw_sidebar_hint(frame),
+            PaneFocus::Preview => self.draw_preview_hint(frame),
+            PaneFocus::Editor => self.draw_editor_hint(frame),
+        }
+
+        match self.curr_overlay {
+            Overlays::CreateRequest => self.draw_create_request_form(frame),
+            Overlays::None => {}
+        }
 
         if self
             .selected_pane
@@ -455,10 +535,15 @@ impl Eventful for ApiExplorer<'_> {
 }
 
 pub fn build_layout(size: Rect) -> ExplorerLayout {
+    let [top_pane, hint_pane] = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Fill(1), Constraint::Length(1)])
+        .areas(size);
+
     let [sidebar, right_pane] = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Length(30), Constraint::Fill(1)])
-        .areas(size);
+        .areas(top_pane);
 
     let [req_uri, req_builder] = Layout::default()
         .direction(Direction::Vertical)
@@ -478,6 +563,7 @@ pub fn build_layout(size: Rect) -> ExplorerLayout {
     };
 
     ExplorerLayout {
+        hint_pane,
         sidebar,
         req_uri,
         req_editor,

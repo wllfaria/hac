@@ -80,7 +80,7 @@ impl<'a> StatefulWidget for Sidebar<'a> {
 
         let block = Block::default()
             .borders(Borders::ALL)
-            .title("Requests")
+            .title("Navigation")
             .border_style(block_border);
 
         block.render(area, buf);
