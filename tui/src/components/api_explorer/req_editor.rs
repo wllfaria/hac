@@ -353,7 +353,22 @@ impl<'re> ReqEditor<'re> {
             .col()
             .saturating_sub(self.col_scroll)
             .eq(&0)
-            .then(|| self.col_scroll = self.col_scroll.saturating_sub(1));
+            .then(|| {
+                self.col_scroll = self
+                    .col_scroll
+                    .saturating_sub(self.col_scroll.saturating_sub(self.cursor.col()))
+            });
+
+        self.cursor
+            .col()
+            .saturating_sub(self.col_scroll)
+            .gt(&self.layout.content_pane.width.sub(1).into())
+            .then(|| {
+                self.col_scroll = self
+                    .cursor
+                    .col()
+                    .sub(self.layout.content_pane.width.sub(1) as usize)
+            });
     }
 
     fn jump_to_empty_line_below(&mut self) {
@@ -419,6 +434,7 @@ impl<'re> ReqEditor<'re> {
     fn delete_word_backwards(&mut self) {
         let walked = self.body.delete_word_backwards(&self.cursor);
         self.cursor.move_left(walked);
+        self.maybe_scroll_view();
     }
 
     fn insert_char(&mut self, c: char) {
@@ -534,6 +550,7 @@ impl<'re> ReqEditor<'re> {
 
     fn move_left(&mut self) {
         self.cursor.move_left(1);
+        self.maybe_scroll_view();
     }
 
     fn move_down(&mut self) {
