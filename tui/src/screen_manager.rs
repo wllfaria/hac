@@ -248,7 +248,9 @@ mod tests {
         let (_guard, path) = setup_temp_schemas(10);
         let schemas = schema::schema::get_schemas(path).unwrap();
         let config = config::load_config();
+        let (tx, _) = tokio::sync::mpsc::unbounded_channel::<Command>();
         let mut sm = ScreenManager::new(initial, &colors, schemas, &config).unwrap();
+        _ = sm.register_command_handler(tx.clone());
         assert_eq!(sm.curr_screen, Screens::Dashboard);
 
         sm.handle_command(command);

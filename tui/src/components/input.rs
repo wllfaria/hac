@@ -87,7 +87,6 @@ mod tests {
                     .title("my input".to_string())
                     .title_style(Style::default().fg(colors.normal.white))
                     .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded)
                     .border_style(Style::default().fg(colors.primary.hover)),
             )
             .style(Style::default().fg(colors.normal.magenta));
@@ -107,7 +106,6 @@ mod tests {
                     .title("my input".to_string())
                     .title_style(Style::default().fg(colors.normal.white))
                     .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded)
                     .border_style(Style::default().fg(colors.bright.magenta)),
             )
             .style(Style::default().fg(colors.normal.magenta));
@@ -128,7 +126,6 @@ mod tests {
                     .title("my input".to_string())
                     .title_style(Style::default().fg(colors.normal.white))
                     .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded)
                     .border_style(Style::default().fg(colors.primary.hover)),
             )
             .style(Style::default().fg(colors.normal.white));
@@ -148,7 +145,6 @@ mod tests {
                     .title("my input".to_string())
                     .title_style(Style::default().fg(colors.normal.white))
                     .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded)
                     .border_style(Style::default().fg(colors.bright.magenta)),
             )
             .style(Style::default().fg(colors.normal.white));
