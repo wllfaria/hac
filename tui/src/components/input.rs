@@ -2,7 +2,7 @@ use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::Style,
-    widgets::{Block, BorderType, Borders, Paragraph, StatefulWidget, Widget},
+    widgets::{Block, Borders, Paragraph, StatefulWidget, Widget},
 };
 
 pub struct Input<'a> {
@@ -56,7 +56,6 @@ impl<'a> Input<'a> {
                     .title(self.name.clone())
                     .title_style(Style::default().fg(self.colors.normal.white))
                     .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded)
                     .border_style(border_color),
             )
             .style(color)
@@ -74,6 +73,8 @@ impl StatefulWidget for Input<'_> {
 
 #[cfg(test)]
 mod tests {
+    use ratatui::widgets::BorderType;
+
     use super::*;
 
     #[test]

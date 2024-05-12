@@ -27,6 +27,7 @@ pub struct ScreenManager<'sm> {
     size: Rect,
     colors: &'sm colors::Colors,
     config: &'sm config::Config,
+    sender: Option<UnboundedSender<Command>>,
 }
 
 impl<'sm> ScreenManager<'sm> {
@@ -45,6 +46,7 @@ impl<'sm> ScreenManager<'sm> {
             size,
             colors,
             config,
+            sender: None,
         })
     }
 
@@ -72,12 +74,15 @@ impl<'sm> ScreenManager<'sm> {
             Command::SelectSchema(schema) | Command::CreateSchema(schema) => {
                 tracing::debug!("changing to api explorer: {}", schema.info.name);
                 self.switch_screen(Screens::Editor);
-                self.api_explorer = Some(ApiExplorer::new(
-                    self.size,
-                    schema,
-                    self.colors,
-                    self.config,
-                ));
+                let mut api_explorer =
+                    ApiExplorer::new(self.size, schema, self.colors, self.config);
+                _ = api_explorer.register_command_handler(
+                    self.sender
+                        .as_ref()
+                        .expect("should have a command sender at this point")
+                        .clone(),
+                );
+                self.api_explorer = Some(api_explorer);
             }
             Command::Error(msg) => {
                 self.dashboard.display_error(msg);
@@ -109,6 +114,7 @@ impl Component for ScreenManager<'_> {
     }
 
     fn register_command_handler(&mut self, sender: UnboundedSender<Command>) -> anyhow::Result<()> {
+        self.sender = Some(sender.clone());
         self.dashboard.register_command_handler(sender.clone())?;
         Ok(())
     }

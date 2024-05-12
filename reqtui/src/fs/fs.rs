@@ -34,3 +34,16 @@ pub async fn create_schema(name: String, description: String) -> anyhow::Result<
     tracing::debug!("successfully created new schema: {:?}", schema.path);
     Ok(schema)
 }
+
+pub async fn sync_schema(schema: Schema) -> anyhow::Result<(), FsError> {
+    let schema_str =
+        serde_json::to_string(&schema).map_err(|e| FsError::SerializationError(e.to_string()))?;
+
+    tokio::fs::write(&schema.path, schema_str)
+        .await
+        .map_err(|_| FsError::IOError(format!("failed to synchronize schema {:?}", schema.path)))?;
+
+    tracing::debug!("synchronization of schema: {:?}", schema.path);
+
+    Ok(())
+}

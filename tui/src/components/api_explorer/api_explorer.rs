@@ -5,6 +5,7 @@ use crate::components::{
         res_viewer::{ResViewer, ResViewerState, ResViewerTabs},
         sidebar::{Sidebar, SidebarState},
     },
+    input::Input,
     overlay::draw_overlay,
     Component, Eventful,
 };
@@ -13,19 +14,19 @@ use config::EditorMode;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Stylize,
-    widgets::{Block, Clear, StatefulWidget},
+    style::{Style, Stylize},
+    widgets::{Block, Borders, Clear, Paragraph, StatefulWidget},
     Frame,
 };
 use reqtui::{
     command::Command,
     net::request_manager::{ReqtuiNetRequest, ReqtuiResponse},
-    schema::types::{Directory, Request, RequestKind, Schema},
+    schema::types::{Directory, Request, RequestKind, RequestMethod, Schema},
 };
 use std::{
     cell::RefCell,
     collections::HashMap,
-    ops::{Add, Sub},
+    ops::{Add, Div, Sub},
     rc::Rc,
 };
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
@@ -37,9 +38,10 @@ pub struct ExplorerLayout {
     pub req_uri: Rect,
     pub req_editor: Rect,
     pub response_preview: Rect,
+    pub create_req_form: Rect,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Overlays {
     None,
     CreateRequest,
@@ -57,6 +59,55 @@ enum PaneFocus {
     ReqUri,
     Preview,
     Editor,
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub enum FormFocus {
+    #[default]
+    NameInput,
+    ReqButton,
+    DirButton,
+    Parent,
+    ConfirmButton,
+    CancelButton,
+}
+
+impl FormFocus {
+    fn prev(&self) -> FormFocus {
+        match self {
+            Self::NameInput => FormFocus::CancelButton,
+            Self::ReqButton => FormFocus::NameInput,
+            Self::DirButton => FormFocus::ReqButton,
+            Self::Parent => FormFocus::DirButton,
+            Self::ConfirmButton => FormFocus::Parent,
+            Self::CancelButton => FormFocus::ConfirmButton,
+        }
+    }
+
+    fn next(&self) -> FormFocus {
+        match self {
+            Self::NameInput => FormFocus::ReqButton,
+            Self::ReqButton => FormFocus::DirButton,
+            Self::DirButton => FormFocus::Parent,
+            Self::Parent => FormFocus::ConfirmButton,
+            Self::ConfirmButton => FormFocus::CancelButton,
+            Self::CancelButton => FormFocus::NameInput,
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct CreateReqFormState {
+    pub req_kind: CreateReqKind,
+    pub req_name: String,
+    pub focus: FormFocus,
+}
+
+#[derive(Debug, Default)]
+pub enum CreateReqKind {
+    #[default]
+    Request,
+    Directory,
 }
 
 #[derive(Debug)]
@@ -81,9 +132,12 @@ pub struct ApiExplorer<'ae> {
     pretty_preview_scroll: usize,
 
     curr_overlay: Overlays,
+    create_req_form_state: CreateReqFormState,
 
     editor: ReqEditor<'ae>,
     editor_tab: ReqEditorTabs,
+
+    sender: Option<UnboundedSender<Command>>,
 
     responses_map: HashMap<Request, Rc<RefCell<ReqtuiResponse>>>,
 }
@@ -131,6 +185,8 @@ impl<'ae> ApiExplorer<'ae> {
             dirs_expanded: HashMap::default(),
             responses_map: HashMap::default(),
 
+            sender: None,
+
             preview_tab: ResViewerTabs::Preview,
             raw_preview_scroll: 0,
             preview_header_scroll_y: 0,
@@ -138,6 +194,7 @@ impl<'ae> ApiExplorer<'ae> {
             pretty_preview_scroll: 0,
 
             curr_overlay: Overlays::None,
+            create_req_form_state: CreateReqFormState::default(),
 
             response_rx,
             request_tx,
@@ -415,8 +472,205 @@ impl<'ae> ApiExplorer<'ae> {
         frame.render_widget(hint, self.layout.hint_pane);
     }
 
-    fn draw_create_request_form(&self, frame: &mut Frame) {
+    fn draw_create_request_form(&mut self, frame: &mut Frame) {
         draw_overlay(self.colors, frame.size(), "新", frame);
+        let size = self.layout.create_req_form;
+        frame.render_widget(Clear, size);
+
+        let item_height = 3;
+        let name_input_size =
+            Rect::new(size.x.add(1), size.y.add(1), size.width.sub(2), item_height);
+
+        let req_button_size = Rect::new(
+            size.x.add(1),
+            size.y.add(item_height).add(1),
+            size.width.sub(2).div(2),
+            item_height,
+        );
+
+        let dir_button_size = Rect::new(
+            size.x.add(size.width.div(2)),
+            size.y.add(item_height).add(1),
+            size.width.div(2),
+            item_height,
+        );
+
+        let confirm_button_size = Rect::new(
+            size.x.add(1),
+            size.y.add(size.height.sub(4)),
+            size.width.sub(2).div(2),
+            item_height,
+        );
+
+        let cancel_button_size = Rect::new(
+            size.x.add(size.width.div(2)),
+            size.y.add(size.height.sub(4)),
+            size.width.div(2),
+            item_height,
+        );
+
+        let mut input = Input::new(self.colors, "Name".into());
+        if self.create_req_form_state.focus.eq(&FormFocus::NameInput) {
+            input.focus();
+        }
+
+        let req_button_border_style = match (
+            &self.create_req_form_state.focus,
+            &self.create_req_form_state.req_kind,
+        ) {
+            (FormFocus::ReqButton, _) => Style::default().fg(self.colors.bright.magenta),
+            (_, CreateReqKind::Request) => Style::default().fg(self.colors.normal.red),
+            (_, _) => Style::default().fg(self.colors.bright.black),
+        };
+
+        let dir_button_border_style = match (
+            &self.create_req_form_state.focus,
+            &self.create_req_form_state.req_kind,
+        ) {
+            (FormFocus::DirButton, _) => Style::default().fg(self.colors.bright.magenta),
+            (_, CreateReqKind::Directory) => Style::default().fg(self.colors.normal.red),
+            (_, _) => Style::default().fg(self.colors.bright.black),
+        };
+
+        let confirm_button_border_style = match self.create_req_form_state.focus {
+            FormFocus::ConfirmButton => Style::default().fg(self.colors.bright.magenta),
+            _ => Style::default().fg(self.colors.bright.black),
+        };
+        let cancel_button_border_style = match self.create_req_form_state.focus {
+            FormFocus::CancelButton => Style::default().fg(self.colors.bright.magenta),
+            _ => Style::default().fg(self.colors.bright.black),
+        };
+
+        let req_button =
+            Paragraph::new("Request".fg(self.colors.normal.white).into_centered_line()).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(req_button_border_style),
+            );
+
+        let dir_button = Paragraph::new(
+            "Directory"
+                .fg(self.colors.normal.white)
+                .into_centered_line(),
+        )
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(dir_button_border_style),
+        );
+
+        let confirm_button =
+            Paragraph::new("Confirm".fg(self.colors.normal.green).into_centered_line()).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(confirm_button_border_style),
+            );
+
+        let cancel_button =
+            Paragraph::new("Cancel".fg(self.colors.normal.red).into_centered_line()).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(cancel_button_border_style),
+            );
+
+        frame.render_widget(req_button, req_button_size);
+        frame.render_widget(dir_button, dir_button_size);
+        frame.render_widget(confirm_button, confirm_button_size);
+        frame.render_widget(cancel_button, cancel_button_size);
+
+        frame.render_stateful_widget(
+            input,
+            name_input_size,
+            &mut self.create_req_form_state.req_name,
+        );
+    }
+
+    fn handle_create_request_key_event(
+        &mut self,
+        key_event: KeyEvent,
+    ) -> anyhow::Result<Option<Command>> {
+        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            return Ok(Some(Command::Quit));
+        };
+
+        match (
+            key_event.code,
+            key_event.modifiers,
+            &self.create_req_form_state.focus,
+        ) {
+            (KeyCode::Tab, KeyModifiers::NONE, _) => {
+                self.create_req_form_state.focus =
+                    FormFocus::next(&self.create_req_form_state.focus);
+            }
+            (KeyCode::BackTab, KeyModifiers::SHIFT, _) => {
+                self.create_req_form_state.focus =
+                    FormFocus::prev(&self.create_req_form_state.focus);
+            }
+            (KeyCode::Char(c), _, FormFocus::NameInput) => {
+                self.create_req_form_state.req_name.push(c);
+            }
+            (KeyCode::Backspace, _, FormFocus::NameInput) => {
+                self.create_req_form_state.req_name.pop();
+            }
+            (KeyCode::Enter, _, FormFocus::ReqButton) => {
+                self.create_req_form_state.req_kind = CreateReqKind::Request;
+            }
+            (KeyCode::Enter, _, FormFocus::DirButton) => {
+                self.create_req_form_state.req_kind = CreateReqKind::Directory;
+            }
+            (KeyCode::Enter, _, FormFocus::ConfirmButton) => {
+                self.create_new_request();
+                self.create_req_form_state = CreateReqFormState::default();
+                self.curr_overlay = Overlays::None;
+            }
+            (KeyCode::Enter, _, FormFocus::CancelButton) => {
+                self.create_req_form_state = CreateReqFormState::default();
+                self.curr_overlay = Overlays::None;
+            }
+            _ => {}
+        }
+
+        Ok(None)
+    }
+
+    fn create_new_request(&mut self) {
+        let form_state = &self.create_req_form_state;
+        let new_request = match form_state.req_kind {
+            CreateReqKind::Request => RequestKind::Single(Request {
+                name: form_state.req_name.clone(),
+                method: RequestMethod::Get,
+                uri: String::default(),
+                body: None,
+                body_type: None,
+            }),
+            CreateReqKind::Directory => RequestKind::Nested(Directory {
+                name: form_state.req_name.clone(),
+                requests: vec![],
+            }),
+        };
+
+        if let Some(requests) = self.schema.requests.as_mut() {
+            requests.push(new_request);
+        }
+
+        let sender = self
+            .sender
+            .as_ref()
+            .expect("should have a sender at this point")
+            .clone();
+        let schema = self.schema.clone();
+
+        tokio::spawn(async move {
+            match reqtui::fs::sync_schema(schema).await {
+                Ok(_) => {}
+                Err(e) => {
+                    if sender.send(Command::Error(e.to_string())).is_err() {
+                        tracing::error!("failed to send error command through channel");
+                        std::process::abort();
+                    }
+                }
+            }
+        });
     }
 }
 
@@ -472,6 +726,11 @@ impl Component for ApiExplorer<'_> {
         Ok(())
     }
 
+    fn register_command_handler(&mut self, sender: UnboundedSender<Command>) -> anyhow::Result<()> {
+        self.sender = Some(sender);
+        Ok(())
+    }
+
     fn resize(&mut self, new_size: Rect) {
         let new_layout = build_layout(new_size);
         self.editor.resize(new_layout.req_editor);
@@ -481,6 +740,15 @@ impl Component for ApiExplorer<'_> {
 
 impl Eventful for ApiExplorer<'_> {
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
+        if self.curr_overlay.ne(&Overlays::None) {
+            match self.curr_overlay {
+                Overlays::CreateRequest => return self.handle_create_request_key_event(key_event),
+                _ => {}
+            };
+
+            return Ok(None);
+        }
+
         if let KeyCode::Tab = key_event.code {
             match (&self.focused_pane, &self.selected_pane, key_event.modifiers) {
                 (PaneFocus::Sidebar, None, KeyModifiers::NONE) => {
@@ -562,12 +830,20 @@ pub fn build_layout(size: Rect) -> ExplorerLayout {
             .areas(req_builder)
     };
 
+    let create_req_form = Rect::new(
+        size.width.div(4),
+        size.height.div(2).saturating_sub(7),
+        size.width.div(2),
+        14,
+    );
+
     ExplorerLayout {
         hint_pane,
         sidebar,
         req_uri,
         req_editor,
         response_preview,
+        create_req_form,
     }
 }
 
