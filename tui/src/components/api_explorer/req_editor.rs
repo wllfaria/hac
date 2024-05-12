@@ -317,6 +317,7 @@ impl<'re> ReqEditor<'re> {
             Action::PreviousWord => self.move_to_prev_word(),
             Action::InsertLineBelow => self.insert_line_below(),
             Action::InsertLineAbove => self.insert_line_above(),
+            Action::JumpToClosing => self.jump_to_opposing_token(),
             Action::Undo => todo!(),
             Action::FindNext => todo!(),
             Action::FindPrevious => todo!(),
@@ -359,6 +360,13 @@ impl<'re> ReqEditor<'re> {
         self.maybe_scroll_view();
         let line_len = self.body.line_len(self.cursor.row());
         self.cursor.maybe_snap_to_col(line_len);
+    }
+
+    fn jump_to_opposing_token(&mut self) {
+        let (new_col, new_row) = self.body.find_oposing_token(&self.cursor);
+        self.cursor.move_to_col(new_col);
+        self.cursor.move_to_row(new_row);
+        self.maybe_scroll_view();
     }
 
     fn page_down(&mut self) {

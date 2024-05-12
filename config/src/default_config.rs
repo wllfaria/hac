@@ -27,13 +27,13 @@ pub static DEFAULT_CONFIG: &str = r##"
 "S-O" = "InsertLineAbove"
 "p" = "PasteBelow"
 "a" = "InsertAhead"
-#"/" = { EnterMode = "Search" }
 "i" = { EnterMode = "Insert" }
 "S-I" = ["MoveToLineStart", { EnterMode = "Insert" }]
 "S-A" = "InsertAtEOL"
 "S-B" = "MoveAfterWhitespaceReverse"
 "S-W" = "MoveAfterWhitespace"
 "S-X" = "DeletePreviousNonWrapping"
+"%" = "JumpToClosing"
 
 [editor_keys.normal.d]
 "w" = "DeleteWord"

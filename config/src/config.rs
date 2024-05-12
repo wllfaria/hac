@@ -42,6 +42,7 @@ pub enum Action {
     InsertTab,
     InsertLine,
     DeletePreviousChar,
+    JumpToClosing,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,4 +1,7 @@
-use std::ops::{Add, Sub};
+use std::{
+    collections::HashMap,
+    ops::{Add, Sub},
+};
 
 use crate::text_object::cursor::Cursor;
 use ropey::Rope;
@@ -329,10 +332,92 @@ impl TextObject<Write> {
         let curr_line = self.content.line_to_char(cursor.row());
         self.content.insert(curr_line, &self.line_break.to_string());
     }
+
+    pub fn find_oposing_token(&mut self, cursor: &Cursor) -> (usize, usize) {
+        let start_idx = self.content.line_to_char(cursor.row()).add(cursor.col());
+        let mut combinations = HashMap::new();
+        let pairs = [('<', '>'), ('(', ')'), ('[', ']'), ('{', '}')];
+
+        pairs.iter().for_each(|pair| {
+            combinations.insert(pair.0, pair.1);
+            combinations.insert(pair.1, pair.0);
+        });
+
+        let mut look_forward = true;
+        let mut token_to_search = char::default();
+        let mut curr_open = 0;
+        let mut walked = 0;
+
+        if let Some(initial_char) = self.content.get_char(start_idx) {
+            match initial_char {
+                c if is_opening_token(c) => {
+                    token_to_search = *combinations.get(&c).unwrap();
+                    curr_open = curr_open.add(1);
+                }
+                c if is_closing_token(c) => {
+                    token_to_search = *combinations.get(&c).unwrap();
+                    curr_open = curr_open.add(1);
+                    look_forward = false;
+                }
+                _ => {}
+            }
+
+            if look_forward {
+                for char in self.content.chars_at(start_idx.add(1)) {
+                    char.eq(combinations.get(&token_to_search).unwrap())
+                        .then(|| curr_open = curr_open.add(1));
+
+                    char.eq(&token_to_search)
+                        .then(|| curr_open = curr_open.sub(1));
+
+                    walked = walked.add(1);
+
+                    if curr_open.eq(&0) {
+                        break;
+                    }
+                }
+            } else {
+                for _ in (0..start_idx.saturating_sub(1)).rev() {
+                    let char = self.content.char(start_idx.saturating_sub(walked));
+                    char.eq(combinations.get(&token_to_search).unwrap())
+                        .then(|| curr_open = curr_open.add(1));
+
+                    char.eq(&token_to_search)
+                        .then(|| curr_open = curr_open.sub(1));
+
+                    walked = walked.add(1);
+
+                    if curr_open.eq(&0) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        if look_forward {
+            let curr_row = self.content.char_to_line(start_idx.add(walked));
+            let curr_row_start = self.content.line_to_char(curr_row);
+            let curr_col = start_idx.add(walked).saturating_sub(curr_row_start);
+            (curr_col, curr_row)
+        } else {
+            let curr_row = self.content.char_to_line(start_idx.sub(walked));
+            let curr_row_start = self.content.line_to_char(curr_row);
+            let curr_col = start_idx.sub(walked).sub(curr_row_start);
+            (curr_col, curr_row)
+        }
+    }
 }
 
 impl<State> std::fmt::Display for TextObject<State> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.content.to_string())
     }
+}
+
+fn is_opening_token(char: char) -> bool {
+    matches!(char, '(' | '{' | '[' | '<')
+}
+
+fn is_closing_token(char: char) -> bool {
+    matches!(char, ')' | '}' | ']' | '>')
 }
