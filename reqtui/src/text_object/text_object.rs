@@ -256,6 +256,37 @@ impl TextObject<Write> {
         (curr_col, curr_row)
     }
 
+    pub fn find_empty_line_above(&self, cursor: &Cursor) -> usize {
+        let mut new_row = cursor.row().saturating_sub(1);
+
+        while let Some(line) = self.content.get_line(new_row) {
+            if line.to_string().eq(&self.line_break.to_string()) {
+                break;
+            }
+
+            if new_row.eq(&0) {
+                break;
+            }
+            new_row = new_row.saturating_sub(1);
+        }
+
+        new_row
+    }
+
+    pub fn find_empty_line_below(&self, cursor: &Cursor) -> usize {
+        let mut new_row = cursor.row().add(1);
+        let len_lines = self.len_lines();
+
+        while let Some(line) = self.content.get_line(new_row) {
+            if line.to_string().eq(&self.line_break.to_string()) {
+                break;
+            }
+            new_row = new_row.add(1);
+        }
+
+        usize::min(new_row, len_lines.saturating_sub(1))
+    }
+
     pub fn len_lines(&self) -> usize {
         self.content.len_lines()
     }
@@ -337,7 +368,6 @@ impl TextObject<Write> {
         let start_idx = self.content.line_to_char(cursor.row()).add(cursor.col());
         let mut combinations = HashMap::new();
         let pairs = [('<', '>'), ('(', ')'), ('[', ']'), ('{', '}')];
-
         pairs.iter().for_each(|pair| {
             combinations.insert(pair.0, pair.1);
             combinations.insert(pair.1, pair.0);
@@ -345,8 +375,7 @@ impl TextObject<Write> {
 
         let mut look_forward = true;
         let mut token_to_search = char::default();
-        let mut curr_open = 0;
-        let mut walked = 0;
+        let (mut curr_open, mut walked) = (0, 0);
 
         if let Some(initial_char) = self.content.get_char(start_idx) {
             match initial_char {
@@ -362,36 +391,46 @@ impl TextObject<Write> {
                 _ => {}
             }
 
-            if look_forward {
-                for char in self.content.chars_at(start_idx.add(1)) {
-                    char.eq(combinations.get(&token_to_search).unwrap())
-                        .then(|| curr_open = curr_open.add(1));
-
-                    char.eq(&token_to_search)
-                        .then(|| curr_open = curr_open.sub(1));
-
-                    walked = walked.add(1);
-
-                    if curr_open.eq(&0) {
-                        break;
-                    }
-                }
+            let range = if look_forward {
+                start_idx.add(1)..self.content.len_chars()
             } else {
-                for _ in (0..start_idx.saturating_sub(1)).rev() {
-                    let char = self.content.char(start_idx.saturating_sub(walked));
-                    char.eq(combinations.get(&token_to_search).unwrap())
-                        .then(|| curr_open = curr_open.add(1));
+                0..start_idx
+            };
 
-                    char.eq(&token_to_search)
-                        .then(|| curr_open = curr_open.sub(1));
+            for i in range {
+                let char = self
+                    .content
+                    .get_char(if look_forward {
+                        i
+                    } else {
+                        start_idx - walked - 1
+                    })
+                    .unwrap_or_default();
 
-                    walked = walked.add(1);
-
-                    if curr_open.eq(&0) {
-                        break;
+                if token_to_search.eq(&char::default()) {
+                    if !is_opening_token(char) {
+                        walked = walked.add(1);
+                        continue;
                     }
+                    token_to_search = *combinations.get(&char).unwrap();
+                }
+
+                char.eq(combinations.get(&token_to_search).unwrap())
+                    .then(|| curr_open = curr_open.add(1));
+
+                char.eq(&token_to_search)
+                    .then(|| curr_open = curr_open.sub(1));
+
+                walked = walked.add(1);
+
+                if curr_open.eq(&0) {
+                    break;
                 }
             }
+        }
+
+        if curr_open.gt(&0) {
+            return (cursor.col(), cursor.row());
         }
 
         if look_forward {

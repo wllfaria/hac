@@ -34,6 +34,8 @@ pub static DEFAULT_CONFIG: &str = r##"
 "S-W" = "MoveAfterWhitespace"
 "S-X" = "DeletePreviousNonWrapping"
 "%" = "JumpToClosing"
+"{" = "JumpToEmptyLineAbove"
+"}" = "JumpToEmptyLineBelow"
 
 [editor_keys.normal.d]
 "w" = "DeleteWord"

@@ -318,6 +318,8 @@ impl<'re> ReqEditor<'re> {
             Action::InsertLineBelow => self.insert_line_below(),
             Action::InsertLineAbove => self.insert_line_above(),
             Action::JumpToClosing => self.jump_to_opposing_token(),
+            Action::JumpToEmptyLineBelow => self.jump_to_empty_line_below(),
+            Action::JumpToEmptyLineAbove => self.jump_to_empty_line_above(),
             Action::Undo => todo!(),
             Action::FindNext => todo!(),
             Action::FindPrevious => todo!(),
@@ -352,6 +354,22 @@ impl<'re> ReqEditor<'re> {
             .saturating_sub(self.col_scroll)
             .eq(&0)
             .then(|| self.col_scroll = self.col_scroll.saturating_sub(1));
+    }
+
+    fn jump_to_empty_line_below(&mut self) {
+        let new_row = self.body.find_empty_line_below(&self.cursor);
+        self.cursor.move_to_row(new_row);
+        self.maybe_scroll_view();
+        let line_len = self.body.line_len(self.cursor.row());
+        self.cursor.maybe_snap_to_col(line_len);
+    }
+
+    fn jump_to_empty_line_above(&mut self) {
+        let new_row = self.body.find_empty_line_above(&self.cursor);
+        self.cursor.move_to_row(new_row);
+        self.maybe_scroll_view();
+        let line_len = self.body.line_len(self.cursor.row());
+        self.cursor.maybe_snap_to_col(line_len);
     }
 
     fn page_up(&mut self) {
