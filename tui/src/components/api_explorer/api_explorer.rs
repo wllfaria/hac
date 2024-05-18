@@ -26,7 +26,7 @@ use reqtui::{
 use std::{
     cell::RefCell,
     collections::HashMap,
-    ops::{Add, Div, Sub},
+    ops::{Add, Div, Mul, Sub},
     rc::Rc,
 };
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
@@ -45,6 +45,7 @@ pub struct ExplorerLayout {
 pub enum Overlays {
     None,
     CreateRequest,
+    RequestMethod,
 }
 
 #[derive(PartialEq)]
@@ -67,7 +68,6 @@ pub enum FormFocus {
     NameInput,
     ReqButton,
     DirButton,
-    Parent,
     ConfirmButton,
     CancelButton,
 }
@@ -78,8 +78,7 @@ impl FormFocus {
             Self::NameInput => FormFocus::CancelButton,
             Self::ReqButton => FormFocus::NameInput,
             Self::DirButton => FormFocus::ReqButton,
-            Self::Parent => FormFocus::DirButton,
-            Self::ConfirmButton => FormFocus::Parent,
+            Self::ConfirmButton => FormFocus::DirButton,
             Self::CancelButton => FormFocus::ConfirmButton,
         }
     }
@@ -88,22 +87,33 @@ impl FormFocus {
         match self {
             Self::NameInput => FormFocus::ReqButton,
             Self::ReqButton => FormFocus::DirButton,
-            Self::DirButton => FormFocus::Parent,
-            Self::Parent => FormFocus::ConfirmButton,
+            Self::DirButton => FormFocus::ConfirmButton,
             Self::ConfirmButton => FormFocus::CancelButton,
             Self::CancelButton => FormFocus::NameInput,
         }
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct CreateReqFormState {
     pub req_kind: CreateReqKind,
     pub req_name: String,
     pub focus: FormFocus,
+    pub method: RequestMethod,
 }
 
-#[derive(Debug, Default)]
+impl Default for CreateReqFormState {
+    fn default() -> Self {
+        CreateReqFormState {
+            req_kind: CreateReqKind::default(),
+            req_name: String::new(),
+            focus: FormFocus::default(),
+            method: RequestMethod::Get,
+        }
+    }
+}
+
+#[derive(Debug, Default, PartialEq)]
 pub enum CreateReqKind {
     #[default]
     Request,
@@ -491,7 +501,7 @@ impl<'ae> ApiExplorer<'ae> {
         let dir_button_size = Rect::new(
             size.x.add(size.width.div(2)),
             size.y.add(item_height).add(1),
-            size.width.div(2),
+            size.width.div(2).sub(1),
             item_height,
         );
 
@@ -505,7 +515,7 @@ impl<'ae> ApiExplorer<'ae> {
         let cancel_button_size = Rect::new(
             size.x.add(size.width.div(2)),
             size.y.add(size.height.sub(4)),
-            size.width.div(2),
+            size.width.div(2).sub(1),
             item_height,
         );
 
@@ -619,10 +629,9 @@ impl<'ae> ApiExplorer<'ae> {
                 self.create_req_form_state.req_kind = CreateReqKind::Directory;
             }
             (KeyCode::Enter, _, FormFocus::ConfirmButton) => {
-                self.create_new_request();
-                self.create_req_form_state = CreateReqFormState::default();
-                self.curr_overlay = Overlays::None;
+                self.create_or_ask_for_request_method()
             }
+
             (KeyCode::Enter, _, FormFocus::CancelButton) => {
                 self.create_req_form_state = CreateReqFormState::default();
                 self.curr_overlay = Overlays::None;
@@ -632,13 +641,81 @@ impl<'ae> ApiExplorer<'ae> {
 
         Ok(None)
     }
+    fn draw_request_method_form(&mut self, frame: &mut Frame) {
+        draw_overlay(self.colors, frame.size(), "新", frame);
+        let size = self.layout.create_req_form;
+        frame.render_widget(Clear, size);
 
-    fn create_new_request(&mut self) {
+        let item_height = 3;
+        let mut buttons = vec![];
+        let reqs = vec![
+            RequestMethod::Get,
+            RequestMethod::Post,
+            RequestMethod::Put,
+            RequestMethod::Patch,
+            RequestMethod::Delete,
+        ];
+
+        for item in reqs {
+            let border_style = if self.create_req_form_state.method == item {
+                Style::default().fg(self.colors.bright.magenta)
+            } else {
+                Style::default().fg(self.colors.bright.black)
+            };
+
+            buttons.push(
+                Paragraph::new(
+                    item.to_string()
+                        .fg(self.colors.normal.white)
+                        .into_centered_line(),
+                )
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(border_style),
+                ),
+            );
+        }
+
+        let expand_last = buttons.len() % 2 != 0;
+        let right_half = size.width.div(2);
+        let buttons_len = buttons.len();
+        for (i, button) in buttons.into_iter().enumerate() {
+            let padding = if i % 2 != 0 { right_half } else { 0 };
+            let width = if i.eq(&buttons_len.sub(1)) && expand_last {
+                size.width.div(2).sub(1)
+            } else {
+                size.width.sub(1)
+            };
+            let button_size = Rect::new(
+                size.x.add(padding),
+                size.y
+                    .add(item_height)
+                    .add(1)
+                    .add(item_height * (i as u16 / 2)),
+                width,
+                item_height,
+            );
+
+            frame.render_widget(button, button_size);
+        }
+    }
+
+    fn create_or_ask_for_request_method(&mut self) {
+        let form_state = &self.create_req_form_state;
+        if form_state.req_kind.eq(&CreateReqKind::Request) {
+            self.curr_overlay = Overlays::RequestMethod;
+            return;
+        }
+        self.create_and_sync_request();
+    }
+
+    fn create_and_sync_request(&mut self) {
         let form_state = &self.create_req_form_state;
         let new_request = match form_state.req_kind {
             CreateReqKind::Request => RequestKind::Single(Request {
                 name: form_state.req_name.clone(),
-                method: RequestMethod::Get,
+                method: form_state.method.clone(),
                 uri: String::default(),
                 body: None,
                 body_type: None,
@@ -659,6 +736,8 @@ impl<'ae> ApiExplorer<'ae> {
             .expect("should have a sender at this point")
             .clone();
         let schema = self.schema.clone();
+        self.create_req_form_state = CreateReqFormState::default();
+        self.curr_overlay = Overlays::None;
 
         tokio::spawn(async move {
             match reqtui::fs::sync_schema(schema).await {
@@ -695,6 +774,7 @@ impl Component for ApiExplorer<'_> {
 
         match self.curr_overlay {
             Overlays::CreateRequest => self.draw_create_request_form(frame),
+            Overlays::RequestMethod => self.draw_request_method_form(frame),
             Overlays::None => {}
         }
 
@@ -832,9 +912,9 @@ pub fn build_layout(size: Rect) -> ExplorerLayout {
 
     let create_req_form = Rect::new(
         size.width.div(4),
-        size.height.div(2).saturating_sub(7),
+        size.height.div(2).saturating_sub(6),
         size.width.div(2),
-        14,
+        11,
     );
 
     ExplorerLayout {

@@ -2,7 +2,7 @@ pub mod config;
 mod data;
 mod default_config;
 
-pub use config::{load_config, Config, KeyAction};
+pub use config::{load_config, Action, Config, KeyAction};
 pub use data::{get_schemas_dir, setup_data_dir};
 use serde::{Deserialize, Serialize};
 

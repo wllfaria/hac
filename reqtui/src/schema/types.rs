@@ -48,6 +48,18 @@ impl std::fmt::Display for RequestMethod {
     }
 }
 
+impl RequestMethod {
+    pub fn len(&self) -> Option<RequestMethod> {
+        match self {
+            RequestMethod::Get => Some(RequestMethod::Post),
+            RequestMethod::Post => Some(RequestMethod::Put),
+            RequestMethod::Put => Some(RequestMethod::Patch),
+            RequestMethod::Patch => Some(RequestMethod::Delete),
+            RequestMethod::Delete => None,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Request {
     pub method: RequestMethod,

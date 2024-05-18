@@ -685,14 +685,18 @@ impl Eventful for ReqEditor<'_> {
                 Some(key_action) => self.keymap_buffer = Some(key_action.clone()),
                 None => {}
             },
-            EditorMode::Insert => match self.config.editor_keys.insert.get(&key_str) {
-                Some(KeyAction::Simple(action)) => self.handle_action(action),
-                Some(KeyAction::Multiple(actions)) => {
-                    actions.iter().for_each(|a| self.handle_action(a))
+            EditorMode::Insert => {
+                match self.config.editor_keys.insert.get(&key_str) {
+                    Some(KeyAction::Simple(action)) => self.handle_action(action),
+                    Some(KeyAction::Multiple(actions)) => {
+                        actions.iter().for_each(|a| self.handle_action(a))
+                    }
+                    Some(key_action) => self.keymap_buffer = Some(key_action.clone()),
+                    None => self.handle_action(&Action::InsertChar(key_str.chars().nth(0).expect(
+                        "failed to insert char into body. something is wrong with the index",
+                    ))),
                 }
-                Some(key_action) => self.keymap_buffer = Some(key_action.clone()),
-                None => self.handle_action(&Action::InsertChar(key_str.chars().nth(0).unwrap())),
-            },
+            }
         }
 
         self.tree = HIGHLIGHTER.write().unwrap().parse(&self.body.to_string());
