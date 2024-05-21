@@ -423,7 +423,8 @@ impl<'re> ReqEditor<'re> {
     }
 
     fn insert_line_above(&mut self) {
-        self.body.insert_line_above(&self.cursor);
+        self.body
+            .insert_line_above(&self.cursor, self.tree.as_ref());
         self.maybe_scroll_view();
         let line_len = self.body.line_len(self.cursor.row());
         self.cursor.maybe_snap_to_col(line_len);

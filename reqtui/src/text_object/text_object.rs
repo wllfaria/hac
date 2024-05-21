@@ -356,23 +356,17 @@ impl TextObject<Write> {
     }
 
     pub fn insert_line_below(&mut self, cursor: &Cursor, tree: Option<&Tree>) {
-        let indentation = if let Some(tree) = tree {
-            let line_byte_idx = self.content.line_to_byte(cursor.row());
-            let cursor_byte_idx = line_byte_idx.add(cursor.col());
-            let indentation_level = Highlighter::find_indentation_level(tree, cursor_byte_idx);
-            tracing::debug!("{indentation_level}");
-            "  ".repeat(indentation_level)
-        } else {
-            String::new()
-        };
+        let indentation = self.get_scope_aware_indentation(cursor, tree);
         let next_line = self.content.line_to_char(cursor.row().add(1));
         let line_with_indentation = format!("{}{}", indentation, &self.line_break.to_string());
         self.content.insert(next_line, &line_with_indentation);
     }
 
-    pub fn insert_line_above(&mut self, cursor: &Cursor) {
+    pub fn insert_line_above(&mut self, cursor: &Cursor, tree: Option<&Tree>) {
+        let indentation = self.get_scope_aware_indentation(cursor, tree);
         let curr_line = self.content.line_to_char(cursor.row());
-        self.content.insert(curr_line, &self.line_break.to_string());
+        let line_with_indentation = format!("{}{}", indentation, &self.line_break.to_string());
+        self.content.insert(curr_line, &line_with_indentation);
     }
 
     pub fn find_oposing_token(&mut self, cursor: &Cursor) -> (usize, usize) {
@@ -454,6 +448,17 @@ impl TextObject<Write> {
             let curr_row_start = self.content.line_to_char(curr_row);
             let curr_col = start_idx.sub(walked).sub(curr_row_start);
             (curr_col, curr_row)
+        }
+    }
+
+    fn get_scope_aware_indentation(&self, cursor: &Cursor, tree: Option<&Tree>) -> String {
+        if let Some(tree) = tree {
+            let line_byte_idx = self.content.line_to_byte(cursor.row());
+            let cursor_byte_idx = line_byte_idx.add(cursor.col());
+            let indentation_level = Highlighter::find_indentation_level(tree, cursor_byte_idx);
+            "  ".repeat(indentation_level)
+        } else {
+            String::new()
         }
     }
 }
