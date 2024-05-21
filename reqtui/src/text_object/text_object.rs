@@ -3,8 +3,9 @@ use std::{
     ops::{Add, Sub},
 };
 
-use crate::text_object::cursor::Cursor;
+use crate::{syntax::highlighter::Highlighter, text_object::cursor::Cursor};
 use ropey::Rope;
+use tree_sitter::Tree;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum LineBreak {
@@ -354,9 +355,19 @@ impl TextObject<Write> {
         end_idx.sub(start_idx)
     }
 
-    pub fn insert_line_below(&mut self, cursor: &Cursor) {
+    pub fn insert_line_below(&mut self, cursor: &Cursor, tree: Option<&Tree>) {
+        let indentation = if let Some(tree) = tree {
+            let line_byte_idx = self.content.line_to_byte(cursor.row());
+            let cursor_byte_idx = line_byte_idx.add(cursor.col());
+            let indentation_level = Highlighter::find_indentation_level(tree, cursor_byte_idx);
+            tracing::debug!("{indentation_level}");
+            "  ".repeat(indentation_level)
+        } else {
+            String::new()
+        };
         let next_line = self.content.line_to_char(cursor.row().add(1));
-        self.content.insert(next_line, &self.line_break.to_string());
+        let line_with_indentation = format!("{}{}", indentation, &self.line_break.to_string());
+        self.content.insert(next_line, &line_with_indentation);
     }
 
     pub fn insert_line_above(&mut self, cursor: &Cursor) {

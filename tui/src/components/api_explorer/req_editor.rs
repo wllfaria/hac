@@ -321,10 +321,10 @@ impl<'re> ReqEditor<'re> {
             Action::JumpToClosing => self.jump_to_opposing_token(),
             Action::JumpToEmptyLineBelow => self.jump_to_empty_line_below(),
             Action::JumpToEmptyLineAbove => self.jump_to_empty_line_above(),
-            Action::Undo => todo!(),
-            Action::FindNext => todo!(),
-            Action::FindPrevious => todo!(),
-            Action::PasteBelow => todo!(),
+            Action::Undo => {}
+            Action::FindNext => {}
+            Action::FindPrevious => {}
+            Action::PasteBelow => {}
         }
     }
 
@@ -414,7 +414,8 @@ impl<'re> ReqEditor<'re> {
     }
 
     fn insert_line_below(&mut self) {
-        self.body.insert_line_below(&self.cursor);
+        self.body
+            .insert_line_below(&self.cursor, self.tree.as_ref());
         self.cursor.move_down(1);
         self.maybe_scroll_view();
         let line_len = self.body.line_len(self.cursor.row());
@@ -685,18 +686,18 @@ impl Eventful for ReqEditor<'_> {
                 Some(key_action) => self.keymap_buffer = Some(key_action.clone()),
                 None => {}
             },
-            EditorMode::Insert => {
-                match self.config.editor_keys.insert.get(&key_str) {
-                    Some(KeyAction::Simple(action)) => self.handle_action(action),
-                    Some(KeyAction::Multiple(actions)) => {
-                        actions.iter().for_each(|a| self.handle_action(a))
-                    }
-                    Some(key_action) => self.keymap_buffer = Some(key_action.clone()),
-                    None => self.handle_action(&Action::InsertChar(key_str.chars().nth(0).expect(
-                        "failed to insert char into body. something is wrong with the index",
-                    ))),
+            EditorMode::Insert => match self.config.editor_keys.insert.get(&key_str) {
+                Some(KeyAction::Simple(action)) => self.handle_action(action),
+                Some(KeyAction::Multiple(actions)) => {
+                    actions.iter().for_each(|a| self.handle_action(a))
                 }
-            }
+                Some(key_action) => self.keymap_buffer = Some(key_action.clone()),
+                None => {
+                    if let Some(char) = key_str.chars().last() {
+                        self.handle_action(&Action::InsertChar(char));
+                    }
+                }
+            },
         }
 
         self.tree = HIGHLIGHTER.write().unwrap().parse(&self.body.to_string());

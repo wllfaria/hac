@@ -82,4 +82,22 @@ impl Highlighter {
 
         colors
     }
+
+    pub fn find_indentation_level(tree: &Tree, cursor_byte_idx: usize) -> usize {
+        let root_node = tree.root_node();
+        let current_node = root_node
+            .descendant_for_byte_range(cursor_byte_idx, cursor_byte_idx)
+            .unwrap();
+        let mut indent_level: usize = 0;
+        let mut current_node = current_node;
+        while let Some(parent) = current_node.parent() {
+            if parent.kind().eq("pair") {
+                current_node = parent;
+                continue;
+            }
+            current_node = parent;
+            indent_level += 1;
+        }
+        indent_level.saturating_sub(1)
+    }
 }
