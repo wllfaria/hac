@@ -36,6 +36,18 @@ pub enum RequestMethod {
     Delete,
 }
 
+impl RequestMethod {
+    pub fn next(&self) -> Self {
+        match self {
+            RequestMethod::Get => RequestMethod::Post,
+            RequestMethod::Post => RequestMethod::Put,
+            RequestMethod::Put => RequestMethod::Patch,
+            RequestMethod::Patch => RequestMethod::Delete,
+            RequestMethod::Delete => RequestMethod::Get,
+        }
+    }
+}
+
 impl std::fmt::Display for RequestMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

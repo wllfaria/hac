@@ -80,7 +80,10 @@ impl<'a> StatefulWidget for Sidebar<'a> {
 
         let block = Block::default()
             .borders(Borders::ALL)
-            .title("Navigation")
+            .title(vec![
+                "C".fg(self.colors.normal.red).bold(),
+                "ollections".into(),
+            ])
             .border_style(block_border);
 
         block.render(area, buf);

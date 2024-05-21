@@ -15,7 +15,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Style, Stylize},
-    widgets::{Block, Borders, Clear, Paragraph, StatefulWidget},
+    widgets::{Block, Borders, Clear, Padding, Paragraph, StatefulWidget},
     Frame,
 };
 use reqtui::{
@@ -26,7 +26,7 @@ use reqtui::{
 use std::{
     cell::RefCell,
     collections::HashMap,
-    ops::{Add, Div, Mul, Sub},
+    ops::{Add, Div, Sub},
     rc::Rc,
 };
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
@@ -440,7 +440,7 @@ impl<'ae> ApiExplorer<'ae> {
     }
     fn draw_sidebar_hint(&self, frame: &mut Frame) {
         let hint =
-            "[j/k -> navigate] [enter -> select item] [n -> create item] [? -> help] [<C-c> -> quit]"
+            "[j/k -> navigate] [enter -> select item] [n -> create request] [? -> help] [<C-c> -> quit]"
                 .fg(self.colors.normal.magenta)
                 .into_centered_line();
 
@@ -483,13 +483,10 @@ impl<'ae> ApiExplorer<'ae> {
     }
 
     fn draw_create_request_form(&mut self, frame: &mut Frame) {
-        draw_overlay(self.colors, frame.size(), "新", frame);
         let size = self.layout.create_req_form;
-        frame.render_widget(Clear, size);
-
         let item_height = 3;
         let name_input_size =
-            Rect::new(size.x.add(1), size.y.add(1), size.width.sub(2), item_height);
+            Rect::new(size.x.add(1), size.y.add(1), size.width.sub(1), item_height);
 
         let req_button_size = Rect::new(
             size.x.add(1),
@@ -501,7 +498,7 @@ impl<'ae> ApiExplorer<'ae> {
         let dir_button_size = Rect::new(
             size.x.add(size.width.div(2)),
             size.y.add(item_height).add(1),
-            size.width.div(2).sub(1),
+            size.width.div_ceil(2),
             item_height,
         );
 
@@ -515,7 +512,7 @@ impl<'ae> ApiExplorer<'ae> {
         let cancel_button_size = Rect::new(
             size.x.add(size.width.div(2)),
             size.y.add(size.height.sub(4)),
-            size.width.div(2).sub(1),
+            size.width.div_ceil(2),
             item_height,
         );
 
@@ -583,6 +580,13 @@ impl<'ae> ApiExplorer<'ae> {
                     .border_style(cancel_button_border_style),
             );
 
+        let full_block = Block::default()
+            .padding(Padding::uniform(1))
+            .style(Style::default().bg(self.colors.primary.background));
+
+        draw_overlay(self.colors, frame.size(), "新", frame);
+        frame.render_widget(Clear, size);
+        frame.render_widget(full_block, size);
         frame.render_widget(req_button, req_button_size);
         frame.render_widget(dir_button, dir_button_size);
         frame.render_widget(confirm_button, confirm_button_size);
@@ -631,8 +635,7 @@ impl<'ae> ApiExplorer<'ae> {
             (KeyCode::Enter, _, FormFocus::ConfirmButton) => {
                 self.create_or_ask_for_request_method()
             }
-
-            (KeyCode::Enter, _, FormFocus::CancelButton) => {
+            (KeyCode::Enter, _, FormFocus::CancelButton) | (KeyCode::Esc, _, _) => {
                 self.create_req_form_state = CreateReqFormState::default();
                 self.curr_overlay = Overlays::None;
             }
@@ -641,10 +644,34 @@ impl<'ae> ApiExplorer<'ae> {
 
         Ok(None)
     }
+
+    fn handle_request_method_key_event(
+        &mut self,
+        key_event: KeyEvent,
+    ) -> anyhow::Result<Option<Command>> {
+        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            return Ok(Some(Command::Quit));
+        };
+
+        match (key_event.code, &self.create_req_form_state.method) {
+            (KeyCode::Tab, _) => {
+                self.create_req_form_state.method = self.create_req_form_state.method.next();
+            }
+            (KeyCode::Enter, _) => {
+                self.create_and_sync_request();
+            }
+            (KeyCode::Esc, _) => {
+                self.create_req_form_state = CreateReqFormState::default();
+                self.curr_overlay = Overlays::None;
+            }
+            _ => {}
+        }
+
+        Ok(None)
+    }
+
     fn draw_request_method_form(&mut self, frame: &mut Frame) {
-        draw_overlay(self.colors, frame.size(), "新", frame);
         let size = self.layout.create_req_form;
-        frame.render_widget(Clear, size);
 
         let item_height = 3;
         let mut buttons = vec![];
@@ -677,22 +704,27 @@ impl<'ae> ApiExplorer<'ae> {
             );
         }
 
+        let full_block = Block::default()
+            .padding(Padding::uniform(1))
+            .style(Style::default().bg(self.colors.primary.background));
+
+        draw_overlay(self.colors, frame.size(), "新", frame);
+        frame.render_widget(Clear, size);
+        frame.render_widget(full_block, size);
+
         let expand_last = buttons.len() % 2 != 0;
         let right_half = size.width.div(2);
         let buttons_len = buttons.len();
         for (i, button) in buttons.into_iter().enumerate() {
             let padding = if i % 2 != 0 { right_half } else { 0 };
             let width = if i.eq(&buttons_len.sub(1)) && expand_last {
-                size.width.div(2).sub(1)
-            } else {
                 size.width.sub(1)
+            } else {
+                size.width.div(2)
             };
             let button_size = Rect::new(
-                size.x.add(padding),
-                size.y
-                    .add(item_height)
-                    .add(1)
-                    .add(item_height * (i as u16 / 2)),
+                size.x.add(padding).add(1),
+                size.y.add(1).add(item_height * (i / 2) as u16),
                 width,
                 item_height,
             );
@@ -823,6 +855,7 @@ impl Eventful for ApiExplorer<'_> {
         if self.curr_overlay.ne(&Overlays::None) {
             match self.curr_overlay {
                 Overlays::CreateRequest => return self.handle_create_request_key_event(key_event),
+                Overlays::RequestMethod => return self.handle_request_method_key_event(key_event),
                 _ => {}
             };
 
