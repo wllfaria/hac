@@ -38,4 +38,8 @@ pub trait Component {
     fn register_command_handler(&mut self, sender: UnboundedSender<Command>) -> anyhow::Result<()> {
         Ok(())
     }
+
+    fn handle_tick(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
 }

@@ -27,6 +27,7 @@ fn create_sample_schema() -> Schema {
         path: "any_path".into(),
         requests: Some(vec![
             RequestKind::Single(Request {
+                id: "any id".to_string(),
                 name: "testing".to_string(),
                 uri: "https://jsonplaceholder.typicode.com/users".to_string(),
                 method: RequestMethod::Get,
@@ -34,6 +35,7 @@ fn create_sample_schema() -> Schema {
                 body_type: Some("application/json".to_string()),
             }),
             RequestKind::Single(Request {
+                id: "any_other_id".to_string(),
                 name: "testing".to_string(),
                 uri: "https://jsonplaceholder.typicode.com/users".to_string(),
                 method: RequestMethod::Get,

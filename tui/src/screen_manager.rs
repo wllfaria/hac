@@ -127,6 +127,19 @@ impl Component for ScreenManager<'_> {
             e.resize(new_size)
         }
     }
+
+    fn handle_tick(&mut self) -> anyhow::Result<()> {
+        // currently, only the editor cares about the ticks, used to determine
+        // when to sync changes in disk
+        if let Screens::Editor = &self.curr_screen {
+            self.api_explorer
+                .as_mut()
+                .expect("we are displaying the editor without having one")
+                .handle_tick()?
+        };
+
+        Ok(())
+    }
 }
 
 impl Eventful for ScreenManager<'_> {

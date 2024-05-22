@@ -144,6 +144,7 @@ pub struct ApiExplorer<'ae> {
     curr_overlay: Overlays,
     create_req_form_state: CreateReqFormState,
 
+    sync_interval: std::time::Instant,
     editor: ReqEditor<'ae>,
     editor_tab: ReqEditorTabs,
 
@@ -161,7 +162,7 @@ impl<'ae> ApiExplorer<'ae> {
     ) -> Self {
         let layout = build_layout(size);
 
-        let selected_request = schema.requests.as_ref().and_then(|requests| {
+        let mut selected_request = schema.requests.as_ref().and_then(|requests| {
             requests.first().and_then(|req| {
                 if let RequestKind::Single(req) = req {
                     Some(Rc::new(RefCell::new(req.clone())))
@@ -185,7 +186,7 @@ impl<'ae> ApiExplorer<'ae> {
             colors,
             config,
 
-            editor: ReqEditor::new(colors, selected_request.clone(), layout.req_editor, config),
+            editor: ReqEditor::new(colors, selected_request.as_mut(), layout.req_editor, config),
             editor_tab: ReqEditorTabs::Request,
 
             res_viewer: ResViewer::new(colors, None),
@@ -206,6 +207,7 @@ impl<'ae> ApiExplorer<'ae> {
             curr_overlay: Overlays::None,
             create_req_form_state: CreateReqFormState::default(),
 
+            sync_interval: std::time::Instant::now(),
             response_rx,
             request_tx,
             layout,
@@ -230,7 +232,7 @@ impl<'ae> ApiExplorer<'ae> {
                             self.selected_request = Some(Rc::new(RefCell::new(req.clone())));
                             self.editor = ReqEditor::new(
                                 self.colors,
-                                self.selected_request.clone(),
+                                self.selected_request.as_mut(),
                                 self.layout.req_editor,
                                 self.config,
                             );
@@ -746,6 +748,7 @@ impl<'ae> ApiExplorer<'ae> {
         let form_state = &self.create_req_form_state;
         let new_request = match form_state.req_kind {
             CreateReqKind::Request => RequestKind::Single(Request {
+                id: uuid::Uuid::new_v4().to_string(),
                 name: form_state.req_name.clone(),
                 method: form_state.method.clone(),
                 uri: String::default(),
@@ -758,19 +761,58 @@ impl<'ae> ApiExplorer<'ae> {
             }),
         };
 
-        if let Some(requests) = self.schema.requests.as_mut() {
-            requests.push(new_request);
-        }
+        self.schema
+            .requests
+            .get_or_insert_with(Vec::new)
+            .push(new_request);
 
+        self.create_req_form_state = CreateReqFormState::default();
+        self.curr_overlay = Overlays::None;
+
+        self.sync_schema_changes();
+    }
+
+    fn sync_schema_changes(&mut self) {
         let sender = self
             .sender
             .as_ref()
             .expect("should have a sender at this point")
             .clone();
-        let schema = self.schema.clone();
-        self.create_req_form_state = CreateReqFormState::default();
-        self.curr_overlay = Overlays::None;
 
+        let mut schema = self.schema.clone();
+        if let Some(request) = self.selected_request.as_ref() {
+            let mut request = request.borrow().clone();
+            let body = self.editor.body().to_string();
+            if !body.is_empty() {
+                request.body = Some(body);
+                request.body_type = Some("application/json".into());
+            }
+
+            schema
+                .requests
+                .as_mut()
+                .expect("no requests on schema, but we have a selected request")
+                .iter_mut()
+                .for_each(|other| match other {
+                    RequestKind::Single(inner) => {
+                        tracing::debug!("inner: {}, request: {}", inner.id, request.id);
+                        request
+                            .id
+                            .eq(&inner.id)
+                            .then(|| std::mem::swap(inner, &mut request));
+                    }
+                    RequestKind::Nested(dir) => dir.requests.iter_mut().for_each(|other| {
+                        if let RequestKind::Single(inner) = other {
+                            request
+                                .id
+                                .eq(&inner.id)
+                                .then(|| std::mem::swap(inner, &mut request));
+                        }
+                    }),
+                });
+        }
+
+        self.sync_interval = std::time::Instant::now();
         tokio::spawn(async move {
             match reqtui::fs::sync_schema(schema).await {
                 Ok(_) => {}
@@ -835,6 +877,13 @@ impl Component for ApiExplorer<'_> {
             frame.set_cursor(col_with_offset, row_with_offset);
         }
 
+        Ok(())
+    }
+
+    fn handle_tick(&mut self) -> anyhow::Result<()> {
+        if self.sync_interval.elapsed().as_secs().ge(&5) {
+            self.sync_schema_changes();
+        }
         Ok(())
     }
 
@@ -1035,6 +1084,7 @@ mod tests {
 
     fn create_root_one() -> RequestKind {
         RequestKind::Single(Request {
+            id: "any id".to_string(),
             method: RequestMethod::Get,
             name: "Root1".to_string(),
             uri: "/root1".to_string(),
@@ -1045,6 +1095,7 @@ mod tests {
 
     fn create_child_one() -> RequestKind {
         RequestKind::Single(Request {
+            id: "any id".to_string(),
             method: RequestMethod::Post,
             name: "Child1".to_string(),
             uri: "/nested1/child1".to_string(),
@@ -1055,6 +1106,7 @@ mod tests {
 
     fn create_child_two() -> RequestKind {
         RequestKind::Single(Request {
+            id: "any id".to_string(),
             method: RequestMethod::Put,
             name: "Child2".to_string(),
             uri: "/nested1/child2".to_string(),
@@ -1065,6 +1117,7 @@ mod tests {
 
     fn create_not_used() -> RequestKind {
         RequestKind::Single(Request {
+            id: "any id".to_string(),
             method: RequestMethod::Put,
             name: "NotUsed".to_string(),
             uri: "/not/used".to_string(),
@@ -1086,6 +1139,7 @@ mod tests {
 
     fn create_root_two() -> RequestKind {
         RequestKind::Single(Request {
+            id: "any id".to_string(),
             method: RequestMethod::Delete,
             name: "Root2".to_string(),
             uri: "/root2".to_string(),

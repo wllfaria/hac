@@ -73,8 +73,6 @@ impl StatefulWidget for Input<'_> {
 
 #[cfg(test)]
 mod tests {
-    use ratatui::widgets::BorderType;
-
     use super::*;
 
     #[test]

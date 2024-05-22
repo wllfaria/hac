@@ -20,10 +20,11 @@ pub struct EventPool {
     event_tx: tokio::sync::mpsc::UnboundedSender<Event>,
     task: JoinHandle<()>,
     frame_rate: f64,
+    tick_rate: f64,
 }
 
 impl EventPool {
-    pub fn new(frame_rate: f64) -> Self {
+    pub fn new(frame_rate: f64, tick_rate: f64) -> Self {
         let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
         let task = tokio::spawn(async {});
 
@@ -32,17 +33,20 @@ impl EventPool {
             event_tx,
             task,
             frame_rate,
+            tick_rate,
         }
     }
 
     #[cfg_attr(test, mutants::skip)]
     pub fn start(&mut self) {
         let render_delay = std::time::Duration::from_secs_f64(1.0.div(self.frame_rate));
+        let tick_delay = std::time::Duration::from_secs_f64(1.0.div(self.tick_rate));
 
         let event_tx = self.event_tx.clone();
         self.task = tokio::spawn(async move {
             let mut reader = crossterm::event::EventStream::new();
             let mut render_interval = tokio::time::interval(render_delay);
+            let mut tick_interval = tokio::time::interval(tick_delay);
 
             event_tx
                 .send(Event::Init)
@@ -50,6 +54,7 @@ impl EventPool {
 
             loop {
                 let render_delay = render_interval.tick();
+                let tick_delay = tick_interval.tick();
                 let crossterm_event = reader.next().fuse();
 
                 tokio::select! {
@@ -68,6 +73,9 @@ impl EventPool {
                             None => {}
                         }
                     }
+                    _ = tick_delay => {
+                        event_tx.send(Event::Tick).unwrap();
+                    },
                     _ = render_delay => {
                         event_tx.send(Event::Render).unwrap();
                     },

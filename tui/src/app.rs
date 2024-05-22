@@ -24,7 +24,7 @@ impl<'app> App<'app> {
         let terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
         Ok(Self {
             screen_manager: ScreenManager::new(terminal.size()?, colors, schemas, config)?,
-            event_pool: EventPool::new(60f64),
+            event_pool: EventPool::new(60f64, 30f64),
             should_quit: false,
             terminal,
         })
@@ -42,7 +42,7 @@ impl<'app> App<'app> {
         loop {
             if let Some(event) = self.event_pool.next().await {
                 match event {
-                    Event::Tick => {}
+                    Event::Tick => self.screen_manager.handle_tick()?,
                     Event::Resize(new_size) => self.screen_manager.resize(new_size),
                     Event::Render => {
                         self.terminal.draw(|f| {

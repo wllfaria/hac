@@ -74,6 +74,7 @@ impl RequestMethod {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Request {
+    pub id: String,
     pub method: RequestMethod,
     pub name: String,
     pub uri: String,

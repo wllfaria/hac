@@ -106,7 +106,7 @@ pub struct ReqEditor<'re> {
 impl<'re> ReqEditor<'re> {
     pub fn new(
         colors: &'re colors::Colors,
-        request: Option<Rc<RefCell<Request>>>,
+        request: Option<&mut Rc<RefCell<Request>>>,
         size: Rect,
         config: &'re config::Config,
     ) -> Self {
@@ -138,6 +138,10 @@ impl<'re> ReqEditor<'re> {
 
             keymap_buffer: None,
         }
+    }
+
+    pub fn body(&self) -> &TextObject<Write> {
+        &self.body
     }
 
     pub fn layout(&self) -> &ReqEditorLayout {

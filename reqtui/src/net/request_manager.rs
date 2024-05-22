@@ -20,7 +20,7 @@ pub enum ReqtuiNetRequest {
     Error(String),
 }
 
-#[tracing::instrument(skip(response_tx))]
+#[tracing::instrument(skip_all)]
 pub fn handle_request(request: Request, response_tx: UnboundedSender<ReqtuiNetRequest>) {
     tracing::debug!("starting to handle user request");
     tokio::spawn(async move {
