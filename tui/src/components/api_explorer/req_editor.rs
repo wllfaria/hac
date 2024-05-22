@@ -183,8 +183,7 @@ impl<'re> ReqEditor<'re> {
             .add(cursor.content.len())
             .add(percentage.content.len());
 
-        let padding = Span::from(" ".repeat(size.width.sub(content_len as u16).into()))
-            .bg(self.colors.normal.black);
+        let padding = Span::from(" ".repeat(size.width.sub(content_len as u16).into()));
 
         match self.editor_mode {
             EditorMode::Insert => {
