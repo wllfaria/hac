@@ -783,11 +783,16 @@ impl<'ae> ApiExplorer<'ae> {
         if let Some(request) = self.selected_request.as_ref() {
             let mut request = request.borrow().clone();
             let body = self.editor.body().to_string();
+            // this is not the best idea for when we start implementing other kinds of
+            // body types like GraphQL
             if !body.is_empty() {
                 request.body = Some(body);
                 request.body_type = Some("application/json".into());
             }
 
+            // we might later on decide to keep track of the actual dir/request index
+            // so we dont have to go over all the possible requests, this might be a
+            // problem for huge collections, but I haven't tested
             schema
                 .requests
                 .as_mut()
@@ -795,18 +800,11 @@ impl<'ae> ApiExplorer<'ae> {
                 .iter_mut()
                 .for_each(|other| match other {
                     RequestKind::Single(inner) => {
-                        tracing::debug!("inner: {}, request: {}", inner.id, request.id);
-                        request
-                            .id
-                            .eq(&inner.id)
-                            .then(|| std::mem::swap(inner, &mut request));
+                        request.id.eq(&inner.id).then(|| *inner = request.clone());
                     }
                     RequestKind::Nested(dir) => dir.requests.iter_mut().for_each(|other| {
                         if let RequestKind::Single(inner) = other {
-                            request
-                                .id
-                                .eq(&inner.id)
-                                .then(|| std::mem::swap(inner, &mut request));
+                            request.id.eq(&inner.id).then(|| *inner = request.clone());
                         }
                     }),
                 });
