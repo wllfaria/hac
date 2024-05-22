@@ -78,7 +78,7 @@ impl Default for PrimaryColors {
     fn default() -> Self {
         PrimaryColors {
             foreground: Color::Rgb(0x0F, 0x14, 0x19),
-            background: Color::Rgb(0x1f, 0x1f, 0x28),
+            background: Color::Rgb(0x18, 0x16, 0x16),
             accent: Color::Rgb(0xb6, 0x92, 0x7b),
             hover: Color::Rgb(0x38, 0x38, 0x38),
         }
