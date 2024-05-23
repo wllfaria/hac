@@ -1,7 +1,4 @@
-use crate::collection::{
-    errors::CollectionError,
-    types::{Collection, Info},
-};
+use crate::collection::types::{Collection, Info};
 use std::{
     path::Path,
     time::{self, UNIX_EPOCH},
@@ -27,7 +24,7 @@ where
         let collection_name = collections_dir.as_ref().join(file_name);
         let file = std::fs::read_to_string(&collection_name)?;
         let mut collection: Collection = serde_json::from_str(&file)?;
-        collection.path = collection_name;
+        collection.path = collection_name.join(".json");
         collections.push(collection);
     }
 
@@ -36,10 +33,7 @@ where
     Ok(collections)
 }
 
-pub fn create_from_form(
-    name: String,
-    description: String,
-) -> anyhow::Result<Collection, CollectionError> {
+pub fn create_from_form(name: String, description: String) -> Collection {
     let name = if name.is_empty() {
         let now = time::SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -54,12 +48,25 @@ pub fn create_from_form(
     let name_as_file_name = name.to_lowercase().replace(' ', "_");
     let collection_name = collections_dir.join(name_as_file_name);
 
-    Ok(Collection {
+    Collection {
         info: Info {
             name,
             description: Some(description),
         },
         requests: None,
-        path: collection_name,
-    })
+        path: format!("{}.json", collection_name.to_string_lossy()).into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_creating_from_form() {
+        let collection = create_from_form("any valid name".into(), "any desctiption".into());
+
+        assert!(collection.path.to_string_lossy().ends_with(".json"));
+        assert!(collection.info.name.eq("any valid name"));
+        assert!(collection.info.description.is_some())
+    }
 }

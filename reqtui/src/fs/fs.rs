@@ -19,7 +19,7 @@ pub async fn create_collection(
     name: String,
     description: String,
 ) -> anyhow::Result<Collection, FsError> {
-    let collection = create_from_form(name, description).map_err(|_| FsError::Unknown)?;
+    let collection = create_from_form(name, description);
 
     if collection.path.exists() {
         return Err(FsError::CollectionAlreadyExists(
