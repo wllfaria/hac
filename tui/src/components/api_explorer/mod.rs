@@ -5,4 +5,4 @@ mod req_uri;
 mod res_viewer;
 mod sidebar;
 
-pub use api_explorer::ApiExplorer;
+pub use api_explorer::CollectionViewer;

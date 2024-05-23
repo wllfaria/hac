@@ -23,7 +23,7 @@ fn get_data_dir() -> PathBuf {
 }
 
 #[tracing::instrument(err)]
-pub fn get_schemas_dir() -> anyhow::Result<PathBuf> {
+pub fn get_collections_dir() -> anyhow::Result<PathBuf> {
     let data_dir = get_data_dir();
     let schemas_dir = data_dir.join(SCHEMAS_DIR);
 

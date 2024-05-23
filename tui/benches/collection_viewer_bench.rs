@@ -10,8 +10,8 @@ use reqtui::{
 };
 use tree_sitter::Tree;
 use tui::{
-    components::{api_explorer::ApiExplorer, Component, Eventful},
-    utils::build_styled_content,
+    components::{api_explorer::CollectionViewer, Eventful, Page},
+    utils::build_syntax_highlighted_lines,
 };
 
 fn main() {
@@ -46,7 +46,7 @@ fn create_sample_schema() -> Schema {
     }
 }
 
-fn feed_keys(widget: &mut ApiExplorer, key_codes: Vec<KeyCode>) {
+fn feed_keys(widget: &mut CollectionViewer, key_codes: Vec<KeyCode>) {
     key_codes.into_iter().for_each(|code| {
         widget
             .handle_key_event(KeyEvent {
@@ -65,7 +65,7 @@ fn handling_key_events() {
     let schema = create_sample_schema();
     let size = Rect::new(0, 0, 80, 24);
     let config = config::load_config();
-    let mut api_explorer = ApiExplorer::new(size, schema, &colors, &config);
+    let mut api_explorer = CollectionViewer::new(size, schema, &colors, &config);
     let mut terminal = Terminal::new(TestBackend::new(size.width, size.height)).unwrap();
     let mut frame = terminal.get_frame();
 
@@ -93,7 +93,7 @@ fn creating_with_highlight() {
     let schema = create_sample_schema();
     let size = Rect::new(0, 0, 80, 24);
     let config = config::load_config();
-    let mut api_explorer = ApiExplorer::new(size, schema, &colors, &config);
+    let mut api_explorer = CollectionViewer::new(size, schema, &colors, &config);
     let mut terminal = Terminal::new(TestBackend::new(size.width, size.height)).unwrap();
     let _frame = terminal.get_frame();
 
@@ -141,5 +141,5 @@ lazy_static! {
 #[divan::bench]
 fn benchmarking_building_content() {
     let colors = colors::Colors::default();
-    build_styled_content(&BODY, TREE.as_ref(), &colors);
+    build_syntax_highlighted_lines(&BODY, TREE.as_ref(), &colors);
 }

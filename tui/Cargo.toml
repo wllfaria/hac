@@ -36,5 +36,5 @@ bench = false
 path = "src/main.rs"
 
 [[bench]]
-name = "api_explorer"
+name = "collection_viewer_bench"
 harness = false

@@ -1,5 +1,5 @@
 use crate::{
-    components::{Component, Eventful},
+    components::{Eventful, Page},
     event_pool::{Event, EventPool},
     screen_manager::ScreenManager,
 };
@@ -30,6 +30,8 @@ impl<'app> App<'app> {
         })
     }
 
+    /// this is the main method which starts the event loop task, listen for events and commands
+    /// to pass them down the chain, and render the terminal screen
     pub async fn run(&mut self) -> anyhow::Result<()> {
         let (command_tx, mut command_rx) = mpsc::unbounded_channel();
         self.event_pool.start();
@@ -54,22 +56,22 @@ impl<'app> App<'app> {
                             }
                         })?;
                     }
-                    _ => {}
+                    event => {
+                        if let Some(command) =
+                            self.screen_manager.handle_event(Some(event.clone()))?
+                        {
+                            command_tx
+                                .send(command)
+                                .expect("failed to send command through channel")
+                        }
+                    }
                 };
-
-                if let Some(command) = self.screen_manager.handle_event(Some(event.clone()))? {
-                    command_tx
-                        .send(command)
-                        .expect("failed to send command through channel")
-                }
             }
 
             while let Ok(command) = command_rx.try_recv() {
                 match command {
                     Command::Quit => self.should_quit = true,
-                    Command::SelectSchema(_) => self.screen_manager.handle_command(command),
-                    Command::CreateSchema(_) => self.screen_manager.handle_command(command),
-                    Command::Error(_) => self.screen_manager.handle_command(command),
+                    _ => self.screen_manager.handle_command(command),
                 }
             }
 
@@ -83,14 +85,18 @@ impl<'app> App<'app> {
     }
 }
 
+/// before initializing the app, we must setup the terminal to enable all the features
+/// we need, such as raw mode and entering the alternate screen
 fn startup() -> anyhow::Result<()> {
     crossterm::terminal::enable_raw_mode()?;
-    crossterm::execute!(std::io::stdout(), crossterm::terminal::EnterAlternateScreen,)?;
+    crossterm::execute!(std::io::stdout(), crossterm::terminal::EnterAlternateScreen)?;
     Ok(())
 }
 
+/// before shutting down we must reverse the changes we made to the users terminal, allowing
+/// them have a usable terminal
 fn shutdown() -> anyhow::Result<()> {
     crossterm::terminal::disable_raw_mode()?;
-    crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen,)?;
+    crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen)?;
     Ok(())
 }

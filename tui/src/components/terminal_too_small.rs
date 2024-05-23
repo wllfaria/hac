@@ -1,4 +1,4 @@
-use crate::components::Component;
+use crate::components::Page;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
     style::Stylize,
@@ -7,11 +7,13 @@ use ratatui::{
     Frame,
 };
 
-pub struct TerminalTooSmall<'a> {
-    colors: &'a colors::Colors,
+/// `TerminalTooSmall` as the name suggests is a screen rendered by the
+/// `screen_manager` when the terminal gets smaller than a certain threshold,
+/// this page will display over everything and will automatically be hidden
+/// when the terminal gets bigger than said threshold
+pub struct TerminalTooSmall<'tts> {
+    colors: &'tts colors::Colors,
 }
-
-pub struct TerminalTooSmallLayout {}
 
 impl<'a> TerminalTooSmall<'a> {
     pub fn new(colors: &'a colors::Colors) -> Self {
@@ -19,7 +21,7 @@ impl<'a> TerminalTooSmall<'a> {
     }
 }
 
-impl Component for TerminalTooSmall<'_> {
+impl Page for TerminalTooSmall<'_> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         let layout = build_layout(size);
 
@@ -43,6 +45,10 @@ impl Component for TerminalTooSmall<'_> {
 
         Ok(())
     }
+
+    // we purposefully don't do nothing here, as this page automatically adapts to the
+    // size of the window when rendering
+    fn resize(&mut self, _new_size: Rect) {}
 }
 
 fn build_layout(size: Rect) -> Rect {

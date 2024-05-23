@@ -1,6 +1,6 @@
 use reqtui::{net::request_manager::ReqtuiResponse, syntax::highlighter::HIGHLIGHTER};
 
-use crate::utils::build_styled_content;
+use crate::utils::build_syntax_highlighted_lines;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
@@ -119,7 +119,8 @@ impl<'a> ResViewer<'a> {
 
         if let Some(ref res) = response {
             let pretty_body = res.borrow().pretty_body.to_string();
-            self.lines = build_styled_content(&pretty_body, self.tree.as_ref(), self.colors);
+            self.lines =
+                build_syntax_highlighted_lines(&pretty_body, self.tree.as_ref(), self.colors);
         }
 
         self.response = response;

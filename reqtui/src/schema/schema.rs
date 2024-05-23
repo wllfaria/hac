@@ -10,7 +10,7 @@ use super::{
 
 #[tracing::instrument(err)]
 pub fn get_schemas_from_config() -> anyhow::Result<Vec<Schema>> {
-    let schemas_dir = config::get_schemas_dir()?;
+    let schemas_dir = config::get_collections_dir()?;
     get_schemas(schemas_dir)
 }
 
@@ -48,7 +48,8 @@ pub fn create_from_form(name: String, description: String) -> anyhow::Result<Sch
         name
     };
 
-    let schemas_dir = config::get_schemas_dir().map_err(|e| SchemaError::IOError(e.to_string()))?;
+    let schemas_dir =
+        config::get_collections_dir().map_err(|e| SchemaError::IOError(e.to_string()))?;
     let name_as_file_name = name.to_lowercase().replace(' ', "_");
     let schema_name = schemas_dir.join(name_as_file_name);
 

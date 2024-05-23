@@ -6,7 +6,7 @@ use std::{
     io::Write,
 };
 use tempfile::{tempdir, TempDir};
-use tui::components::{dashboard::Dashboard, Component, Eventful};
+use tui::components::{dashboard::CollectionList, Eventful, Page};
 
 fn setup_temp_schemas(amount: usize) -> (TempDir, String) {
     let tmp_data_dir = tempdir().expect("Failed to create temp data dir");
@@ -30,7 +30,7 @@ fn setup_temp_schemas(amount: usize) -> (TempDir, String) {
     (tmp_data_dir, tmp_dir.to_string_lossy().to_string())
 }
 
-fn feed_keys(dashboard: &mut Dashboard, events: &[KeyEvent]) {
+fn feed_keys(dashboard: &mut CollectionList, events: &[KeyEvent]) {
     for event in events {
         _ = dashboard.handle_key_event(*event);
     }
@@ -49,7 +49,7 @@ fn get_rendered_from_buffer(frame: &mut Frame, size: Rect) -> Vec<String> {
 fn test_draw_empty_message() {
     let colors = colors::Colors::default();
     let size = Rect::new(0, 0, 80, 22);
-    let mut dashboard = Dashboard::new(size, &colors, vec![]).unwrap();
+    let mut dashboard = CollectionList::new(size, &colors, vec![]).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
 
@@ -80,7 +80,7 @@ fn test_draw_no_matches_message() {
     let size = Rect::new(0, 0, 80, 22);
     let (_guard, path) = setup_temp_schemas(3);
     let schemas = schema::schema::get_schemas(path).unwrap();
-    let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+    let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
 
@@ -130,7 +130,7 @@ fn draw_hint_text() {
     let size = Rect::new(0, 0, 80, 22);
     let (_guard, path) = setup_temp_schemas(3);
     let schemas = schema::schema::get_schemas(path).unwrap();
-    let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+    let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
 
@@ -150,7 +150,7 @@ fn draw_filter_prompt() {
     let size = Rect::new(0, 0, 80, 22);
     let (_guard, path) = setup_temp_schemas(3);
     let schemas = schema::schema::get_schemas(path).unwrap();
-    let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+    let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
     let expected =
@@ -184,7 +184,7 @@ fn draw_filter_prompt() {
 fn test_draw_title() {
     let colors = colors::Colors::default();
     let size = Rect::new(0, 0, 80, 22);
-    let mut dashboard = Dashboard::new(size, &colors, vec![]).unwrap();
+    let mut dashboard = CollectionList::new(size, &colors, vec![]).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
 
@@ -213,7 +213,7 @@ fn test_draw_title() {
 fn test_draw_error() {
     let colors = colors::Colors::default();
     let size = Rect::new(0, 0, 80, 22);
-    let mut dashboard = Dashboard::new(size, &colors, vec![]).unwrap();
+    let mut dashboard = CollectionList::new(size, &colors, vec![]).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
 
@@ -259,7 +259,7 @@ fn test_draw_error() {
 fn test_draw_help() {
     let colors = colors::Colors::default();
     let size = Rect::new(0, 0, 80, 22);
-    let mut dashboard = Dashboard::new(size, &colors, vec![]).unwrap();
+    let mut dashboard = CollectionList::new(size, &colors, vec![]).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
 
@@ -308,7 +308,7 @@ fn test_draw_help() {
 fn test_draw_form_popup() {
     let colors = colors::Colors::default();
     let size = Rect::new(0, 0, 80, 22);
-    let mut dashboard = Dashboard::new(size, &colors, vec![]).unwrap();
+    let mut dashboard = CollectionList::new(size, &colors, vec![]).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
 
@@ -361,7 +361,7 @@ fn test_draw_delete_prompt() {
     let size = Rect::new(0, 0, 80, 22);
     let (_guard, path) = setup_temp_schemas(3);
     let schemas = schema::schema::get_schemas(path).unwrap();
-    let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+    let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
 
@@ -414,7 +414,7 @@ fn test_draw_schema_list() {
     let size = Rect::new(0, 0, 80, 22);
     let (_guard, path) = setup_temp_schemas(3);
     let schemas = schema::schema::get_schemas(path).unwrap();
-    let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+    let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
 

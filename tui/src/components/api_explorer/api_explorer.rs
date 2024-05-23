@@ -7,7 +7,7 @@ use crate::components::{
     },
     input::Input,
     overlay::draw_overlay,
-    Component, Eventful,
+    Eventful, Page,
 };
 use anyhow::Context;
 use config::EditorMode;
@@ -121,7 +121,7 @@ pub enum CreateReqKind {
 }
 
 #[derive(Debug)]
-pub struct ApiExplorer<'ae> {
+pub struct CollectionViewer<'ae> {
     schema: Schema,
     colors: &'ae colors::Colors,
     config: &'ae config::Config,
@@ -153,7 +153,7 @@ pub struct ApiExplorer<'ae> {
     responses_map: HashMap<Request, Rc<RefCell<ReqtuiResponse>>>,
 }
 
-impl<'ae> ApiExplorer<'ae> {
+impl<'ae> CollectionViewer<'ae> {
     pub fn new(
         size: Rect,
         schema: Schema,
@@ -179,7 +179,7 @@ impl<'ae> ApiExplorer<'ae> {
 
         let (request_tx, response_rx) = unbounded_channel::<ReqtuiNetRequest>();
 
-        ApiExplorer {
+        CollectionViewer {
             schema,
             focused_pane: PaneFocus::ReqUri,
             selected_pane: None,
@@ -825,7 +825,7 @@ impl<'ae> ApiExplorer<'ae> {
     }
 }
 
-impl Component for ApiExplorer<'_> {
+impl Page for CollectionViewer<'_> {
     #[tracing::instrument(skip_all, target = "api_explorer")]
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         self.draw_background(size, frame);
@@ -897,7 +897,7 @@ impl Component for ApiExplorer<'_> {
     }
 }
 
-impl Eventful for ApiExplorer<'_> {
+impl Eventful for CollectionViewer<'_> {
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         if self.curr_overlay.ne(&Overlays::None) {
             match self.curr_overlay {

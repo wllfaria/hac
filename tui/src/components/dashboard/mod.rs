@@ -3,4 +3,4 @@ mod dashboard;
 mod new_collection_form;
 mod schema_list;
 
-pub use dashboard::Dashboard;
+pub use dashboard::CollectionList;

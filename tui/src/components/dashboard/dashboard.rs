@@ -6,7 +6,7 @@ use crate::components::{
     },
     error_popup::ErrorPopup,
     overlay::draw_overlay,
-    Component, Eventful,
+    Eventful, Page,
 };
 use reqtui::{command::Command, schema::types::Schema};
 
@@ -34,7 +34,7 @@ struct DashboardLayout {
 }
 
 #[derive(Debug)]
-pub struct Dashboard<'a> {
+pub struct CollectionList<'a> {
     layout: DashboardLayout,
     schemas: Vec<Schema>,
 
@@ -58,7 +58,7 @@ enum PaneFocus {
     Filter,
 }
 
-impl<'a> Dashboard<'a> {
+impl<'a> CollectionList<'a> {
     pub fn new(
         size: Rect,
         colors: &'a colors::Colors,
@@ -67,7 +67,7 @@ impl<'a> Dashboard<'a> {
         let mut list_state = SchemaListState::new(schemas.clone());
         schemas.is_empty().not().then(|| list_state.select(Some(0)));
 
-        Ok(Dashboard {
+        Ok(CollectionList {
             list_state,
             form_state: FormState::default(),
             colors,
@@ -503,7 +503,7 @@ impl<'a> Dashboard<'a> {
     }
 }
 
-impl Component for Dashboard<'_> {
+impl Page for CollectionList<'_> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         self.draw_background(size, frame);
         self.draw_title(frame)?;
@@ -537,7 +537,7 @@ impl Component for Dashboard<'_> {
     }
 }
 
-impl Eventful for Dashboard<'_> {
+impl Eventful for CollectionList<'_> {
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
             return Ok(Some(Command::Quit));
@@ -643,7 +643,7 @@ mod tests {
         (tmp_data_dir, tmp_dir.to_string_lossy().to_string())
     }
 
-    fn feed_keys(dashboard: &mut Dashboard, events: &[KeyEvent]) {
+    fn feed_keys(dashboard: &mut CollectionList, events: &[KeyEvent]) {
         for event in events {
             _ = dashboard.handle_key_event(*event);
         }
@@ -674,7 +674,7 @@ mod tests {
         let (_guard, path) = setup_temp_schemas(1);
         let schemas = schema::schema::get_schemas(path).unwrap();
 
-        let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+        let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
 
         assert_eq!(dashboard.schemas.len(), 1);
         assert_eq!(dashboard.list_state.selected(), Some(0));
@@ -700,7 +700,7 @@ mod tests {
     fn test_actions_without_any_schemas() {
         let size = Rect::new(0, 0, 80, 24);
         let colors = colors::Colors::default();
-        let mut dashboard = Dashboard::new(size, &colors, vec![]).unwrap();
+        let mut dashboard = CollectionList::new(size, &colors, vec![]).unwrap();
 
         assert!(dashboard.schemas.is_empty());
         assert_eq!(dashboard.list_state.selected(), None);
@@ -727,7 +727,7 @@ mod tests {
         let (_guard, path) = setup_temp_schemas(10);
         let schemas = schema::schema::get_schemas(path).unwrap();
 
-        let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+        let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
 
         assert_eq!(dashboard.schemas.len(), 10);
         assert_eq!(dashboard.list_state.selected(), Some(0));
@@ -795,7 +795,7 @@ mod tests {
         let (_guard, path) = setup_temp_schemas(3);
         let schemas = schema::schema::get_schemas(path).unwrap();
 
-        let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+        let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
 
         feed_keys(
             &mut dashboard,
@@ -833,7 +833,7 @@ mod tests {
         let (_guard, path) = setup_temp_schemas(3);
         let schemas = schema::schema::get_schemas(path).unwrap();
 
-        let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+        let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
 
         feed_keys(
             &mut dashboard,
@@ -909,7 +909,7 @@ mod tests {
         let colors = colors::Colors::default();
         let (_guard, path) = setup_temp_schemas(3);
         let schemas = schema::schema::get_schemas(path).unwrap();
-        let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+        let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
 
         feed_keys(
             &mut dashboard,
@@ -930,7 +930,7 @@ mod tests {
     fn test_display_error() {
         let size = Rect::new(0, 0, 80, 24);
         let colors = colors::Colors::default();
-        let mut dashboard = Dashboard::new(size, &colors, vec![]).unwrap();
+        let mut dashboard = CollectionList::new(size, &colors, vec![]).unwrap();
 
         dashboard.display_error("any error message".into());
 
@@ -942,7 +942,7 @@ mod tests {
     fn test_draw_background() {
         let colors = colors::Colors::default();
         let size = Rect::new(0, 0, 80, 22);
-        let dashboard = Dashboard::new(size, &colors, vec![]).unwrap();
+        let dashboard = CollectionList::new(size, &colors, vec![]).unwrap();
 
         let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
         let mut frame = terminal.get_frame();
@@ -964,7 +964,7 @@ mod tests {
         let size = Rect::new(0, 0, 80, 22);
         let (_guard, path) = setup_temp_schemas(3);
         let schemas = schema::schema::get_schemas(path).unwrap();
-        let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+        let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
 
         dashboard.display_error("any_error_message".into());
         assert_eq!(dashboard.pane_focus, PaneFocus::Error);
@@ -983,7 +983,7 @@ mod tests {
         let new_size = Rect::new(0, 0, 80, 24);
         let (_guard, path) = setup_temp_schemas(3);
         let schemas = schema::schema::get_schemas(path).unwrap();
-        let mut dashboard = Dashboard::new(size, &colors, schemas).unwrap();
+        let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
         let expected = DashboardLayout {
             schemas_pane: Rect::new(1, 6, 79, 17),
             hint_pane: Rect::new(1, 23, 79, 1),

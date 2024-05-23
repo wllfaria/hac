@@ -1,4 +1,4 @@
-use crate::{components::Eventful, utils::build_styled_content};
+use crate::{components::Eventful, utils::build_syntax_highlighted_lines};
 use config::{Action, EditorMode, KeyAction};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
@@ -122,7 +122,7 @@ impl<'re> ReqEditor<'re> {
             };
 
         let content = body.to_string();
-        let styled_display = build_styled_content(&content, tree.as_ref(), colors);
+        let styled_display = build_syntax_highlighted_lines(&content, tree.as_ref(), colors);
 
         Self {
             colors,
@@ -670,8 +670,11 @@ impl Eventful for ReqEditor<'_> {
             }
 
             self.tree = HIGHLIGHTER.write().unwrap().parse(&self.body.to_string());
-            self.styled_display =
-                build_styled_content(&self.body.to_string(), self.tree.as_ref(), self.colors);
+            self.styled_display = build_syntax_highlighted_lines(
+                &self.body.to_string(),
+                self.tree.as_ref(),
+                self.colors,
+            );
             return Ok(None);
         }
 
@@ -706,7 +709,7 @@ impl Eventful for ReqEditor<'_> {
 
         self.tree = HIGHLIGHTER.write().unwrap().parse(&self.body.to_string());
         self.styled_display =
-            build_styled_content(&self.body.to_string(), self.tree.as_ref(), self.colors);
+            build_syntax_highlighted_lines(&self.body.to_string(), self.tree.as_ref(), self.colors);
 
         Ok(None)
     }

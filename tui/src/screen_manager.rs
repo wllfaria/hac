@@ -1,32 +1,42 @@
 use crate::{
     components::{
-        api_explorer::ApiExplorer, dashboard::Dashboard, terminal_too_small::TerminalTooSmall,
-        Component, Eventful,
+        api_explorer::CollectionViewer, dashboard::CollectionList,
+        terminal_too_small::TerminalTooSmall, Eventful, Page,
     },
     event_pool::Event,
 };
 use reqtui::{command::Command, schema::Schema};
 
-use anyhow::Context;
 use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Screens {
-    Editor,
-    Dashboard,
+    CollectionList,
+    CollectionViewer,
     TerminalTooSmall,
 }
 
+/// ScreenManager is responsible for redirecting the user to the screen it should
+/// be seeing at any point by the application, it is the entity behind navigation
 pub struct ScreenManager<'sm> {
-    curr_screen: Screens,
-    api_explorer: Option<ApiExplorer<'sm>>,
-    dashboard: Dashboard<'sm>,
     terminal_too_small: TerminalTooSmall<'sm>,
+    collection_list: CollectionList<'sm>,
+    /// CollectionViewer is a option as we need a selected schema in order to build
+    /// all the components inside
+    collection_viewer: Option<CollectionViewer<'sm>>,
+
+    curr_screen: Screens,
+    /// we keep track of the previous screen, as when the terminal_too_small screen
+    /// is shown, we know where to redirect the user back
     prev_screen: Screens,
+
     size: Rect,
     colors: &'sm colors::Colors,
     config: &'sm config::Config,
+
+    // we hold a copy of the sender so we can pass it to the editor when we first
+    // build one
     sender: Option<UnboundedSender<Command>>,
 }
 
@@ -38,11 +48,11 @@ impl<'sm> ScreenManager<'sm> {
         config: &'sm config::Config,
     ) -> anyhow::Result<Self> {
         Ok(Self {
-            curr_screen: Screens::Dashboard,
-            prev_screen: Screens::Dashboard,
-            api_explorer: None,
+            curr_screen: Screens::CollectionList,
+            prev_screen: Screens::CollectionList,
+            collection_viewer: None,
             terminal_too_small: TerminalTooSmall::new(colors),
-            dashboard: Dashboard::new(size, colors, schemas)?,
+            collection_list: CollectionList::new(size, colors, schemas)?,
             size,
             colors,
             config,
@@ -51,62 +61,63 @@ impl<'sm> ScreenManager<'sm> {
     }
 
     fn restore_screen(&mut self) {
-        if self.curr_screen.ne(&Screens::TerminalTooSmall) {
-            return;
-        }
-
-        let temp = self.curr_screen.clone();
-        self.curr_screen = self.prev_screen.clone();
-        self.prev_screen = temp;
+        std::mem::swap(&mut self.curr_screen, &mut self.prev_screen);
     }
 
     fn switch_screen(&mut self, screen: Screens) {
         if self.curr_screen == screen {
             return;
         }
-
-        self.prev_screen = self.curr_screen.clone();
+        std::mem::swap(&mut self.curr_screen, &mut self.prev_screen);
         self.curr_screen = screen;
     }
 
+    // events can generate commands, which are sent back to the top level event loop through this
+    // channel, and goes back down the chain of components as many components may be interested
+    // in such command
     pub fn handle_command(&mut self, command: Command) {
         match command {
             Command::SelectSchema(schema) | Command::CreateSchema(schema) => {
                 tracing::debug!("changing to api explorer: {}", schema.info.name);
-                self.switch_screen(Screens::Editor);
-                let mut api_explorer =
-                    ApiExplorer::new(self.size, schema, self.colors, self.config);
-                _ = api_explorer.register_command_handler(
-                    self.sender
-                        .as_ref()
-                        .expect("should have a command sender at this point")
-                        .clone(),
-                );
-                self.api_explorer = Some(api_explorer);
+                self.switch_screen(Screens::CollectionViewer);
+                let mut collection_viewer =
+                    CollectionViewer::new(self.size, schema, self.colors, self.config);
+                collection_viewer
+                    .register_command_handler(
+                        self.sender
+                            .as_ref()
+                            .expect("attempted to register the sender on collection_viewer but it was None")
+                            .clone(),
+                    )
+                    .ok();
+                self.collection_viewer = Some(collection_viewer);
             }
             Command::Error(msg) => {
-                self.dashboard.display_error(msg);
+                self.collection_list.display_error(msg);
             }
             _ => {}
         }
     }
 }
 
-impl Component for ScreenManager<'_> {
+impl Page for ScreenManager<'_> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         match (size.width < 80, size.height < 22) {
             (true, _) => self.switch_screen(Screens::TerminalTooSmall),
             (_, true) => self.switch_screen(Screens::TerminalTooSmall),
-            (false, false) => self.restore_screen(),
+            (false, false) if self.curr_screen.eq(&Screens::TerminalTooSmall) => {
+                self.restore_screen()
+            }
+            _ => {}
         }
 
         match &self.curr_screen {
-            Screens::Editor => self
-                .api_explorer
+            Screens::CollectionViewer => self
+                .collection_viewer
                 .as_mut()
-                .context("should never be able to switch to editor screen without having a schema")?
+                .expect("should never be able to switch to editor screen without having a schema")
                 .draw(frame, frame.size())?,
-            Screens::Dashboard => self.dashboard.draw(frame, frame.size())?,
+            Screens::CollectionList => self.collection_list.draw(frame, frame.size())?,
             Screens::TerminalTooSmall => self.terminal_too_small.draw(frame, frame.size())?,
         };
 
@@ -115,15 +126,16 @@ impl Component for ScreenManager<'_> {
 
     fn register_command_handler(&mut self, sender: UnboundedSender<Command>) -> anyhow::Result<()> {
         self.sender = Some(sender.clone());
-        self.dashboard.register_command_handler(sender.clone())?;
+        self.collection_list
+            .register_command_handler(sender.clone())?;
         Ok(())
     }
 
     fn resize(&mut self, new_size: Rect) {
         self.size = new_size;
-        self.dashboard.resize(new_size);
+        self.collection_list.resize(new_size);
 
-        if let Some(e) = self.api_explorer.as_mut() {
+        if let Some(e) = self.collection_viewer.as_mut() {
             e.resize(new_size)
         }
     }
@@ -131,8 +143,8 @@ impl Component for ScreenManager<'_> {
     fn handle_tick(&mut self) -> anyhow::Result<()> {
         // currently, only the editor cares about the ticks, used to determine
         // when to sync changes in disk
-        if let Screens::Editor = &self.curr_screen {
-            self.api_explorer
+        if let Screens::CollectionViewer = &self.curr_screen {
+            self.collection_viewer
                 .as_mut()
                 .expect("we are displaying the editor without having one")
                 .handle_tick()?
@@ -145,12 +157,12 @@ impl Component for ScreenManager<'_> {
 impl Eventful for ScreenManager<'_> {
     fn handle_event(&mut self, event: Option<Event>) -> anyhow::Result<Option<Command>> {
         match self.curr_screen {
-            Screens::Editor => self
-                .api_explorer
+            Screens::CollectionViewer => self
+                .collection_viewer
                 .as_mut()
                 .expect("should never be able to switch to editor screen without having a schema")
                 .handle_event(event),
-            Screens::Dashboard => self.dashboard.handle_event(event),
+            Screens::CollectionList => self.collection_list.handle_event(event),
             Screens::TerminalTooSmall => Ok(None),
         }
     }
@@ -222,11 +234,11 @@ mod tests {
         terminal.resize(small).unwrap();
         sm.draw(&mut terminal.get_frame(), small).unwrap();
         assert_eq!(sm.curr_screen, Screens::TerminalTooSmall);
-        assert_eq!(sm.prev_screen, Screens::Dashboard);
+        assert_eq!(sm.prev_screen, Screens::CollectionList);
 
         terminal.resize(enough).unwrap();
         sm.draw(&mut terminal.get_frame(), enough).unwrap();
-        assert_eq!(sm.curr_screen, Screens::Dashboard);
+        assert_eq!(sm.curr_screen, Screens::CollectionList);
         assert_eq!(sm.prev_screen, Screens::TerminalTooSmall);
     }
 
@@ -264,10 +276,10 @@ mod tests {
         let (tx, _) = tokio::sync::mpsc::unbounded_channel::<Command>();
         let mut sm = ScreenManager::new(initial, &colors, schemas, &config).unwrap();
         _ = sm.register_command_handler(tx.clone());
-        assert_eq!(sm.curr_screen, Screens::Dashboard);
+        assert_eq!(sm.curr_screen, Screens::CollectionList);
 
         sm.handle_command(command);
-        assert_eq!(sm.curr_screen, Screens::Editor);
+        assert_eq!(sm.curr_screen, Screens::CollectionViewer);
     }
 
     #[test]
@@ -283,7 +295,7 @@ mod tests {
 
         sm.register_command_handler(tx.clone()).unwrap();
 
-        assert!(sm.dashboard.command_sender.is_some());
+        assert!(sm.collection_list.command_sender.is_some());
     }
 
     #[test]
