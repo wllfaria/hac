@@ -278,7 +278,16 @@ impl<'ae> CollectionViewer<'ae> {
             return Ok(Some(Command::Quit));
         };
         match key_event.code {
-            KeyCode::Char('i') => self.selected_pane = Some(PaneFocus::Preview),
+            KeyCode::Char(c) => {
+                if let Some(req) = self.selected_request.as_mut() {
+                    req.borrow_mut().uri.push(c);
+                }
+            }
+            KeyCode::Backspace => {
+                if let Some(req) = self.selected_request.as_mut() {
+                    req.borrow_mut().uri.pop();
+                }
+            }
             KeyCode::Enter => {
                 if let Some(req) = self.selected_request.as_ref() {
                     reqtui::net::handle_request(

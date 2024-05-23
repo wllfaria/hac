@@ -24,7 +24,7 @@ where
         let collection_name = collections_dir.as_ref().join(file_name);
         let file = std::fs::read_to_string(&collection_name)?;
         let mut collection: Collection = serde_json::from_str(&file)?;
-        collection.path = collection_name.join(".json");
+        collection.path = collection_name;
         collections.push(collection);
     }
 
