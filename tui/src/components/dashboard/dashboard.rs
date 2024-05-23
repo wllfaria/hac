@@ -8,7 +8,7 @@ use crate::components::{
     overlay::draw_overlay,
     Eventful, Page,
 };
-use reqtui::{command::Command, schema::types::Schema};
+use reqtui::{collection::types::Collection, command::Command};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
@@ -36,7 +36,7 @@ struct DashboardLayout {
 #[derive(Debug)]
 pub struct CollectionList<'a> {
     layout: DashboardLayout,
-    schemas: Vec<Schema>,
+    schemas: Vec<Collection>,
 
     list: SchemaList<'a>,
     list_state: SchemaListState,
@@ -62,7 +62,7 @@ impl<'a> CollectionList<'a> {
     pub fn new(
         size: Rect,
         colors: &'a colors::Colors,
-        schemas: Vec<Schema>,
+        schemas: Vec<Collection>,
     ) -> anyhow::Result<Self> {
         let mut list_state = SchemaListState::new(schemas.clone());
         schemas.is_empty().not().then(|| list_state.select(Some(0)));
@@ -141,7 +141,7 @@ impl<'a> CollectionList<'a> {
                     })
                     .map(|schema| {
                         tracing::debug!("selected schema: {}", schema.info.name);
-                        Command::SelectSchema(schema.clone())
+                        Command::SelectCollection(schema.clone())
                     }));
             }
             KeyCode::Char('d') => {
@@ -230,9 +230,9 @@ impl<'a> CollectionList<'a> {
                         .expect("should always have a sender at this point");
 
                     tokio::spawn(async move {
-                        match reqtui::fs::create_schema(name, description).await {
+                        match reqtui::fs::create_collection(name, description).await {
                             Ok(schema) => {
-                                if sender_copy.send(Command::CreateSchema(schema)).is_err() {
+                                if sender_copy.send(Command::CreateCollection(schema)).is_err() {
                                     tracing::error!("failed to send command through channel");
                                     std::process::abort();
                                 }
@@ -285,7 +285,7 @@ impl<'a> CollectionList<'a> {
 
                 tokio::spawn(async move {
                     tracing::debug!("attempting to delete schema: {:?}", path);
-                    reqtui::fs::delete_schema(&path)
+                    reqtui::fs::delete_collection(&path)
                         .await
                         .expect("failed to delete schema from filesystem");
                 });
@@ -612,7 +612,7 @@ fn build_layout(size: Rect) -> DashboardLayout {
 #[cfg(test)]
 mod tests {
     use ratatui::{backend::TestBackend, buffer::Cell, Terminal};
-    use reqtui::schema;
+    use reqtui::collection;
     use std::{
         fs::{create_dir, File},
         io::Write,
@@ -672,7 +672,7 @@ mod tests {
         let size = Rect::new(0, 0, 80, 24);
         let colors = colors::Colors::default();
         let (_guard, path) = setup_temp_schemas(1);
-        let schemas = schema::schema::get_schemas(path).unwrap();
+        let schemas = collection::collection::get_collections(path).unwrap();
 
         let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
 
@@ -725,7 +725,7 @@ mod tests {
         let size = Rect::new(0, 0, 80, 24);
         let colors = colors::Colors::default();
         let (_guard, path) = setup_temp_schemas(10);
-        let schemas = schema::schema::get_schemas(path).unwrap();
+        let schemas = collection::collection::get_collections(path).unwrap();
 
         let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
 
@@ -793,7 +793,7 @@ mod tests {
         let size = Rect::new(0, 0, 80, 24);
         let colors = colors::Colors::default();
         let (_guard, path) = setup_temp_schemas(3);
-        let schemas = schema::schema::get_schemas(path).unwrap();
+        let schemas = collection::collection::get_collections(path).unwrap();
 
         let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
 
@@ -831,7 +831,7 @@ mod tests {
         let size = Rect::new(0, 0, 80, 24);
         let colors = colors::Colors::default();
         let (_guard, path) = setup_temp_schemas(3);
-        let schemas = schema::schema::get_schemas(path).unwrap();
+        let schemas = collection::collection::get_collections(path).unwrap();
 
         let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
 
@@ -908,7 +908,7 @@ mod tests {
         let size = Rect::new(0, 0, 80, 24);
         let colors = colors::Colors::default();
         let (_guard, path) = setup_temp_schemas(3);
-        let schemas = schema::schema::get_schemas(path).unwrap();
+        let schemas = collection::collection::get_collections(path).unwrap();
         let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
 
         feed_keys(
@@ -963,7 +963,7 @@ mod tests {
         let colors = colors::Colors::default();
         let size = Rect::new(0, 0, 80, 22);
         let (_guard, path) = setup_temp_schemas(3);
-        let schemas = schema::schema::get_schemas(path).unwrap();
+        let schemas = collection::collection::get_collections(path).unwrap();
         let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
 
         dashboard.display_error("any_error_message".into());
@@ -982,7 +982,7 @@ mod tests {
         let size = Rect::new(0, 0, 80, 22);
         let new_size = Rect::new(0, 0, 80, 24);
         let (_guard, path) = setup_temp_schemas(3);
-        let schemas = schema::schema::get_schemas(path).unwrap();
+        let schemas = collection::collection::get_collections(path).unwrap();
         let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
         let expected = DashboardLayout {
             schemas_pane: Rect::new(1, 6, 79, 17),

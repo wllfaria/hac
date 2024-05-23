@@ -6,7 +6,7 @@ use ratatui::{
     style::{Style, Stylize},
     widgets::{Block, Borders, Paragraph, StatefulWidget, Widget},
 };
-use reqtui::schema::types::Request;
+use reqtui::collection::types::Request;
 
 #[derive(Debug)]
 pub struct ReqUriState<'a> {

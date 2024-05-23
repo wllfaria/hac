@@ -1,9 +1,9 @@
-use crate::schema::Schema;
+use crate::collection::Collection;
 
 #[derive(Debug, PartialEq)]
 pub enum Command {
     Quit,
-    SelectSchema(Schema),
+    SelectCollection(Collection),
     Error(String),
-    CreateSchema(Schema),
+    CreateCollection(Collection),
 }

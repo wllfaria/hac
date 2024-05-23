@@ -2,9 +2,9 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifi
 use lazy_static::lazy_static;
 use ratatui::{backend::TestBackend, layout::Rect, Terminal};
 use reqtui::{
-    schema::{
+    collection::{
         types::{Info, Request, RequestKind, RequestMethod},
-        Schema,
+        Collection,
     },
     syntax::highlighter::Highlighter,
 };
@@ -18,8 +18,8 @@ fn main() {
     divan::main();
 }
 
-fn create_sample_schema() -> Schema {
-    Schema {
+fn create_sample_schema() -> Collection {
+    Collection {
         info: Info {
             name: "sample schema".to_string(),
             description: None,

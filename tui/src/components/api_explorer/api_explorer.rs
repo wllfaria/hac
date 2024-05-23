@@ -19,9 +19,9 @@ use ratatui::{
     Frame,
 };
 use reqtui::{
+    collection::types::{Collection, Directory, Request, RequestKind, RequestMethod},
     command::Command,
     net::request_manager::{ReqtuiNetRequest, ReqtuiResponse},
-    schema::types::{Directory, Request, RequestKind, RequestMethod, Schema},
 };
 use std::{
     cell::RefCell,
@@ -122,7 +122,7 @@ pub enum CreateReqKind {
 
 #[derive(Debug)]
 pub struct CollectionViewer<'ae> {
-    schema: Schema,
+    schema: Collection,
     colors: &'ae colors::Colors,
     config: &'ae config::Config,
     layout: ExplorerLayout,
@@ -156,7 +156,7 @@ pub struct CollectionViewer<'ae> {
 impl<'ae> CollectionViewer<'ae> {
     pub fn new(
         size: Rect,
-        schema: Schema,
+        schema: Collection,
         colors: &'ae colors::Colors,
         config: &'ae config::Config,
     ) -> Self {
@@ -812,7 +812,7 @@ impl<'ae> CollectionViewer<'ae> {
 
         self.sync_interval = std::time::Instant::now();
         tokio::spawn(async move {
-            match reqtui::fs::sync_schema(schema).await {
+            match reqtui::fs::sync_collection(schema).await {
                 Ok(_) => {}
                 Err(e) => {
                     if sender.send(Command::Error(e.to_string())).is_err() {
@@ -1077,7 +1077,7 @@ fn find_next_entry(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use reqtui::schema::types::{Directory, Request, RequestMethod};
+    use reqtui::collection::types::{Directory, Request, RequestMethod};
     use std::collections::HashMap;
 
     fn create_root_one() -> RequestKind {

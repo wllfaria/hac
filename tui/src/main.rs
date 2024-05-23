@@ -1,12 +1,9 @@
-use reqtui::schema::schema;
+use cli::RuntimeBehavior;
+use reqtui::collection::collection;
 use tui::app;
 
-use std::path::PathBuf;
-
-fn setup_tracing(
-    data_dir: &PathBuf,
-) -> anyhow::Result<tracing_appender::non_blocking::WorkerGuard> {
-    let logfile = config::LOG_FILE;
+fn setup_tracing() -> anyhow::Result<tracing_appender::non_blocking::WorkerGuard> {
+    let (data_dir, logfile) = config::log_file();
     let appender = tracing_appender::rolling::never(data_dir, logfile);
     let (writer, guard) = tracing_appender::non_blocking(appender);
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
@@ -22,15 +19,26 @@ fn setup_tracing(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let data_dir = config::setup_data_dir()?;
-    let config = config::load_config();
-    let _guard = setup_tracing(&data_dir)?;
+    match cli::Cli::parse_args() {
+        RuntimeBehavior::PrintConfigPath => {
+            cli::Cli::print_config_path(config::get_config_dir_path(), config::get_usual_path())
+        }
+        RuntimeBehavior::PrintDataPath => cli::Cli::print_data_path(config::get_collections_dir()),
+        RuntimeBehavior::DumpDefaultConfig => {
+            cli::Cli::print_default_config(config::default_as_str())
+        }
+        RuntimeBehavior::Run => {
+            config::get_or_create_data_dir();
+            let config = config::load_config();
+            let _guard = setup_tracing()?;
 
-    let colors = colors::Colors::default();
-    let mut schemas = schema::get_schemas_from_config()?;
-    schemas.sort_by_key(|k| k.info.name.clone());
-    let mut app = app::App::new(&colors, schemas, &config)?;
-    app.run().await?;
+            let colors = colors::Colors::default();
+            let mut schemas = collection::get_collections_from_config()?;
+            schemas.sort_by_key(|key| key.info.name.clone());
+            let mut app = app::App::new(&colors, schemas, &config)?;
+            app.run().await?;
+        }
+    }
 
     Ok(())
 }

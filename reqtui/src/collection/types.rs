@@ -3,7 +3,7 @@ use std::{hash::Hash, path::PathBuf};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
-pub struct Schema {
+pub struct Collection {
     pub info: Info,
     pub requests: Option<Vec<RequestKind>>,
     #[serde(skip)]

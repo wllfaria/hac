@@ -1,4 +1,4 @@
-use reqtui::schema::types::{Directory, Request, RequestKind, RequestMethod};
+use reqtui::collection::types::{Directory, Request, RequestKind, RequestMethod};
 
 use ratatui::{
     buffer::Buffer,

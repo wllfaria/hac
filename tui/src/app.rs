@@ -4,7 +4,7 @@ use crate::{
     screen_manager::ScreenManager,
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
-use reqtui::{command::Command, schema::Schema};
+use reqtui::{collection::Collection, command::Command};
 use std::io::Stdout;
 use tokio::sync::mpsc;
 
@@ -18,7 +18,7 @@ pub struct App<'app> {
 impl<'app> App<'app> {
     pub fn new(
         colors: &'app colors::Colors,
-        schemas: Vec<Schema>,
+        schemas: Vec<Collection>,
         config: &'app config::Config,
     ) -> anyhow::Result<Self> {
         let terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;

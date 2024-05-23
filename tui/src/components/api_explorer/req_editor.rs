@@ -10,8 +10,8 @@ use ratatui::{
     Frame,
 };
 use reqtui::{
+    collection::types::Request,
     command::Command,
-    schema::types::Request,
     syntax::highlighter::HIGHLIGHTER,
     text_object::{cursor::Cursor, TextObject, Write},
 };

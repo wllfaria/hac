@@ -1,10 +1,9 @@
-use reqwest::header::{HeaderMap, HeaderValue};
-use tokio::sync::mpsc::UnboundedSender;
-
 use crate::{
-    schema::types::Request,
+    collection::types::Request,
     text_object::{Readonly, TextObject},
 };
+use reqwest::header::{HeaderMap, HeaderValue};
+use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Debug, PartialEq)]
 pub struct ReqtuiResponse {

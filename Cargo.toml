@@ -1,5 +1,5 @@
 [workspace]
-members = ["config", "reqtui", "tui", "colors"]
+members = ["config", "reqtui", "tui", "colors", "cli"]
 default-members = ["tui"]
 resolver = "2"
 
@@ -7,6 +7,7 @@ resolver = "2"
 config = { path = "config" }
 reqtui = { path = "reqtui" }
 colors = { path = "colors" }
+cli = { path = "cli" }
 
 anyhow = "1.0.81"
 crossterm = { version = "0.27.0", features = ["event-stream"] }

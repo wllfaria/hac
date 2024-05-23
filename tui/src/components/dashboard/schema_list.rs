@@ -12,17 +12,17 @@ use ratatui::{
         StatefulWidget, Widget,
     },
 };
-use reqtui::schema::Schema;
+use reqtui::collection::Collection;
 
 #[derive(Debug)]
 pub struct SchemaListState {
     selected: Option<usize>,
-    pub(super) items: Vec<Schema>,
+    pub(super) items: Vec<Collection>,
     scroll: usize,
 }
 
 impl SchemaListState {
-    pub fn new(items: Vec<Schema>) -> Self {
+    pub fn new(items: Vec<Collection>) -> Self {
         SchemaListState {
             selected: None,
             items,
@@ -38,7 +38,7 @@ impl SchemaListState {
         self.selected
     }
 
-    pub fn set_items(&mut self, items: Vec<Schema>) {
+    pub fn set_items(&mut self, items: Vec<Collection>) {
         self.items = items;
     }
 }
@@ -88,7 +88,12 @@ impl<'a> SchemaList<'a> {
             .collect::<VecDeque<_>>()
     }
 
-    fn build_card(&self, state: &SchemaListState, schema: &Schema, index: usize) -> Paragraph<'_> {
+    fn build_card(
+        &self,
+        state: &SchemaListState,
+        schema: &Collection,
+        index: usize,
+    ) -> Paragraph<'_> {
         let lines = vec![
             schema.info.name.clone().fg(self.colors.normal.white).into(),
             schema
@@ -171,10 +176,10 @@ mod tests {
 
     use super::*;
     use ratatui::{backend::TestBackend, buffer::Cell, Terminal};
-    use reqtui::schema::types::*;
+    use reqtui::collection::types::*;
 
-    fn sample_schema() -> Schema {
-        Schema {
+    fn sample_schema() -> Collection {
+        Collection {
             info: Info {
                 name: String::from("any_name"),
                 description: None,
@@ -214,7 +219,7 @@ mod tests {
     fn test_build_card() {
         let colors = colors::Colors::default();
         let schema_list = SchemaList::new(&colors);
-        let schemas = vec![Schema {
+        let schemas = vec![Collection {
             info: Info {
                 name: String::from("any_name"),
                 description: None,

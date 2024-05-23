@@ -2,8 +2,12 @@ pub mod config;
 mod data;
 mod default_config;
 
-pub use config::{load_config, Action, Config, KeyAction};
-pub use data::{get_collections_dir, setup_data_dir};
+pub use config::{
+    default_as_str, get_config_dir_path, get_usual_path, load_config, Action, Config, KeyAction,
+};
+pub use data::{
+    get_collections_dir, get_or_create_collections_dir, get_or_create_data_dir, log_file,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(PartialEq, Deserialize, Serialize, Debug, Clone)]
@@ -12,11 +16,11 @@ pub enum EditorMode {
     Normal,
 }
 
-pub static LOG_FILE: &str = "reqtui.log";
 pub static APP_NAME: &str = "reqtui";
-pub static SCHEMAS_DIR: &str = "schemas";
+pub static COLLECTIONS_DIR: &str = "collections";
 pub static CONFIG_FILE: &str = "reqtui.toml";
 pub static THEMES_DIR: &str = "themes";
+pub static CONFIG_ENV_VAR: &str = "REQTUI_CONFIG";
 
 #[cfg(unix)]
 static XDG_ENV_VARS: [&str; 2] = ["XDG_CONFIG_HOME", "XDG_DATA_HOME"];

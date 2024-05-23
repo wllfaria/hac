@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{backend::TestBackend, layout::Rect, Frame, Terminal};
-use reqtui::schema;
+use reqtui::collection;
 use std::{
     fs::{create_dir, File},
     io::Write,
@@ -79,7 +79,7 @@ fn test_draw_no_matches_message() {
     let colors = colors::Colors::default();
     let size = Rect::new(0, 0, 80, 22);
     let (_guard, path) = setup_temp_schemas(3);
-    let schemas = schema::schema::get_schemas(path).unwrap();
+    let schemas = collection::collection::get_collections(path).unwrap();
     let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
@@ -129,7 +129,7 @@ fn draw_hint_text() {
     let colors = colors::Colors::default();
     let size = Rect::new(0, 0, 80, 22);
     let (_guard, path) = setup_temp_schemas(3);
-    let schemas = schema::schema::get_schemas(path).unwrap();
+    let schemas = collection::collection::get_collections(path).unwrap();
     let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
@@ -149,7 +149,7 @@ fn draw_filter_prompt() {
     let colors = colors::Colors::default();
     let size = Rect::new(0, 0, 80, 22);
     let (_guard, path) = setup_temp_schemas(3);
-    let schemas = schema::schema::get_schemas(path).unwrap();
+    let schemas = collection::collection::get_collections(path).unwrap();
     let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
@@ -360,7 +360,7 @@ fn test_draw_delete_prompt() {
     let colors = colors::Colors::default();
     let size = Rect::new(0, 0, 80, 22);
     let (_guard, path) = setup_temp_schemas(3);
-    let schemas = schema::schema::get_schemas(path).unwrap();
+    let schemas = collection::collection::get_collections(path).unwrap();
     let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
@@ -413,7 +413,7 @@ fn test_draw_schema_list() {
     let colors = colors::Colors::default();
     let size = Rect::new(0, 0, 80, 22);
     let (_guard, path) = setup_temp_schemas(3);
-    let schemas = schema::schema::get_schemas(path).unwrap();
+    let schemas = collection::collection::get_collections(path).unwrap();
     let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();

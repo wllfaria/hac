@@ -5,7 +5,7 @@ use crate::{
     },
     event_pool::Event,
 };
-use reqtui::{command::Command, schema::Schema};
+use reqtui::{collection::Collection, command::Command};
 
 use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;
@@ -44,7 +44,7 @@ impl<'sm> ScreenManager<'sm> {
     pub fn new(
         size: Rect,
         colors: &'sm colors::Colors,
-        schemas: Vec<Schema>,
+        schemas: Vec<Collection>,
         config: &'sm config::Config,
     ) -> anyhow::Result<Self> {
         Ok(Self {
@@ -77,7 +77,7 @@ impl<'sm> ScreenManager<'sm> {
     // in such command
     pub fn handle_command(&mut self, command: Command) {
         match command {
-            Command::SelectSchema(schema) | Command::CreateSchema(schema) => {
+            Command::SelectCollection(schema) | Command::CreateCollection(schema) => {
                 tracing::debug!("changing to api explorer: {}", schema.info.name);
                 self.switch_screen(Screens::CollectionViewer);
                 let mut collection_viewer =
@@ -173,7 +173,7 @@ mod tests {
     use super::*;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::{backend::TestBackend, Terminal};
-    use reqtui::schema::{self, types::*};
+    use reqtui::collection::{self, types::*};
     use std::{
         fs::{create_dir, File},
         io::Write,
@@ -208,7 +208,7 @@ mod tests {
         let small_in_height = Rect::new(0, 0, 100, 19);
         let colors = colors::Colors::default();
         let (_guard, path) = setup_temp_schemas(10);
-        let schemas = schema::schema::get_schemas(path).unwrap();
+        let schemas = collection::collection::get_collections(path).unwrap();
         let config = config::load_config();
         let mut sm = ScreenManager::new(small_in_width, &colors, schemas, &config).unwrap();
         let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
@@ -226,7 +226,7 @@ mod tests {
         let enough = Rect::new(0, 0, 80, 22);
         let colors = colors::Colors::default();
         let (_guard, path) = setup_temp_schemas(10);
-        let schemas = schema::schema::get_schemas(path).unwrap();
+        let schemas = collection::collection::get_collections(path).unwrap();
         let config = config::load_config();
         let mut sm = ScreenManager::new(small, &colors, schemas, &config).unwrap();
         let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
@@ -248,7 +248,7 @@ mod tests {
         let expected = Rect::new(0, 0, 100, 22);
         let colors = colors::Colors::default();
         let (_guard, path) = setup_temp_schemas(10);
-        let schemas = schema::schema::get_schemas(path).unwrap();
+        let schemas = collection::collection::get_collections(path).unwrap();
         let config = config::load_config();
         let mut sm = ScreenManager::new(initial, &colors, schemas, &config).unwrap();
 
@@ -261,7 +261,7 @@ mod tests {
     fn test_switch_to_explorer_on_select() {
         let initial = Rect::new(0, 0, 80, 22);
         let colors = colors::Colors::default();
-        let schema = Schema {
+        let schema = Collection {
             info: Info {
                 name: String::from("any_name"),
                 description: None,
@@ -269,9 +269,9 @@ mod tests {
             path: "any_path".into(),
             requests: None,
         };
-        let command = Command::SelectSchema(schema.clone());
+        let command = Command::SelectCollection(schema.clone());
         let (_guard, path) = setup_temp_schemas(10);
-        let schemas = schema::schema::get_schemas(path).unwrap();
+        let schemas = collection::collection::get_collections(path).unwrap();
         let config = config::load_config();
         let (tx, _) = tokio::sync::mpsc::unbounded_channel::<Command>();
         let mut sm = ScreenManager::new(initial, &colors, schemas, &config).unwrap();
@@ -287,7 +287,7 @@ mod tests {
         let initial = Rect::new(0, 0, 80, 22);
         let colors = colors::Colors::default();
         let (_guard, path) = setup_temp_schemas(10);
-        let schemas = schema::schema::get_schemas(path).unwrap();
+        let schemas = collection::collection::get_collections(path).unwrap();
         let config = config::load_config();
         let mut sm = ScreenManager::new(initial, &colors, schemas, &config).unwrap();
 
@@ -303,7 +303,7 @@ mod tests {
         let initial = Rect::new(0, 0, 80, 22);
         let colors = colors::Colors::default();
         let (_guard, path) = setup_temp_schemas(10);
-        let schemas = schema::schema::get_schemas(path).unwrap();
+        let schemas = collection::collection::get_collections(path).unwrap();
         let config = config::load_config();
         let mut sm = ScreenManager::new(initial, &colors, schemas, &config).unwrap();
 
