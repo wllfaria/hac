@@ -1,8 +1,8 @@
 use crate::components::{
     confirm_popup::ConfirmPopup,
     dashboard::{
+        collection_list::{CollectionList, CollectionListState},
         new_collection_form::{FormFocus, FormState, NewCollectionForm},
-        schema_list::{SchemaList, SchemaListState},
     },
     error_popup::ErrorPopup,
     overlay::draw_overlay,
@@ -24,7 +24,7 @@ use tui_big_text::{BigText, PixelSize};
 
 #[derive(Debug, PartialEq)]
 struct DashboardLayout {
-    schemas_pane: Rect,
+    collections_pane: Rect,
     hint_pane: Rect,
     help_popup: Rect,
     title_pane: Rect,
@@ -34,12 +34,12 @@ struct DashboardLayout {
 }
 
 #[derive(Debug)]
-pub struct CollectionList<'a> {
+pub struct CollectionDashboard<'a> {
     layout: DashboardLayout,
-    schemas: Vec<Collection>,
+    collections: Vec<Collection>,
 
-    list: SchemaList<'a>,
-    list_state: SchemaListState,
+    list: CollectionList<'a>,
+    list_state: CollectionListState,
     form_state: FormState,
     colors: &'a colors::Colors,
     filter: String,
@@ -58,22 +58,25 @@ enum PaneFocus {
     Filter,
 }
 
-impl<'a> CollectionList<'a> {
+impl<'a> CollectionDashboard<'a> {
     pub fn new(
         size: Rect,
         colors: &'a colors::Colors,
-        schemas: Vec<Collection>,
+        collections: Vec<Collection>,
     ) -> anyhow::Result<Self> {
-        let mut list_state = SchemaListState::new(schemas.clone());
-        schemas.is_empty().not().then(|| list_state.select(Some(0)));
+        let mut list_state = CollectionListState::new(collections.clone());
+        collections
+            .is_empty()
+            .not()
+            .then(|| list_state.select(Some(0)));
 
-        Ok(CollectionList {
+        Ok(CollectionDashboard {
             list_state,
             form_state: FormState::default(),
             colors,
             layout: build_layout(size),
-            schemas,
-            list: SchemaList::new(colors),
+            collections,
+            list: CollectionList::new(colors),
             filter: String::new(),
             command_sender: None,
             error_message: String::default(),
@@ -88,7 +91,7 @@ impl<'a> CollectionList<'a> {
 
     fn filter_list(&mut self) {
         self.list_state.set_items(
-            self.schemas
+            self.collections
                 .clone()
                 .into_iter()
                 .filter(|s| s.info.name.contains(&self.filter))
@@ -136,12 +139,14 @@ impl<'a> CollectionList<'a> {
                     .then(|| {
                         self.list_state
                             .selected()
-                            .and_then(|i| self.schemas.get(i))
-                            .expect("user should never be allowed to select a non existing schema")
+                            .and_then(|i| self.collections.get(i))
+                            .expect(
+                                "user should never be allowed to select a non existing collection",
+                            )
                     })
-                    .map(|schema| {
-                        tracing::debug!("selected schema: {}", schema.info.name);
-                        Command::SelectCollection(schema.clone())
+                    .map(|collection| {
+                        tracing::debug!("selected collection: {}", collection.info.name);
+                        Command::SelectCollection(collection.clone())
                     }));
             }
             KeyCode::Char('d') => {
@@ -170,7 +175,7 @@ impl<'a> CollectionList<'a> {
                             .map(|i| {
                                 usize::min(
                                     self.list_state.items.len() - 1,
-                                    i + self.list.items_per_row(&self.layout.schemas_pane),
+                                    i + self.list.items_per_row(&self.layout.collections_pane),
                                 )
                             })
                             .or(Some(0)),
@@ -183,7 +188,9 @@ impl<'a> CollectionList<'a> {
                         self.list_state
                             .selected()
                             .map(|i| {
-                                i.saturating_sub(self.list.items_per_row(&self.layout.schemas_pane))
+                                i.saturating_sub(
+                                    self.list.items_per_row(&self.layout.collections_pane),
+                                )
                             })
                             .or(Some(0)),
                     );
@@ -231,8 +238,11 @@ impl<'a> CollectionList<'a> {
 
                     tokio::spawn(async move {
                         match reqtui::fs::create_collection(name, description).await {
-                            Ok(schema) => {
-                                if sender_copy.send(Command::CreateCollection(schema)).is_err() {
+                            Ok(collection) => {
+                                if sender_copy
+                                    .send(Command::CreateCollection(collection))
+                                    .is_err()
+                                {
                                     tracing::error!("failed to send command through channel");
                                     std::process::abort();
                                 }
@@ -277,21 +287,21 @@ impl<'a> CollectionList<'a> {
                     .list_state
                     .selected()
                     .expect("deleting when nothing is selected should never happen");
-                let schema = self
-                    .schemas
+                let collection = self
+                    .collections
                     .get(selected)
                     .expect("should never attempt to delete a non existing item");
-                let path = schema.path.clone();
+                let path = collection.path.clone();
 
                 tokio::spawn(async move {
-                    tracing::debug!("attempting to delete schema: {:?}", path);
+                    tracing::debug!("attempting to delete collection: {:?}", path);
                     reqtui::fs::delete_collection(&path)
                         .await
-                        .expect("failed to delete schema from filesystem");
+                        .expect("failed to delete collection from filesystem");
                 });
 
-                self.schemas.remove(selected);
-                self.list_state.set_items(self.schemas.clone());
+                self.collections.remove(selected);
+                self.list_state.set_items(self.collections.clone());
                 self.list_state.select(None);
                 self.pane_focus = PaneFocus::List;
             }
@@ -392,10 +402,10 @@ impl<'a> CollectionList<'a> {
         frame.render_widget(filter, self.layout.hint_pane);
     }
 
-    fn draw_schemas_list(&mut self, frame: &mut Frame) {
+    fn draw_collection_list(&mut self, frame: &mut Frame) {
         frame.render_stateful_widget(
             self.list.clone(),
-            self.layout.schemas_pane,
+            self.layout.collections_pane,
             &mut self.list_state,
         );
     }
@@ -408,7 +418,7 @@ impl<'a> CollectionList<'a> {
                 Constraint::Length(8),
                 Constraint::Fill(1),
             ])
-            .split(self.layout.schemas_pane)[1];
+            .split(self.layout.collections_pane)[1];
 
         let no_matches = BigText::builder()
             .pixel_size(PixelSize::Quadrant)
@@ -431,12 +441,12 @@ impl<'a> CollectionList<'a> {
                 Constraint::Length(8),
                 Constraint::Fill(1),
             ])
-            .split(self.layout.schemas_pane)[1];
+            .split(self.layout.collections_pane)[1];
 
         let empty_message = BigText::builder()
             .pixel_size(PixelSize::Quadrant)
             .style(Style::default().fg(self.colors.normal.magenta))
-            .lines(vec!["No schemas".into()])
+            .lines(vec!["No collections".into()])
             .alignment(Alignment::Center)
             .build()?;
 
@@ -473,7 +483,7 @@ impl<'a> CollectionList<'a> {
             .selected()
             .expect("attempted to open confirm popup without an item selected");
         let selected_item_name = &self
-            .schemas
+            .collections
             .get(selected_index)
             .expect("should never be able to have an out of bounds selection")
             .info
@@ -503,13 +513,16 @@ impl<'a> CollectionList<'a> {
     }
 }
 
-impl Page for CollectionList<'_> {
+impl Page for CollectionDashboard<'_> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         self.draw_background(size, frame);
         self.draw_title(frame)?;
 
-        match (self.schemas.is_empty(), self.list_state.items.is_empty()) {
-            (false, false) => self.draw_schemas_list(frame),
+        match (
+            self.collections.is_empty(),
+            self.list_state.items.is_empty(),
+        ) {
+            (false, false) => self.draw_collection_list(frame),
             (false, true) => self.draw_no_matches_text(frame)?,
             (true, true) => self.draw_empty_message(frame)?,
             (true, false) => unreachable!(),
@@ -537,7 +550,7 @@ impl Page for CollectionList<'_> {
     }
 }
 
-impl Eventful for CollectionList<'_> {
+impl Eventful for CollectionDashboard<'_> {
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
             return Ok(Some(Command::Quit));
@@ -564,7 +577,7 @@ fn build_layout(size: Rect) -> DashboardLayout {
         .constraints([Constraint::Fill(1), Constraint::Length(1)])
         .areas(size);
 
-    let [_, title_pane, schemas_pane] = Layout::default()
+    let [_, title_pane, collections_pane] = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(1),
@@ -599,7 +612,7 @@ fn build_layout(size: Rect) -> DashboardLayout {
     );
 
     DashboardLayout {
-        schemas_pane,
+        collections_pane,
         hint_pane: help_pane,
         title_pane,
         help_popup,
@@ -621,14 +634,14 @@ mod tests {
 
     use super::*;
 
-    fn setup_temp_schemas(amount: usize) -> (TempDir, String) {
+    fn setup_temp_collections(amount: usize) -> (TempDir, String) {
         let tmp_data_dir = tempdir().expect("Failed to create temp data dir");
 
-        let tmp_dir = tmp_data_dir.path().join("schemas");
-        create_dir(&tmp_dir).expect("Failed to create schemas directory");
+        let tmp_dir = tmp_data_dir.path().join("collections");
+        create_dir(&tmp_dir).expect("Failed to create collections directory");
 
         for i in 0..amount {
-            let file_path = tmp_dir.join(format!("test_schema_{}.json", i));
+            let file_path = tmp_dir.join(format!("test_collection_{}.json", i));
             let mut tmp_file = File::create(&file_path).expect("Failed to create file");
 
             write!(
@@ -643,7 +656,7 @@ mod tests {
         (tmp_data_dir, tmp_dir.to_string_lossy().to_string())
     }
 
-    fn feed_keys(dashboard: &mut CollectionList, events: &[KeyEvent]) {
+    fn feed_keys(dashboard: &mut CollectionDashboard, events: &[KeyEvent]) {
         for event in events {
             _ = dashboard.handle_key_event(*event);
         }
@@ -653,7 +666,7 @@ mod tests {
     fn test_build_layout() {
         let size = Rect::new(0, 0, 80, 24);
         let expected = DashboardLayout {
-            schemas_pane: Rect::new(1, 6, 79, 17),
+            collections_pane: Rect::new(1, 6, 79, 17),
             hint_pane: Rect::new(1, 23, 79, 1),
             title_pane: Rect::new(1, 1, 79, 5),
             help_popup: Rect::new(14, 5, 50, 14),
@@ -671,12 +684,12 @@ mod tests {
     fn test_open_close_help() {
         let size = Rect::new(0, 0, 80, 24);
         let colors = colors::Colors::default();
-        let (_guard, path) = setup_temp_schemas(1);
-        let schemas = collection::collection::get_collections(path).unwrap();
+        let (_guard, path) = setup_temp_collections(1);
+        let collection = collection::collection::get_collections(path).unwrap();
 
-        let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
+        let mut dashboard = CollectionDashboard::new(size, &colors, collection).unwrap();
 
-        assert_eq!(dashboard.schemas.len(), 1);
+        assert_eq!(dashboard.collections.len(), 1);
         assert_eq!(dashboard.list_state.selected(), Some(0));
 
         assert_eq!(dashboard.pane_focus, PaneFocus::List);
@@ -697,12 +710,12 @@ mod tests {
     }
 
     #[test]
-    fn test_actions_without_any_schemas() {
+    fn test_actions_without_any_collections() {
         let size = Rect::new(0, 0, 80, 24);
         let colors = colors::Colors::default();
-        let mut dashboard = CollectionList::new(size, &colors, vec![]).unwrap();
+        let mut dashboard = CollectionDashboard::new(size, &colors, vec![]).unwrap();
 
-        assert!(dashboard.schemas.is_empty());
+        assert!(dashboard.collections.is_empty());
         assert_eq!(dashboard.list_state.selected(), None);
 
         feed_keys(
@@ -716,7 +729,7 @@ mod tests {
             ],
         );
 
-        assert!(dashboard.schemas.is_empty());
+        assert!(dashboard.collections.is_empty());
         assert_eq!(dashboard.list_state.selected(), None);
     }
 
@@ -724,12 +737,12 @@ mod tests {
     fn test_filtering_list() {
         let size = Rect::new(0, 0, 80, 24);
         let colors = colors::Colors::default();
-        let (_guard, path) = setup_temp_schemas(10);
-        let schemas = collection::collection::get_collections(path).unwrap();
+        let (_guard, path) = setup_temp_collections(10);
+        let collections = collection::collection::get_collections(path).unwrap();
 
-        let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
+        let mut dashboard = CollectionDashboard::new(size, &colors, collections).unwrap();
 
-        assert_eq!(dashboard.schemas.len(), 10);
+        assert_eq!(dashboard.collections.len(), 10);
         assert_eq!(dashboard.list_state.selected(), Some(0));
 
         feed_keys(
@@ -792,10 +805,10 @@ mod tests {
     fn test_moving_out_of_bounds() {
         let size = Rect::new(0, 0, 80, 24);
         let colors = colors::Colors::default();
-        let (_guard, path) = setup_temp_schemas(3);
-        let schemas = collection::collection::get_collections(path).unwrap();
+        let (_guard, path) = setup_temp_collections(3);
+        let collections = collection::collection::get_collections(path).unwrap();
 
-        let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
+        let mut dashboard = CollectionDashboard::new(size, &colors, collections).unwrap();
 
         feed_keys(
             &mut dashboard,
@@ -827,13 +840,13 @@ mod tests {
     }
 
     #[test]
-    fn test_creating_new_schema() {
+    fn test_creating_new_collections() {
         let size = Rect::new(0, 0, 80, 24);
         let colors = colors::Colors::default();
-        let (_guard, path) = setup_temp_schemas(3);
-        let schemas = collection::collection::get_collections(path).unwrap();
+        let (_guard, path) = setup_temp_collections(3);
+        let collections = collection::collection::get_collections(path).unwrap();
 
-        let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
+        let mut dashboard = CollectionDashboard::new(size, &colors, collections).unwrap();
 
         feed_keys(
             &mut dashboard,
@@ -904,12 +917,12 @@ mod tests {
     }
 
     #[test]
-    fn test_prompt_delete_schema() {
+    fn test_prompt_delete_collections() {
         let size = Rect::new(0, 0, 80, 24);
         let colors = colors::Colors::default();
-        let (_guard, path) = setup_temp_schemas(3);
-        let schemas = collection::collection::get_collections(path).unwrap();
-        let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
+        let (_guard, path) = setup_temp_collections(3);
+        let collections = collection::collection::get_collections(path).unwrap();
+        let mut dashboard = CollectionDashboard::new(size, &colors, collections).unwrap();
 
         feed_keys(
             &mut dashboard,
@@ -930,7 +943,7 @@ mod tests {
     fn test_display_error() {
         let size = Rect::new(0, 0, 80, 24);
         let colors = colors::Colors::default();
-        let mut dashboard = CollectionList::new(size, &colors, vec![]).unwrap();
+        let mut dashboard = CollectionDashboard::new(size, &colors, vec![]).unwrap();
 
         dashboard.display_error("any error message".into());
 
@@ -942,7 +955,7 @@ mod tests {
     fn test_draw_background() {
         let colors = colors::Colors::default();
         let size = Rect::new(0, 0, 80, 22);
-        let dashboard = CollectionList::new(size, &colors, vec![]).unwrap();
+        let dashboard = CollectionDashboard::new(size, &colors, vec![]).unwrap();
 
         let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
         let mut frame = terminal.get_frame();
@@ -962,9 +975,9 @@ mod tests {
     fn test_close_error_popup() {
         let colors = colors::Colors::default();
         let size = Rect::new(0, 0, 80, 22);
-        let (_guard, path) = setup_temp_schemas(3);
-        let schemas = collection::collection::get_collections(path).unwrap();
-        let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
+        let (_guard, path) = setup_temp_collections(3);
+        let collections = collection::collection::get_collections(path).unwrap();
+        let mut dashboard = CollectionDashboard::new(size, &colors, collections).unwrap();
 
         dashboard.display_error("any_error_message".into());
         assert_eq!(dashboard.pane_focus, PaneFocus::Error);
@@ -981,11 +994,11 @@ mod tests {
         let colors = colors::Colors::default();
         let size = Rect::new(0, 0, 80, 22);
         let new_size = Rect::new(0, 0, 80, 24);
-        let (_guard, path) = setup_temp_schemas(3);
-        let schemas = collection::collection::get_collections(path).unwrap();
-        let mut dashboard = CollectionList::new(size, &colors, schemas).unwrap();
+        let (_guard, path) = setup_temp_collections(3);
+        let collections = collection::collection::get_collections(path).unwrap();
+        let mut dashboard = CollectionDashboard::new(size, &colors, collections).unwrap();
         let expected = DashboardLayout {
-            schemas_pane: Rect::new(1, 6, 79, 17),
+            collections_pane: Rect::new(1, 6, 79, 17),
             hint_pane: Rect::new(1, 23, 79, 1),
             title_pane: Rect::new(1, 1, 79, 5),
             help_popup: Rect::new(14, 5, 50, 14),

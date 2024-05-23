@@ -1,6 +1,6 @@
 use crate::{
     components::{
-        api_explorer::CollectionViewer, dashboard::CollectionList,
+        api_explorer::CollectionViewer, dashboard::CollectionDashboard,
         terminal_too_small::TerminalTooSmall, Eventful, Page,
     },
     event_pool::Event,
@@ -12,7 +12,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Screens {
-    CollectionList,
+    CollectionDashboard,
     CollectionViewer,
     TerminalTooSmall,
 }
@@ -21,8 +21,8 @@ pub enum Screens {
 /// be seeing at any point by the application, it is the entity behind navigation
 pub struct ScreenManager<'sm> {
     terminal_too_small: TerminalTooSmall<'sm>,
-    collection_list: CollectionList<'sm>,
-    /// CollectionViewer is a option as we need a selected schema in order to build
+    collection_list: CollectionDashboard<'sm>,
+    /// CollectionViewer is a option as we need a selected collection in order to build
     /// all the components inside
     collection_viewer: Option<CollectionViewer<'sm>>,
 
@@ -44,15 +44,15 @@ impl<'sm> ScreenManager<'sm> {
     pub fn new(
         size: Rect,
         colors: &'sm colors::Colors,
-        schemas: Vec<Collection>,
+        collections: Vec<Collection>,
         config: &'sm config::Config,
     ) -> anyhow::Result<Self> {
         Ok(Self {
-            curr_screen: Screens::CollectionList,
-            prev_screen: Screens::CollectionList,
+            curr_screen: Screens::CollectionDashboard,
+            prev_screen: Screens::CollectionDashboard,
             collection_viewer: None,
             terminal_too_small: TerminalTooSmall::new(colors),
-            collection_list: CollectionList::new(size, colors, schemas)?,
+            collection_list: CollectionDashboard::new(size, colors, collections)?,
             size,
             colors,
             config,
@@ -77,11 +77,11 @@ impl<'sm> ScreenManager<'sm> {
     // in such command
     pub fn handle_command(&mut self, command: Command) {
         match command {
-            Command::SelectCollection(schema) | Command::CreateCollection(schema) => {
-                tracing::debug!("changing to api explorer: {}", schema.info.name);
+            Command::SelectCollection(collection) | Command::CreateCollection(collection) => {
+                tracing::debug!("changing to api explorer: {}", collection.info.name);
                 self.switch_screen(Screens::CollectionViewer);
                 let mut collection_viewer =
-                    CollectionViewer::new(self.size, schema, self.colors, self.config);
+                    CollectionViewer::new(self.size, collection, self.colors, self.config);
                 collection_viewer
                     .register_command_handler(
                         self.sender
@@ -115,9 +115,11 @@ impl Page for ScreenManager<'_> {
             Screens::CollectionViewer => self
                 .collection_viewer
                 .as_mut()
-                .expect("should never be able to switch to editor screen without having a schema")
+                .expect(
+                    "should never be able to switch to editor screen without having a collection",
+                )
                 .draw(frame, frame.size())?,
-            Screens::CollectionList => self.collection_list.draw(frame, frame.size())?,
+            Screens::CollectionDashboard => self.collection_list.draw(frame, frame.size())?,
             Screens::TerminalTooSmall => self.terminal_too_small.draw(frame, frame.size())?,
         };
 
@@ -160,9 +162,11 @@ impl Eventful for ScreenManager<'_> {
             Screens::CollectionViewer => self
                 .collection_viewer
                 .as_mut()
-                .expect("should never be able to switch to editor screen without having a schema")
+                .expect(
+                    "should never be able to switch to editor screen without having a collection",
+                )
                 .handle_event(event),
-            Screens::CollectionList => self.collection_list.handle_event(event),
+            Screens::CollectionDashboard => self.collection_list.handle_event(event),
             Screens::TerminalTooSmall => Ok(None),
         }
     }
@@ -180,14 +184,14 @@ mod tests {
     };
     use tempfile::{tempdir, TempDir};
 
-    fn setup_temp_schemas(amount: usize) -> (TempDir, String) {
+    fn setup_temp_collections(amount: usize) -> (TempDir, String) {
         let tmp_data_dir = tempdir().expect("Failed to create temp data dir");
 
-        let tmp_dir = tmp_data_dir.path().join("schemas");
-        create_dir(&tmp_dir).expect("Failed to create schemas directory");
+        let tmp_dir = tmp_data_dir.path().join("collections");
+        create_dir(&tmp_dir).expect("Failed to create collections directory");
 
         for i in 0..amount {
-            let file_path = tmp_dir.join(format!("test_schema_{}.json", i));
+            let file_path = tmp_dir.join(format!("test_collection_{}.json", i));
             let mut tmp_file = File::create(&file_path).expect("Failed to create file");
 
             write!(
@@ -207,10 +211,10 @@ mod tests {
         let small_in_width = Rect::new(0, 0, 79, 22);
         let small_in_height = Rect::new(0, 0, 100, 19);
         let colors = colors::Colors::default();
-        let (_guard, path) = setup_temp_schemas(10);
-        let schemas = collection::collection::get_collections(path).unwrap();
+        let (_guard, path) = setup_temp_collections(10);
+        let collections = collection::collection::get_collections(path).unwrap();
         let config = config::load_config();
-        let mut sm = ScreenManager::new(small_in_width, &colors, schemas, &config).unwrap();
+        let mut sm = ScreenManager::new(small_in_width, &colors, collections, &config).unwrap();
         let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
 
         sm.draw(&mut terminal.get_frame(), small_in_width).unwrap();
@@ -225,20 +229,20 @@ mod tests {
         let small = Rect::new(0, 0, 79, 22);
         let enough = Rect::new(0, 0, 80, 22);
         let colors = colors::Colors::default();
-        let (_guard, path) = setup_temp_schemas(10);
-        let schemas = collection::collection::get_collections(path).unwrap();
+        let (_guard, path) = setup_temp_collections(10);
+        let collections = collection::collection::get_collections(path).unwrap();
         let config = config::load_config();
-        let mut sm = ScreenManager::new(small, &colors, schemas, &config).unwrap();
+        let mut sm = ScreenManager::new(small, &colors, collections, &config).unwrap();
         let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
 
         terminal.resize(small).unwrap();
         sm.draw(&mut terminal.get_frame(), small).unwrap();
         assert_eq!(sm.curr_screen, Screens::TerminalTooSmall);
-        assert_eq!(sm.prev_screen, Screens::CollectionList);
+        assert_eq!(sm.prev_screen, Screens::CollectionDashboard);
 
         terminal.resize(enough).unwrap();
         sm.draw(&mut terminal.get_frame(), enough).unwrap();
-        assert_eq!(sm.curr_screen, Screens::CollectionList);
+        assert_eq!(sm.curr_screen, Screens::CollectionDashboard);
         assert_eq!(sm.prev_screen, Screens::TerminalTooSmall);
     }
 
@@ -247,10 +251,10 @@ mod tests {
         let initial = Rect::new(0, 0, 80, 22);
         let expected = Rect::new(0, 0, 100, 22);
         let colors = colors::Colors::default();
-        let (_guard, path) = setup_temp_schemas(10);
-        let schemas = collection::collection::get_collections(path).unwrap();
+        let (_guard, path) = setup_temp_collections(10);
+        let collection = collection::collection::get_collections(path).unwrap();
         let config = config::load_config();
-        let mut sm = ScreenManager::new(initial, &colors, schemas, &config).unwrap();
+        let mut sm = ScreenManager::new(initial, &colors, collection, &config).unwrap();
 
         sm.resize(expected);
 
@@ -261,7 +265,7 @@ mod tests {
     fn test_switch_to_explorer_on_select() {
         let initial = Rect::new(0, 0, 80, 22);
         let colors = colors::Colors::default();
-        let schema = Collection {
+        let collection = Collection {
             info: Info {
                 name: String::from("any_name"),
                 description: None,
@@ -269,14 +273,14 @@ mod tests {
             path: "any_path".into(),
             requests: None,
         };
-        let command = Command::SelectCollection(schema.clone());
-        let (_guard, path) = setup_temp_schemas(10);
-        let schemas = collection::collection::get_collections(path).unwrap();
+        let command = Command::SelectCollection(collection.clone());
+        let (_guard, path) = setup_temp_collections(10);
+        let collection = collection::collection::get_collections(path).unwrap();
         let config = config::load_config();
         let (tx, _) = tokio::sync::mpsc::unbounded_channel::<Command>();
-        let mut sm = ScreenManager::new(initial, &colors, schemas, &config).unwrap();
+        let mut sm = ScreenManager::new(initial, &colors, collection, &config).unwrap();
         _ = sm.register_command_handler(tx.clone());
-        assert_eq!(sm.curr_screen, Screens::CollectionList);
+        assert_eq!(sm.curr_screen, Screens::CollectionDashboard);
 
         sm.handle_command(command);
         assert_eq!(sm.curr_screen, Screens::CollectionViewer);
@@ -286,10 +290,10 @@ mod tests {
     fn test_register_command_sender_for_dashboard() {
         let initial = Rect::new(0, 0, 80, 22);
         let colors = colors::Colors::default();
-        let (_guard, path) = setup_temp_schemas(10);
-        let schemas = collection::collection::get_collections(path).unwrap();
+        let (_guard, path) = setup_temp_collections(10);
+        let collections = collection::collection::get_collections(path).unwrap();
         let config = config::load_config();
-        let mut sm = ScreenManager::new(initial, &colors, schemas, &config).unwrap();
+        let mut sm = ScreenManager::new(initial, &colors, collections, &config).unwrap();
 
         let (tx, _) = tokio::sync::mpsc::unbounded_channel::<Command>();
 
@@ -302,10 +306,10 @@ mod tests {
     fn test_quit_event() {
         let initial = Rect::new(0, 0, 80, 22);
         let colors = colors::Colors::default();
-        let (_guard, path) = setup_temp_schemas(10);
-        let schemas = collection::collection::get_collections(path).unwrap();
+        let (_guard, path) = setup_temp_collections(10);
+        let collections = collection::collection::get_collections(path).unwrap();
         let config = config::load_config();
-        let mut sm = ScreenManager::new(initial, &colors, schemas, &config).unwrap();
+        let mut sm = ScreenManager::new(initial, &colors, collections, &config).unwrap();
 
         let event = Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
 

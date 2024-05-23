@@ -15,15 +15,15 @@ use ratatui::{
 use reqtui::collection::Collection;
 
 #[derive(Debug)]
-pub struct SchemaListState {
+pub struct CollectionListState {
     selected: Option<usize>,
     pub(super) items: Vec<Collection>,
     scroll: usize,
 }
 
-impl SchemaListState {
+impl CollectionListState {
     pub fn new(items: Vec<Collection>) -> Self {
-        SchemaListState {
+        CollectionListState {
             selected: None,
             items,
             scroll: 0,
@@ -44,15 +44,15 @@ impl SchemaListState {
 }
 
 #[derive(Debug, Clone)]
-pub struct SchemaList<'a> {
-    colors: &'a colors::Colors,
+pub struct CollectionList<'cl> {
+    colors: &'cl colors::Colors,
     min_col_width: u16,
     row_height: u16,
 }
 
-impl<'a> SchemaList<'a> {
+impl<'a> CollectionList<'a> {
     pub fn new(colors: &'a colors::Colors) -> Self {
-        SchemaList {
+        CollectionList {
             colors,
             min_col_width: 30,
             row_height: 4,
@@ -90,13 +90,18 @@ impl<'a> SchemaList<'a> {
 
     fn build_card(
         &self,
-        state: &SchemaListState,
-        schema: &Collection,
+        state: &CollectionListState,
+        collection: &Collection,
         index: usize,
     ) -> Paragraph<'_> {
         let lines = vec![
-            schema.info.name.clone().fg(self.colors.normal.white).into(),
-            schema
+            collection
+                .info
+                .name
+                .clone()
+                .fg(self.colors.normal.white)
+                .into(),
+            collection
                 .info
                 .description
                 .clone()
@@ -123,8 +128,8 @@ impl<'a> SchemaList<'a> {
     }
 }
 
-impl StatefulWidget for SchemaList<'_> {
-    type State = SchemaListState;
+impl StatefulWidget for CollectionList<'_> {
+    type State = CollectionListState;
 
     fn render(self, size: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let list_size = Rect::new(size.x, size.y, size.width.saturating_sub(3), size.height);
@@ -163,7 +168,7 @@ impl StatefulWidget for SchemaList<'_> {
             .skip(state.scroll)
             .take(rects.len())
             .enumerate()
-            .map(|(i, schema)| self.build_card(state, schema, i))
+            .map(|(i, collection)| self.build_card(state, collection, i))
             .for_each(|card| card.render(rects.pop_front().unwrap(), buf));
 
         scrollbar.render(scrollbar_size, buf, &mut scrollbar_state);
@@ -178,7 +183,7 @@ mod tests {
     use ratatui::{backend::TestBackend, buffer::Cell, Terminal};
     use reqtui::collection::types::*;
 
-    fn sample_schema() -> Collection {
+    fn sample_collection() -> Collection {
         Collection {
             info: Info {
                 name: String::from("any_name"),
@@ -192,10 +197,10 @@ mod tests {
     #[test]
     fn test_build_layout() {
         let colors = colors::Colors::default();
-        let schema_list = SchemaList::new(&colors);
+        let collection_list = CollectionList::new(&colors);
         let size = Rect::new(0, 0, 31, 10);
 
-        let layout = schema_list.build_layout(&size);
+        let layout = collection_list.build_layout(&size);
 
         assert!(!layout.is_empty());
         assert_eq!(layout.len(), 2);
@@ -204,22 +209,22 @@ mod tests {
     #[test]
     fn test_items_per_row() {
         let colors = colors::Colors::default();
-        let schema_list = SchemaList::new(&colors);
+        let collection_list = CollectionList::new(&colors);
         let zero_items = Rect::new(0, 0, 30, 10);
         let one_item = Rect::new(0, 0, 31, 10);
 
-        let amount = schema_list.items_per_row(&zero_items);
+        let amount = collection_list.items_per_row(&zero_items);
         assert_eq!(amount, 0);
 
-        let amount = schema_list.items_per_row(&one_item);
+        let amount = collection_list.items_per_row(&one_item);
         assert_eq!(amount, 1);
     }
 
     #[test]
     fn test_build_card() {
         let colors = colors::Colors::default();
-        let schema_list = SchemaList::new(&colors);
-        let schemas = vec![Collection {
+        let collection_list = CollectionList::new(&colors);
+        let collections = vec![Collection {
             info: Info {
                 name: String::from("any_name"),
                 description: None,
@@ -227,7 +232,7 @@ mod tests {
             path: "any_path".into(),
             requests: None,
         }];
-        let state = SchemaListState::new(schemas.clone());
+        let state = CollectionListState::new(collections.clone());
 
         let lines = vec![
             "any_name".fg(colors.normal.white).into(),
@@ -240,7 +245,7 @@ mod tests {
                 .border_style(Style::default().fg(colors.primary.hover)),
         );
 
-        let card = schema_list.build_card(&state, &schemas[0], 0);
+        let card = collection_list.build_card(&state, &collections[0], 0);
 
         assert_eq!(card, expected);
     }
@@ -248,21 +253,21 @@ mod tests {
     #[test]
     fn test_rendering() {
         let colors = colors::Colors::default();
-        let schemas = (0..100).map(|_| sample_schema()).collect::<Vec<_>>();
+        let collections = (0..100).map(|_| sample_collection()).collect::<Vec<_>>();
 
         let backend = TestBackend::new(80, 22);
         let mut terminal = Terminal::new(backend).unwrap();
         let size = terminal.size().unwrap();
         let mut frame = terminal.get_frame();
 
-        let mut state = SchemaListState::new(schemas.clone());
-        let schema_list = SchemaList::new(&colors);
+        let mut state = CollectionListState::new(collections.clone());
+        let collection_list = CollectionList::new(&colors);
 
         for cell in &frame.buffer_mut().content {
             assert_eq!(cell, &Cell::default());
         }
 
-        schema_list.render(size, frame.buffer_mut(), &mut state);
+        collection_list.render(size, frame.buffer_mut(), &mut state);
 
         for cell in frame
             .buffer_mut()
