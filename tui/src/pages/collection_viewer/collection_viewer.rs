@@ -181,7 +181,7 @@ impl<'ae> CollectionViewer<'ae> {
 
         CollectionViewer {
             collection,
-            focused_pane: PaneFocus::ReqUri,
+            focused_pane: PaneFocus::Sidebar,
             selected_pane: None,
             colors,
             config,
@@ -222,7 +222,7 @@ impl<'ae> CollectionViewer<'ae> {
 
         match key_event.code {
             KeyCode::Enter => {
-                if let Some(ref req) = self.hovered_request {
+                if let Some(req) = self.hovered_request.clone() {
                     match req {
                         RequestKind::Nested(dir) => {
                             let entry = self.dirs_expanded.entry(dir.clone()).or_insert(false);
@@ -251,6 +251,8 @@ impl<'ae> CollectionViewer<'ae> {
                         req,
                     )
                     .or(Some(req.clone()));
+                } else if let Some(requests) = self.collection.requests.as_ref() {
+                    self.hovered_request = requests.first().cloned();
                 }
             }
             KeyCode::Char('k') => {
@@ -264,7 +266,9 @@ impl<'ae> CollectionViewer<'ae> {
                         id,
                     )
                     .or(Some(id.clone()));
-                };
+                } else if let Some(requests) = self.collection.requests.as_ref() {
+                    self.hovered_request = requests.first().cloned();
+                }
             }
             KeyCode::Char('n') => self.curr_overlay = Overlays::CreateRequest,
             _ => {}
@@ -770,6 +774,11 @@ impl<'ae> CollectionViewer<'ae> {
             }),
         };
 
+        if let RequestKind::Single(ref req) = new_request {
+            self.selected_request = Some(Rc::new(RefCell::new(req.clone())));
+            self.hovered_request = Some(new_request.clone());
+        }
+
         self.collection
             .requests
             .get_or_insert_with(Vec::new)
@@ -777,7 +786,6 @@ impl<'ae> CollectionViewer<'ae> {
 
         self.create_req_form_state = CreateReqFormState::default();
         self.curr_overlay = Overlays::None;
-
         self.sync_collection_changes();
     }
 
