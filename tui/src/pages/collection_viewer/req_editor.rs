@@ -1,4 +1,4 @@
-use crate::{components::Eventful, utils::build_syntax_highlighted_lines};
+use crate::{pages::Eventful, utils::build_syntax_highlighted_lines};
 use config::{Action, EditorMode, KeyAction};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{

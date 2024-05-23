@@ -1,4 +1,4 @@
-use crate::components::Page;
+use crate::pages::Page;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
     style::Stylize,

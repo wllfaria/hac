@@ -1,65 +1,74 @@
 use crate::{
-    collection::types::Request,
+    collection::types::{BodyType, Request},
+    net::request_strategies::{http_strategy::HttpResponse, RequestStrategy},
     text_object::{Readonly, TextObject},
 };
 use reqwest::header::{HeaderMap, HeaderValue};
+use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Debug, PartialEq)]
-pub struct ReqtuiResponse {
+pub struct Response {
     pub body: String,
     pub pretty_body: TextObject<Readonly>,
     pub headers: HeaderMap<HeaderValue>,
+    pub duration: Duration,
 }
 
-#[derive(Debug, PartialEq)]
-pub enum ReqtuiNetRequest {
-    Request(Request),
-    Response(ReqtuiResponse),
-    Error(String),
+pub struct RequestManager;
+
+impl RequestManager {
+    pub async fn handle<S>(strategy: S, request: Request) -> anyhow::Result<Response>
+    where
+        S: RequestStrategy,
+    {
+        let response = strategy.handle(request).await?;
+        Ok(response)
+    }
+}
+
+pub enum ContentType {
+    TextPlain,
+    TextHtml,
+    TextCss,
+    TextJavascript,
+    ApplicationJson,
+    ApplicationXml,
+}
+
+impl From<&str> for ContentType {
+    fn from(value: &str) -> Self {
+        match value {
+            _ if value.to_ascii_lowercase().contains("application/json") => Self::ApplicationJson,
+            _ if value.to_ascii_lowercase().contains("application/xml") => Self::ApplicationXml,
+            _ if value.to_ascii_lowercase().contains("text/plain") => Self::TextPlain,
+            _ if value.to_ascii_lowercase().contains("text/plain") => Self::TextPlain,
+            _ if value.to_ascii_lowercase().contains("text/html") => Self::TextHtml,
+            _ if value.to_ascii_lowercase().contains("text/css") => Self::TextCss,
+            _ if value.to_ascii_lowercase().contains("text/javascript") => Self::TextJavascript,
+            _ => Self::TextPlain,
+        }
+    }
 }
 
 #[tracing::instrument(skip_all)]
-pub fn handle_request(request: Request, response_tx: UnboundedSender<ReqtuiNetRequest>) {
+pub fn handle_request(request: Request, response_tx: UnboundedSender<Response>) {
     tracing::debug!("starting to handle user request");
     tokio::spawn(async move {
-        let client = reqwest::Client::new();
-        match client.get(request.uri).send().await {
-            Ok(res) => {
-                tracing::debug!("request handled successfully, sending response");
+        let result = match request.body_type.as_ref() {
+            // if we dont have a body type, this is a GET request, so we use HTTP strategy
+            None => RequestManager::handle(HttpResponse, request).await,
+            Some(body_type) => match body_type {
+                BodyType::Json => RequestManager::handle(HttpResponse, request).await,
+            },
+        };
 
-                let headers = res.headers().to_owned();
-
-                let body: serde_json::Value = res
-                    .json()
-                    .await
-                    .map_err(|_| {
-                        response_tx.send(ReqtuiNetRequest::Error(
-                            "failed to decode json response".into(),
-                        ))
-                    })
-                    .expect("failed to send response through channel");
-
-                let pretty_body = serde_json::to_string_pretty(&body)
-                    .map_err(|_| {
-                        response_tx.send(ReqtuiNetRequest::Error(
-                            "failed to decode json response".into(),
-                        ))
-                    })
-                    .expect("failed to send response through channel");
-
-                let body = body.to_string();
-                let pretty_body = TextObject::from(&pretty_body);
-
-                response_tx
-                    .send(ReqtuiNetRequest::Response(ReqtuiResponse {
-                        body,
-                        pretty_body,
-                        headers,
-                    }))
-                    .expect("failed to send response through channel");
+        match result {
+            Ok(response) => response_tx.send(response).ok(),
+            Err(e) => {
+                tracing::error!("{e:?}");
+                todo!();
             }
-            Err(_) => todo!(),
         }
     });
 }

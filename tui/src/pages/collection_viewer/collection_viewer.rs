@@ -1,5 +1,5 @@
-use crate::components::{
-    api_explorer::{
+use crate::pages::{
+    collection_viewer::{
         req_editor::{ReqEditor, ReqEditorState, ReqEditorTabs},
         req_uri::{ReqUri, ReqUriState},
         res_viewer::{ResViewer, ResViewerState, ResViewerTabs},
@@ -19,9 +19,9 @@ use ratatui::{
     Frame,
 };
 use reqtui::{
-    collection::types::{Collection, Directory, Request, RequestKind, RequestMethod},
+    collection::types::{BodyType, Collection, Directory, Request, RequestKind, RequestMethod},
     command::Command,
-    net::request_manager::{ReqtuiNetRequest, ReqtuiResponse},
+    net::request_manager::Response,
 };
 use std::{
     cell::RefCell,
@@ -122,12 +122,12 @@ pub enum CreateReqKind {
 
 #[derive(Debug)]
 pub struct CollectionViewer<'ae> {
-    schema: Collection,
+    collection: Collection,
     colors: &'ae colors::Colors,
     config: &'ae config::Config,
     layout: ExplorerLayout,
-    response_rx: UnboundedReceiver<ReqtuiNetRequest>,
-    request_tx: UnboundedSender<ReqtuiNetRequest>,
+    response_rx: UnboundedReceiver<Response>,
+    request_tx: UnboundedSender<Response>,
     selected_request: Option<Rc<RefCell<Request>>>,
     hovered_request: Option<RequestKind>,
     dirs_expanded: HashMap<Directory, bool>,
@@ -150,19 +150,19 @@ pub struct CollectionViewer<'ae> {
 
     sender: Option<UnboundedSender<Command>>,
 
-    responses_map: HashMap<Request, Rc<RefCell<ReqtuiResponse>>>,
+    responses_map: HashMap<Request, Rc<RefCell<Response>>>,
 }
 
 impl<'ae> CollectionViewer<'ae> {
     pub fn new(
         size: Rect,
-        schema: Collection,
+        collection: Collection,
         colors: &'ae colors::Colors,
         config: &'ae config::Config,
     ) -> Self {
         let layout = build_layout(size);
 
-        let mut selected_request = schema.requests.as_ref().and_then(|requests| {
+        let mut selected_request = collection.requests.as_ref().and_then(|requests| {
             requests.first().and_then(|req| {
                 if let RequestKind::Single(req) = req {
                     Some(Rc::new(RefCell::new(req.clone())))
@@ -172,15 +172,15 @@ impl<'ae> CollectionViewer<'ae> {
             })
         });
 
-        let hovered_request = schema
+        let hovered_request = collection
             .requests
             .as_ref()
             .and_then(|requests| requests.first().cloned());
 
-        let (request_tx, response_rx) = unbounded_channel::<ReqtuiNetRequest>();
+        let (request_tx, response_rx) = unbounded_channel::<Response>();
 
         CollectionViewer {
-            schema,
+            collection,
             focused_pane: PaneFocus::ReqUri,
             selected_pane: None,
             colors,
@@ -243,8 +243,8 @@ impl<'ae> CollectionViewer<'ae> {
             KeyCode::Char('j') => {
                 if let Some(ref req) = self.hovered_request {
                     self.hovered_request = find_next_entry(
-                        self.schema.requests.as_ref().context(
-                            "should never have a selected request without any requests on schema",
+                        self.collection.requests.as_ref().context(
+                            "should never have a selected request without any requests on collection",
                         )?,
                         VisitNode::Next,
                         &self.dirs_expanded,
@@ -256,8 +256,8 @@ impl<'ae> CollectionViewer<'ae> {
             KeyCode::Char('k') => {
                 if let Some(ref id) = self.hovered_request {
                     self.hovered_request = find_next_entry(
-                        self.schema.requests.as_ref().context(
-                            "should never have a selected request without any requests on schema",
+                        self.collection.requests.as_ref().context(
+                            "should never have a selected request without any requests on collection",
                         )?,
                         VisitNode::Prev,
                         &self.dirs_expanded,
@@ -317,7 +317,7 @@ impl<'ae> CollectionViewer<'ae> {
 
     fn draw_sidebar(&mut self, frame: &mut Frame) {
         let mut state = SidebarState::new(
-            self.schema.requests.as_deref(),
+            self.collection.requests.as_deref(),
             &self.selected_request,
             self.hovered_request.as_ref(),
             &mut self.dirs_expanded,
@@ -370,7 +370,7 @@ impl<'ae> CollectionViewer<'ae> {
     }
 
     fn drain_response_rx(&mut self) {
-        while let Ok(ReqtuiNetRequest::Response(res)) = self.response_rx.try_recv() {
+        while let Ok(res) = self.response_rx.try_recv() {
             let res = Rc::new(RefCell::new(res));
             self.selected_request.as_ref().and_then(|req| {
                 self.responses_map
@@ -761,7 +761,7 @@ impl<'ae> CollectionViewer<'ae> {
             }),
         };
 
-        self.schema
+        self.collection
             .requests
             .get_or_insert_with(Vec::new)
             .push(new_request);
@@ -769,17 +769,17 @@ impl<'ae> CollectionViewer<'ae> {
         self.create_req_form_state = CreateReqFormState::default();
         self.curr_overlay = Overlays::None;
 
-        self.sync_schema_changes();
+        self.sync_collection_changes();
     }
 
-    fn sync_schema_changes(&mut self) {
+    fn sync_collection_changes(&mut self) {
         let sender = self
             .sender
             .as_ref()
             .expect("should have a sender at this point")
             .clone();
 
-        let mut schema = self.schema.clone();
+        let mut collection = self.collection.clone();
         if let Some(request) = self.selected_request.as_ref() {
             let mut request = request.borrow().clone();
             let body = self.editor.body().to_string();
@@ -787,16 +787,16 @@ impl<'ae> CollectionViewer<'ae> {
             // body types like GraphQL
             if !body.is_empty() {
                 request.body = Some(body);
-                request.body_type = Some("application/json".into());
+                request.body_type = Some(BodyType::Json)
             }
 
             // we might later on decide to keep track of the actual dir/request index
             // so we dont have to go over all the possible requests, this might be a
             // problem for huge collections, but I haven't tested
-            schema
+            collection
                 .requests
                 .as_mut()
-                .expect("no requests on schema, but we have a selected request")
+                .expect("no requests on collection, but we have a selected request")
                 .iter_mut()
                 .for_each(|other| match other {
                     RequestKind::Single(inner) => {
@@ -812,7 +812,7 @@ impl<'ae> CollectionViewer<'ae> {
 
         self.sync_interval = std::time::Instant::now();
         tokio::spawn(async move {
-            match reqtui::fs::sync_collection(schema).await {
+            match reqtui::fs::sync_collection(collection).await {
                 Ok(_) => {}
                 Err(e) => {
                     if sender.send(Command::Error(e.to_string())).is_err() {
@@ -880,7 +880,7 @@ impl Page for CollectionViewer<'_> {
 
     fn handle_tick(&mut self) -> anyhow::Result<()> {
         if self.sync_interval.elapsed().as_secs().ge(&5) {
-            self.sync_schema_changes();
+            self.sync_collection_changes();
         }
         Ok(())
     }

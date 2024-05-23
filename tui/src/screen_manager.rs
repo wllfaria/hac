@@ -1,9 +1,9 @@
 use crate::{
-    components::{
-        api_explorer::CollectionViewer, dashboard::CollectionDashboard,
+    event_pool::Event,
+    pages::{
+        collection_dashboard::CollectionDashboard, collection_viewer::CollectionViewer,
         terminal_too_small::TerminalTooSmall, Eventful, Page,
     },
-    event_pool::Event,
 };
 use reqtui::{collection::Collection, command::Command};
 

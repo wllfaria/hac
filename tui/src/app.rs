@@ -1,6 +1,6 @@
 use crate::{
-    components::{Eventful, Page},
     event_pool::{Event, EventPool},
+    pages::{Eventful, Page},
     screen_manager::ScreenManager,
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
@@ -18,12 +18,12 @@ pub struct App<'app> {
 impl<'app> App<'app> {
     pub fn new(
         colors: &'app colors::Colors,
-        schemas: Vec<Collection>,
+        collections: Vec<Collection>,
         config: &'app config::Config,
     ) -> anyhow::Result<Self> {
         let terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
         Ok(Self {
-            screen_manager: ScreenManager::new(terminal.size()?, colors, schemas, config)?,
+            screen_manager: ScreenManager::new(terminal.size()?, colors, collections, config)?,
             event_pool: EventPool::new(60f64, 30f64),
             should_quit: false,
             terminal,

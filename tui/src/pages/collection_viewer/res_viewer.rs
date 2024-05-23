@@ -1,4 +1,4 @@
-use reqtui::{net::request_manager::ReqtuiResponse, syntax::highlighter::HIGHLIGHTER};
+use reqtui::{net::request_manager::Response, syntax::highlighter::HIGHLIGHTER};
 
 use crate::utils::build_syntax_highlighted_lines;
 use ratatui::{
@@ -89,13 +89,13 @@ impl<'a> ResViewerState<'a> {
 #[derive(Debug, Clone)]
 pub struct ResViewer<'a> {
     colors: &'a colors::Colors,
-    response: Option<Rc<RefCell<ReqtuiResponse>>>,
+    response: Option<Rc<RefCell<Response>>>,
     tree: Option<Tree>,
     lines: Vec<Line<'static>>,
 }
 
 impl<'a> ResViewer<'a> {
-    pub fn new(colors: &'a colors::Colors, response: Option<Rc<RefCell<ReqtuiResponse>>>) -> Self {
+    pub fn new(colors: &'a colors::Colors, response: Option<Rc<RefCell<Response>>>) -> Self {
         let tree = response.as_ref().and_then(|response| {
             let pretty_body = response.borrow().pretty_body.to_string();
             let mut highlighter = HIGHLIGHTER.write().unwrap();
@@ -110,7 +110,7 @@ impl<'a> ResViewer<'a> {
         }
     }
 
-    pub fn update(&mut self, response: Option<Rc<RefCell<ReqtuiResponse>>>) {
+    pub fn update(&mut self, response: Option<Rc<RefCell<Response>>>) {
         self.tree = response.as_ref().and_then(|response| {
             let pretty_body = response.borrow().pretty_body.to_string();
             let mut highlighter = HIGHLIGHTER.write().unwrap();

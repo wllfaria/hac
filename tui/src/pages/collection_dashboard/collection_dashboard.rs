@@ -1,9 +1,9 @@
-use crate::components::{
-    confirm_popup::ConfirmPopup,
-    dashboard::{
+use crate::pages::{
+    collection_dashboard::{
         collection_list::{CollectionList, CollectionListState},
         new_collection_form::{FormFocus, FormState, NewCollectionForm},
     },
+    confirm_popup::ConfirmPopup,
     error_popup::ErrorPopup,
     overlay::draw_overlay,
     Eventful, Page,

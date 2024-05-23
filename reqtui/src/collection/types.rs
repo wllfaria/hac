@@ -80,7 +80,13 @@ pub struct Request {
     pub uri: String,
     pub body: Option<String>,
     #[serde(rename = "bodyType")]
-    pub body_type: Option<String>,
+    pub body_type: Option<BodyType>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub enum BodyType {
+    #[serde(rename = "json")]
+    Json,
 }
 
 impl Hash for Request {

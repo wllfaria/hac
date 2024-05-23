@@ -6,7 +6,7 @@ use std::{
     io::Write,
 };
 use tempfile::{tempdir, TempDir};
-use tui::components::{dashboard::CollectionDashboard, Eventful, Page};
+use tui::pages::{collection_dashboard::CollectionDashboard, Eventful, Page};
 
 fn setup_temp_collections(amount: usize) -> (TempDir, String) {
     let tmp_data_dir = tempdir().expect("Failed to create temp data dir");

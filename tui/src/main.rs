@@ -33,9 +33,9 @@ async fn main() -> anyhow::Result<()> {
             let _guard = setup_tracing()?;
 
             let colors = colors::Colors::default();
-            let mut schemas = collection::get_collections_from_config()?;
-            schemas.sort_by_key(|key| key.info.name.clone());
-            let mut app = app::App::new(&colors, schemas, &config)?;
+            let mut collections = collection::get_collections_from_config()?;
+            collections.sort_by_key(|key| key.info.name.clone());
+            let mut app = app::App::new(&colors, collections, &config)?;
             app.run().await?;
         }
     }

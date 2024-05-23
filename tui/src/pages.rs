@@ -1,6 +1,6 @@
-pub mod api_explorer;
+pub mod collection_dashboard;
+pub mod collection_viewer;
 pub mod confirm_popup;
-pub mod dashboard;
 pub mod error_popup;
 pub mod input;
 mod overlay;

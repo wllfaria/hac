@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, StatefulWidget, Widget},
 };
 
-use crate::components::input::Input;
+use crate::pages::input::Input;
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub enum FormFocus {
