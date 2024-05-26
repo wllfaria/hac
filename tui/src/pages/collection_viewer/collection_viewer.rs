@@ -843,7 +843,7 @@ impl<'ae> CollectionViewer<'ae> {
 }
 
 impl Page for CollectionViewer<'_> {
-    #[tracing::instrument(skip_all, target = "api_explorer")]
+    #[tracing::instrument(skip_all)]
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         self.draw_background(size, frame);
 
@@ -890,6 +890,19 @@ impl Page for CollectionViewer<'_> {
                 editor_position.x.add(editor_position.width),
             );
             frame.set_cursor(col_with_offset, row_with_offset);
+        }
+
+        if self.focused_pane.eq(&PaneFocus::ReqUri) {
+            if let Some(request) = self.selected_request.as_ref() {
+                frame.set_cursor(
+                    self.layout
+                        .req_uri
+                        .x
+                        .add(request.borrow().uri.len() as u16)
+                        .add(1),
+                    self.layout.req_uri.y.add(1),
+                )
+            }
         }
 
         Ok(())
