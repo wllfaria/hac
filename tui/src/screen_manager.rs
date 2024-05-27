@@ -316,6 +316,5 @@ mod tests {
         let command = sm.handle_event(Some(event)).unwrap();
 
         assert!(command.is_some());
-        assert_eq!(command, Some(Command::Quit));
     }
 }

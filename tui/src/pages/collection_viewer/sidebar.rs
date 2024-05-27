@@ -1,4 +1,4 @@
-use reqtui::collection::types::{Directory, Request, RequestKind, RequestMethod};
+use reqtui::collection::types::{Request, RequestKind, RequestMethod};
 
 use ratatui::{
     buffer::Buffer,
@@ -7,22 +7,25 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, StatefulWidget, Widget},
 };
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 pub struct SidebarState<'a> {
     requests: Option<&'a [RequestKind]>,
-    selected_request: &'a Option<Rc<RefCell<Request>>>,
+    selected_request: &'a Option<Arc<RwLock<Request>>>,
     hovered_requet: Option<&'a RequestKind>,
-    dirs_expanded: &'a mut HashMap<Directory, bool>,
+    dirs_expanded: &'a mut HashMap<String, bool>,
     is_focused: bool,
 }
 
 impl<'a> SidebarState<'a> {
     pub fn new(
         requests: Option<&'a [RequestKind]>,
-        selected_request: &'a Option<Rc<RefCell<Request>>>,
+        selected_request: &'a Option<Arc<RwLock<Request>>>,
         hovered_requet: Option<&'a RequestKind>,
-        dirs_expanded: &'a mut HashMap<Directory, bool>,
+        dirs_expanded: &'a mut HashMap<String, bool>,
         is_focused: bool,
     ) -> Self {
         SidebarState {
@@ -98,9 +101,9 @@ impl<'a> StatefulWidget for Sidebar<'a> {
 fn build_lines(
     requests: Option<&[RequestKind]>,
     level: usize,
-    selected_request: &Option<Rc<RefCell<Request>>>,
+    selected_request: &Option<Arc<RwLock<Request>>>,
     hovered_request: Option<&RequestKind>,
-    dirs_expanded: &mut HashMap<Directory, bool>,
+    dirs_expanded: &mut HashMap<String, bool>,
     colors: &colors::Colors,
 ) -> Vec<RenderLine> {
     requests
@@ -108,8 +111,8 @@ fn build_lines(
         .iter()
         .flat_map(|item| match item {
             RequestKind::Nested(dir) => {
-                let is_hovered = hovered_request.is_some_and(|req| *req == *item);
-                let is_expanded = dirs_expanded.entry(dir.clone()).or_insert(false);
+                let is_hovered = hovered_request.is_some_and(|req| req.get_id().eq(&item.get_id()));
+                let is_expanded = dirs_expanded.entry(dir.id.to_string()).or_insert(false);
 
                 let dir_style = match is_hovered {
                     true => Style::default()
@@ -149,10 +152,10 @@ fn build_lines(
             }
             RequestKind::Single(req) => {
                 let gap = " ".repeat(level * 2);
-                let is_selected = selected_request
-                    .as_ref()
-                    .is_some_and(|selected| &*selected.borrow() == req);
-                let is_hovered = hovered_request.is_some_and(|req| *req == *item);
+                let is_selected = selected_request.as_ref().is_some_and(|selected| {
+                    selected.read().unwrap().id.eq(&req.read().unwrap().id)
+                });
+                let is_hovered = hovered_request.is_some_and(|req| req.get_id().eq(&item.get_id()));
 
                 let req_style = match (is_selected, is_hovered) {
                     (true, true) => Style::default()
@@ -169,14 +172,14 @@ fn build_lines(
 
                 let line: Line<'_> = vec![
                     Span::from(gap.clone()),
-                    colored_method(req.method.clone(), colors),
-                    Span::from(format!(" {}", req.name.clone())),
+                    colored_method(req.read().unwrap().method.clone(), colors),
+                    Span::from(format!(" {}", req.read().unwrap().name.clone())),
                 ]
                 .into();
 
                 vec![RenderLine {
                     _level: level,
-                    _name: req.name.clone(),
+                    _name: req.read().unwrap().name.clone(),
                     line: Paragraph::new(line).set_style(req_style),
                 }]
             }

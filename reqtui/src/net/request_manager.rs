@@ -4,7 +4,10 @@ use crate::{
     text_object::{Readonly, TextObject},
 };
 use reqwest::header::{HeaderMap, HeaderValue};
-use std::time::Duration;
+use std::{
+    sync::{Arc, RwLock},
+    time::Duration,
+};
 use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Debug, PartialEq)]
@@ -57,8 +60,8 @@ impl From<&str> for ContentType {
 }
 
 #[tracing::instrument(skip_all)]
-pub fn handle_request(request: Request, response_tx: UnboundedSender<Response>) {
-    tracing::debug!("starting to handle user request");
+pub fn handle_request(request: &Arc<RwLock<Request>>, response_tx: UnboundedSender<Response>) {
+    let request = request.read().unwrap().clone();
     tokio::spawn(async move {
         let response = match request.body_type.as_ref() {
             // if we dont have a body type, this is a GET request, so we use HTTP strategy

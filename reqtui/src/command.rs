@@ -1,6 +1,6 @@
 use crate::collection::Collection;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub enum Command {
     Quit,
     SelectCollection(Collection),

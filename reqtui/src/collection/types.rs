@@ -1,8 +1,12 @@
-use std::{hash::Hash, path::PathBuf};
+use std::{
+    hash::Hash,
+    path::PathBuf,
+    sync::{Arc, RwLock},
+};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Collection {
     pub info: Info,
     pub requests: Option<Vec<RequestKind>>,
@@ -10,18 +14,25 @@ pub struct Collection {
     pub path: PathBuf,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum RequestKind {
-    Single(Request),
+    Single(Arc<RwLock<Request>>),
     Nested(Directory),
 }
 
 impl RequestKind {
-    pub fn get_name(&self) -> &str {
+    pub fn get_name(&self) -> String {
         match self {
-            RequestKind::Single(req) => &req.name,
-            RequestKind::Nested(req) => &req.name,
+            RequestKind::Single(req) => req.read().unwrap().name.to_string(),
+            RequestKind::Nested(dir) => dir.name.to_string(),
+        }
+    }
+
+    pub fn get_id(&self) -> String {
+        match self {
+            RequestKind::Single(req) => req.read().unwrap().id.to_string(),
+            RequestKind::Nested(dir) => dir.id.to_string(),
         }
     }
 }
@@ -95,8 +106,9 @@ impl Hash for Request {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Directory {
+    pub id: String,
     pub name: String,
     pub requests: Vec<RequestKind>,
 }

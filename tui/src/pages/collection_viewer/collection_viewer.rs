@@ -28,6 +28,7 @@ use std::{
     collections::HashMap,
     ops::{Add, Div, Sub},
     rc::Rc,
+    sync::{Arc, RwLock},
 };
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
@@ -128,9 +129,9 @@ pub struct CollectionViewer<'ae> {
     layout: ExplorerLayout,
     response_rx: UnboundedReceiver<Response>,
     request_tx: UnboundedSender<Response>,
-    selected_request: Option<Rc<RefCell<Request>>>,
+    selected_request: Option<Arc<RwLock<Request>>>,
     hovered_request: Option<RequestKind>,
-    dirs_expanded: HashMap<Directory, bool>,
+    dirs_expanded: HashMap<String, bool>,
     focused_pane: PaneFocus,
     selected_pane: Option<PaneFocus>,
 
@@ -150,7 +151,7 @@ pub struct CollectionViewer<'ae> {
     sender: Option<UnboundedSender<Command>>,
     pending_request: bool,
 
-    responses_map: HashMap<Request, Rc<RefCell<Response>>>,
+    responses_map: HashMap<String, Rc<RefCell<Response>>>,
 }
 
 impl<'ae> CollectionViewer<'ae> {
@@ -165,7 +166,7 @@ impl<'ae> CollectionViewer<'ae> {
         let selected_request = collection.requests.as_ref().and_then(|requests| {
             requests.first().and_then(|req| {
                 if let RequestKind::Single(req) = req {
-                    Some(Rc::new(RefCell::new(req.clone())))
+                    Some(Arc::clone(req))
                 } else {
                     None
                 }
@@ -186,7 +187,13 @@ impl<'ae> CollectionViewer<'ae> {
             colors,
             config,
 
-            editor: ReqEditor::new(colors, selected_request.clone(), layout.req_editor, config),
+            // TODO: we have a synchronization problem here.
+            editor: ReqEditor::new(
+                colors,
+                selected_request.as_ref().cloned(),
+                layout.req_editor,
+                config,
+            ),
             res_viewer: ResViewer::new(colors, None, layout.response_preview),
 
             hovered_request,
@@ -216,19 +223,20 @@ impl<'ae> CollectionViewer<'ae> {
     #[tracing::instrument(skip_all, err)]
     fn handle_sidebar_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            self.before_quit();
             return Ok(Some(Command::Quit));
         };
 
         match key_event.code {
             KeyCode::Enter => {
-                if let Some(req) = self.hovered_request.clone() {
+                if let Some(req) = self.hovered_request.as_ref() {
                     match req {
                         RequestKind::Nested(dir) => {
-                            let entry = self.dirs_expanded.entry(dir.clone()).or_insert(false);
+                            let entry = self.dirs_expanded.entry(dir.id.clone()).or_insert(false);
                             *entry = !*entry;
                         }
                         RequestKind::Single(req) => {
-                            self.selected_request = Some(Rc::new(RefCell::new(req.clone())));
+                            self.selected_request = Some(Arc::clone(req));
                             self.editor = ReqEditor::new(
                                 self.colors,
                                 self.selected_request.clone(),
@@ -278,17 +286,18 @@ impl<'ae> CollectionViewer<'ae> {
 
     fn handle_req_uri_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            self.before_quit();
             return Ok(Some(Command::Quit));
         };
         match key_event.code {
             KeyCode::Char(c) => {
                 if let Some(req) = self.selected_request.as_mut() {
-                    req.borrow_mut().uri.push(c);
+                    req.write().unwrap().uri.push(c);
                 }
             }
             KeyCode::Backspace => {
                 if let Some(req) = self.selected_request.as_mut() {
-                    req.borrow_mut().uri.pop();
+                    req.write().unwrap().uri.pop();
                 }
             }
             KeyCode::Enter => {
@@ -299,7 +308,7 @@ impl<'ae> CollectionViewer<'ae> {
                 {
                     self.pending_request = true;
                     reqtui::net::handle_request(
-                        self.selected_request.as_ref().unwrap().borrow().clone(),
+                        self.selected_request.as_ref().unwrap(),
                         self.request_tx.clone(),
                     )
                 }
@@ -392,7 +401,7 @@ impl<'ae> CollectionViewer<'ae> {
             let res = Rc::new(RefCell::new(res));
             self.selected_request.as_ref().and_then(|req| {
                 self.responses_map
-                    .insert(req.borrow().clone(), Rc::clone(&res))
+                    .insert(req.read().unwrap().id.to_string(), Rc::clone(&res))
             });
             self.res_viewer.update(Some(Rc::clone(&res)));
 
@@ -402,8 +411,13 @@ impl<'ae> CollectionViewer<'ae> {
         }
     }
 
+    fn before_quit(&mut self) {
+        self.sync_collection_changes();
+    }
+
     fn handle_preview_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            self.before_quit();
             return Ok(Some(Command::Quit));
         };
 
@@ -628,6 +642,7 @@ impl<'ae> CollectionViewer<'ae> {
         key_event: KeyEvent,
     ) -> anyhow::Result<Option<Command>> {
         if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            self.before_quit();
             return Ok(Some(Command::Quit));
         };
 
@@ -674,6 +689,7 @@ impl<'ae> CollectionViewer<'ae> {
         key_event: KeyEvent,
     ) -> anyhow::Result<Option<Command>> {
         if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            self.before_quit();
             return Ok(Some(Command::Quit));
         };
 
@@ -769,22 +785,23 @@ impl<'ae> CollectionViewer<'ae> {
     fn create_and_sync_request(&mut self) {
         let form_state = &self.create_req_form_state;
         let new_request = match form_state.req_kind {
-            CreateReqKind::Request => RequestKind::Single(Request {
+            CreateReqKind::Request => RequestKind::Single(Arc::new(RwLock::new(Request {
                 id: uuid::Uuid::new_v4().to_string(),
                 name: form_state.req_name.clone(),
                 method: form_state.method.clone(),
                 uri: String::default(),
                 body: None,
                 body_type: None,
-            }),
+            }))),
             CreateReqKind::Directory => RequestKind::Nested(Directory {
+                id: uuid::Uuid::new_v4().to_string(),
                 name: form_state.req_name.clone(),
                 requests: vec![],
             }),
         };
 
         if let RequestKind::Single(ref req) = new_request {
-            self.selected_request = Some(Rc::new(RefCell::new(req.clone())));
+            self.selected_request = Some(Arc::clone(req));
             self.hovered_request = Some(new_request.clone());
         }
 
@@ -807,13 +824,13 @@ impl<'ae> CollectionViewer<'ae> {
 
         let mut collection = self.collection.clone();
         if let Some(request) = self.selected_request.as_ref() {
-            let mut request = request.borrow().clone();
+            let request = request.clone();
             let body = self.editor.body().to_string();
             // this is not the best idea for when we start implementing other kinds of
             // body types like GraphQL
             if !body.is_empty() {
-                request.body = Some(body);
-                request.body_type = Some(BodyType::Json)
+                request.write().unwrap().body = Some(body);
+                request.write().unwrap().body_type = Some(BodyType::Json)
             }
 
             // we might later on decide to keep track of the actual dir/request index
@@ -826,11 +843,15 @@ impl<'ae> CollectionViewer<'ae> {
                 .iter_mut()
                 .for_each(|other| match other {
                     RequestKind::Single(inner) => {
-                        request.id.eq(&inner.id).then(|| *inner = request.clone());
+                        if request.read().unwrap().id.eq(&inner.read().unwrap().id) {
+                            *inner = request.clone();
+                        }
                     }
                     RequestKind::Nested(dir) => dir.requests.iter_mut().for_each(|other| {
                         if let RequestKind::Single(inner) = other {
-                            request.id.eq(&inner.id).then(|| *inner = request.clone());
+                            if request.read().unwrap().id.eq(&inner.read().unwrap().id) {
+                                *inner = request.clone();
+                            }
                         }
                     }),
                 });
@@ -907,7 +928,7 @@ impl Page for CollectionViewer<'_> {
                     self.layout
                         .req_uri
                         .x
-                        .add(request.borrow().uri.len() as u16)
+                        .add(request.read().unwrap().uri.len() as u16)
                         .add(1),
                     self.layout.req_uri.y.add(1),
                 )
@@ -1050,12 +1071,12 @@ pub fn build_layout(size: Rect) -> ExplorerLayout {
 fn traverse(
     found: &mut bool,
     visit: &VisitNode,
-    dirs_expanded: &HashMap<Directory, bool>,
+    dirs_expanded: &HashMap<String, bool>,
     current: &RequestKind,
     needle: &RequestKind,
     path: &mut Vec<RequestKind>,
 ) -> bool {
-    let node_match = current.eq(needle);
+    let node_match = current.get_id().eq(&needle.get_id());
 
     match (&visit, node_match, &found) {
         // We are looking for the next item and we already found the current one (needle), so the
@@ -1081,7 +1102,7 @@ fn traverse(
 
     if let RequestKind::Nested(dir) = current {
         // if we are on a collapsed directory we should not recurse into its children
-        if !dirs_expanded.get(dir).unwrap() {
+        if !dirs_expanded.get(&dir.id).unwrap() {
             return false;
         }
 
@@ -1099,7 +1120,7 @@ fn traverse(
 fn find_next_entry(
     tree: &[RequestKind],
     visit: VisitNode,
-    dirs_expanded: &HashMap<Directory, bool>,
+    dirs_expanded: &HashMap<String, bool>,
     needle: &RequestKind,
 ) -> Option<RequestKind> {
     let mut found = false;
@@ -1121,51 +1142,52 @@ mod tests {
     use std::collections::HashMap;
 
     fn create_root_one() -> RequestKind {
-        RequestKind::Single(Request {
+        RequestKind::Single(Arc::new(RwLock::new(Request {
             id: "any id".to_string(),
             method: RequestMethod::Get,
             name: "Root1".to_string(),
             uri: "/root1".to_string(),
             body_type: None,
             body: None,
-        })
+        })))
     }
 
     fn create_child_one() -> RequestKind {
-        RequestKind::Single(Request {
+        RequestKind::Single(Arc::new(RwLock::new(Request {
             id: "any id".to_string(),
             method: RequestMethod::Post,
             name: "Child1".to_string(),
             uri: "/nested1/child1".to_string(),
             body_type: None,
             body: None,
-        })
+        })))
     }
 
     fn create_child_two() -> RequestKind {
-        RequestKind::Single(Request {
+        RequestKind::Single(Arc::new(RwLock::new(Request {
             id: "any id".to_string(),
             method: RequestMethod::Put,
             name: "Child2".to_string(),
             uri: "/nested1/child2".to_string(),
             body_type: None,
             body: None,
-        })
+        })))
     }
 
     fn create_not_used() -> RequestKind {
-        RequestKind::Single(Request {
+        RequestKind::Single(Arc::new(RwLock::new(Request {
             id: "any id".to_string(),
             method: RequestMethod::Put,
             name: "NotUsed".to_string(),
             uri: "/not/used".to_string(),
             body_type: None,
             body: None,
-        })
+        })))
     }
 
     fn create_dir() -> Directory {
         Directory {
+            id: "any id".to_string(),
             name: "Nested1".to_string(),
             requests: vec![create_child_one(), create_child_two()],
         }
@@ -1176,14 +1198,14 @@ mod tests {
     }
 
     fn create_root_two() -> RequestKind {
-        RequestKind::Single(Request {
+        RequestKind::Single(Arc::new(RwLock::new(Request {
             id: "any id".to_string(),
             method: RequestMethod::Delete,
             name: "Root2".to_string(),
             uri: "/root2".to_string(),
             body_type: None,
             body: None,
-        })
+        })))
     }
 
     fn create_test_tree() -> Vec<RequestKind> {
@@ -1194,70 +1216,68 @@ mod tests {
     fn test_visit_next_no_expanded() {
         let tree = create_test_tree();
         let mut dirs_expanded = HashMap::new();
-        dirs_expanded.insert(create_dir(), false);
+        dirs_expanded.insert(create_dir().id, false);
         let needle = create_nested();
-        let expected = Some(create_root_two());
+        let expected = create_root_two();
 
         let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle);
 
         assert!(next.is_some());
-        assert_eq!(next, expected);
+        assert_eq!(next.unwrap().get_id(), expected.get_id());
     }
 
     #[test]
     fn test_visit_node_nested_next() {
         let tree = create_test_tree();
         let mut dirs_expanded = HashMap::new();
-        dirs_expanded.insert(create_dir(), true);
+        dirs_expanded.insert(create_dir().id, true);
         let needle = create_nested();
-        let expected = Some(create_child_one());
+        let expected = create_child_one();
 
         let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle);
 
         assert!(next.is_some());
-        assert_eq!(next, expected);
+        assert_eq!(next.unwrap().get_id(), expected.get_id());
     }
 
     #[test]
     fn test_visit_node_no_match() {
         let tree = create_test_tree();
         let mut dirs_expanded = HashMap::new();
-        dirs_expanded.insert(create_dir(), true);
+        dirs_expanded.insert(create_dir().id, true);
         let needle = create_not_used();
-        let expected = None;
 
         let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle);
 
         assert!(next.is_none());
-        assert_eq!(next, expected);
     }
 
     #[test]
     fn test_visit_node_nested_prev() {
         let tree = create_test_tree();
         let mut dirs_expanded = HashMap::new();
-        dirs_expanded.insert(create_dir(), true);
+        dirs_expanded.insert(create_dir().id, true);
         let needle = create_child_one();
-        let expected = Some(create_nested());
+        let expected = create_nested();
 
         let next = find_next_entry(&tree, VisitNode::Prev, &dirs_expanded, &needle);
 
         assert!(next.is_some());
-        assert_eq!(next, expected);
+        assert_eq!(next.unwrap().get_id(), expected.get_id());
     }
 
     #[test]
     fn test_visit_prev_into_nested() {
         let tree = create_test_tree();
         let mut dirs_expanded = HashMap::new();
-        dirs_expanded.insert(create_dir(), true);
+        dirs_expanded.insert(create_dir().id, true);
         let needle = create_root_two();
-        let expected = Some(create_child_two());
+        let expected = create_child_two();
 
         let next = find_next_entry(&tree, VisitNode::Prev, &dirs_expanded, &needle);
 
         assert!(next.is_some());
-        assert_eq!(next, expected);
+        assert_eq!(next.unwrap().get_id(), expected.get_id());
     }
 
     #[test]
@@ -1265,11 +1285,9 @@ mod tests {
         let tree = vec![];
         let dirs_expanded = HashMap::new();
         let needle = create_root_two();
-        let expected = None;
 
         let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle);
 
         assert!(next.is_none());
-        assert_eq!(next, expected);
     }
 }

@@ -16,10 +16,9 @@ use reqtui::{
     text_object::{cursor::Cursor, TextObject, Write},
 };
 use std::{
-    cell::RefCell,
     fmt::Display,
     ops::{Add, Div, Mul, Sub},
-    rc::Rc,
+    sync::{Arc, RwLock},
 };
 use tree_sitter::Tree;
 
@@ -28,8 +27,8 @@ pub enum ReqEditorTabs {
     #[default]
     Body,
     Headers,
-    Query,
-    Auth,
+    _Query,
+    _Auth,
 }
 
 #[derive(Debug)]
@@ -43,8 +42,8 @@ impl Display for ReqEditorTabs {
         match self {
             ReqEditorTabs::Body => f.write_str("Request"),
             ReqEditorTabs::Headers => f.write_str("Headers"),
-            ReqEditorTabs::Query => f.write_str("Query"),
-            ReqEditorTabs::Auth => f.write_str("Auth"),
+            ReqEditorTabs::_Query => f.write_str("Query"),
+            ReqEditorTabs::_Auth => f.write_str("Auth"),
         }
     }
 }
@@ -81,7 +80,7 @@ pub struct ReqEditor<'re> {
     col_scroll: usize,
     layout: ReqEditorLayout,
     config: &'re config::Config,
-    request: Option<Rc<RefCell<Request>>>,
+    request: Option<Arc<RwLock<Request>>>,
 
     curr_tab: ReqEditorTabs,
 
@@ -96,21 +95,23 @@ pub struct ReqEditor<'re> {
 impl<'re> ReqEditor<'re> {
     pub fn new(
         colors: &'re colors::Colors,
-        request: Option<Rc<RefCell<Request>>>,
+        request: Option<Arc<RwLock<Request>>>,
 
         size: Rect,
         config: &'re config::Config,
     ) -> Self {
-        tracing::debug!("should only run once");
-        let (body, tree) =
-            if let Some(body) = request.as_ref().and_then(|req| req.borrow().body.clone()) {
+        let (body, tree) = if let Some(request) = request.as_ref() {
+            if let Some(body) = request.read().unwrap().body.as_ref() {
                 let mut highlighter = HIGHLIGHTER.write().unwrap();
-                let tree = highlighter.parse(&body);
+                let tree = highlighter.parse(body);
 
-                (TextObject::from(&body).with_write(), tree)
+                (TextObject::from(body).with_write(), tree)
             } else {
-                (TextObject::default(), None)
-            };
+                Default::default()
+            }
+        } else {
+            Default::default()
+        };
 
         let content = body.to_string();
         let styled_display = build_syntax_highlighted_lines(&content, tree.as_ref(), colors);
@@ -234,8 +235,8 @@ impl<'re> ReqEditor<'re> {
         match self.curr_tab {
             ReqEditorTabs::Body => self.draw_editor(buf, size),
             ReqEditorTabs::Headers => {}
-            ReqEditorTabs::Query => {}
-            ReqEditorTabs::Auth => {}
+            ReqEditorTabs::_Query => {}
+            ReqEditorTabs::_Auth => {}
         }
 
         Ok(())
@@ -251,8 +252,8 @@ impl<'re> ReqEditor<'re> {
             let tabs = vec!["Headers", "Query", "Auth"];
             let active = match self.curr_tab {
                 ReqEditorTabs::Headers => 0,
-                ReqEditorTabs::Query => 1,
-                ReqEditorTabs::Auth => 2,
+                ReqEditorTabs::_Query => 1,
+                ReqEditorTabs::_Auth => 2,
                 _ => 0,
             };
             (tabs, active)
@@ -261,8 +262,8 @@ impl<'re> ReqEditor<'re> {
             let active = match self.curr_tab {
                 ReqEditorTabs::Body => 0,
                 ReqEditorTabs::Headers => 1,
-                ReqEditorTabs::Query => 2,
-                ReqEditorTabs::Auth => 3,
+                ReqEditorTabs::_Query => 2,
+                ReqEditorTabs::_Auth => 3,
             };
             (tabs, active)
         };
@@ -802,9 +803,9 @@ fn keycode_as_string(key_event: KeyEvent) -> String {
     }
 }
 
-fn request_has_no_body(request: &Rc<RefCell<Request>>) -> bool {
+fn request_has_no_body(request: &Arc<RwLock<Request>>) -> bool {
     matches!(
-        request.borrow().method,
+        request.read().unwrap().method,
         RequestMethod::Get | RequestMethod::Delete
     )
 }

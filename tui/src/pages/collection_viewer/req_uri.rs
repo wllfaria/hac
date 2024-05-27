@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, RwLock};
 
 use ratatui::{
     buffer::Buffer,
@@ -10,12 +10,12 @@ use reqtui::collection::types::Request;
 
 #[derive(Debug)]
 pub struct ReqUriState<'a> {
-    selected_request: &'a Option<Rc<RefCell<Request>>>,
+    selected_request: &'a Option<Arc<RwLock<Request>>>,
     is_focused: bool,
 }
 
 impl<'a> ReqUriState<'a> {
-    pub fn new(selected_request: &'a Option<Rc<RefCell<Request>>>, is_focused: bool) -> Self {
+    pub fn new(selected_request: &'a Option<Arc<RwLock<Request>>>, is_focused: bool) -> Self {
         Self {
             selected_request,
             is_focused,
@@ -47,7 +47,7 @@ impl<'a> StatefulWidget for ReqUri<'a> {
         let uri = state
             .selected_request
             .as_ref()
-            .map(|req| req.borrow().uri.to_string())
+            .map(|req| req.read().unwrap().uri.to_string())
             .unwrap_or_default();
 
         Paragraph::new(uri)
