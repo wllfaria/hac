@@ -5,7 +5,7 @@ use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Style, Stylize},
-    text::Line,
+    text::{Line, Span},
     widgets::{
         Block, Borders, Padding, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
         StatefulWidget, Tabs, Widget,
@@ -62,6 +62,7 @@ impl From<ResViewerTabs> for usize {
 pub struct ResViewerLayout {
     tabs_pane: Rect,
     content_pane: Rect,
+    summary_pane: Rect,
 }
 
 impl<'a> ResViewerState<'a> {
@@ -97,9 +98,13 @@ pub struct ResViewer<'a> {
 impl<'a> ResViewer<'a> {
     pub fn new(colors: &'a colors::Colors, response: Option<Rc<RefCell<Response>>>) -> Self {
         let tree = response.as_ref().and_then(|response| {
-            let pretty_body = response.borrow().pretty_body.to_string();
-            let mut highlighter = HIGHLIGHTER.write().unwrap();
-            highlighter.parse(&pretty_body)
+            if let Some(ref pretty_body) = response.borrow().pretty_body {
+                let pretty_body = pretty_body.to_string();
+                let mut highlighter = HIGHLIGHTER.write().unwrap();
+                highlighter.parse(&pretty_body)
+            } else {
+                None
+            }
         });
 
         ResViewer {
@@ -111,16 +116,22 @@ impl<'a> ResViewer<'a> {
     }
 
     pub fn update(&mut self, response: Option<Rc<RefCell<Response>>>) {
-        self.tree = response.as_ref().and_then(|response| {
-            let pretty_body = response.borrow().pretty_body.to_string();
-            let mut highlighter = HIGHLIGHTER.write().unwrap();
-            highlighter.parse(&pretty_body)
-        });
+        let body_str = response
+            .as_ref()
+            .and_then(|res| {
+                res.borrow()
+                    .pretty_body
+                    .as_ref()
+                    .map(|body| body.to_string())
+            })
+            .unwrap_or_default();
 
-        if let Some(ref res) = response {
-            let pretty_body = res.borrow().pretty_body.to_string();
-            self.lines =
-                build_syntax_highlighted_lines(&pretty_body, self.tree.as_ref(), self.colors);
+        if body_str.len().gt(&0) {
+            self.tree = HIGHLIGHTER.write().unwrap().parse(&body_str);
+            self.lines = build_syntax_highlighted_lines(&body_str, self.tree.as_ref(), self.colors);
+        } else {
+            self.tree = None;
+            self.lines = vec![];
         }
 
         self.response = response;
@@ -246,16 +257,21 @@ impl<'a> ResViewer<'a> {
 
     fn draw_raw_response(&self, state: &mut ResViewerState, buf: &mut Buffer, size: Rect) {
         if let Some(response) = self.response.as_ref() {
-            let lines = response
-                .borrow()
-                .body
-                .chars()
-                .collect::<Vec<_>>()
-                // accounting for the scrollbar width when splitting the lines
-                .chunks(size.width.saturating_sub(2).into())
-                .map(|row| Line::from(row.iter().collect::<String>()))
-                .collect::<Vec<_>>();
-
+            let lines = if response.borrow().body.is_some() {
+                response
+                    .borrow()
+                    .body
+                    .as_ref()
+                    .unwrap()
+                    .chars()
+                    .collect::<Vec<_>>()
+                    // accounting for the scrollbar width when splitting the lines
+                    .chunks(size.width.saturating_sub(2).into())
+                    .map(|row| Line::from(row.iter().collect::<String>()))
+                    .collect::<Vec<_>>()
+            } else {
+                vec![Line::from("No body").centered()]
+            };
             // allow for scrolling down until theres only one line left into view
             if state.raw_scroll.deref().ge(&lines.len().saturating_sub(1)) {
                 *state.raw_scroll = lines.len().saturating_sub(1);
@@ -325,9 +341,13 @@ impl<'a> ResViewer<'a> {
 
             self.draw_scrollbar(self.lines.len(), *state.raw_scroll, buf, scrollbar_pane);
 
-            let lines_in_view = self
-                .lines
-                .clone()
+            let lines = if self.lines.len().gt(&0) {
+                self.lines.clone()
+            } else {
+                vec![Line::from("No body").centered()]
+            };
+
+            let lines_in_view = lines
                 .into_iter()
                 .skip(*state.pretty_scroll)
                 .chain(iter::repeat(Line::from("~".fg(self.colors.bright.black))))
@@ -336,6 +356,47 @@ impl<'a> ResViewer<'a> {
 
             let pretty_response = Paragraph::new(lines_in_view);
             pretty_response.render(request_pane, buf);
+        }
+    }
+
+    fn draw_summary(&self, buf: &mut Buffer, size: Rect) {
+        if let Some(ref response) = self.response {
+            let status_color = match response.borrow().status.as_u16() {
+                s if s < 400 => self.colors.normal.green,
+                _ => self.colors.normal.red,
+            };
+            let status = if size.width.gt(&50) {
+                format!(
+                    "{} ({})",
+                    response.borrow().status.as_str(),
+                    response
+                        .borrow()
+                        .status
+                        .canonical_reason()
+                        .expect("tried to get a canonical_reason from a invalid status code")
+                )
+                .fg(status_color)
+            } else {
+                response
+                    .borrow()
+                    .status
+                    .as_str()
+                    .to_string()
+                    .fg(status_color)
+            };
+            let pieces: Vec<Span> = vec![
+                "Status: ".fg(self.colors.bright.black),
+                status,
+                " ".into(),
+                "Time: ".fg(self.colors.bright.black),
+                format!("{}ms", response.borrow().duration.as_millis())
+                    .fg(self.colors.normal.green),
+                " ".into(),
+                "Size: ".fg(self.colors.bright.black),
+                format!("{} B", response.borrow().size).fg(self.colors.normal.green),
+            ];
+
+            Line::from(pieces).render(size, buf);
         }
     }
 }
@@ -349,6 +410,7 @@ impl<'a> StatefulWidget for ResViewer<'a> {
         self.draw_container(size, buf, state);
         self.draw_tabs(buf, state, layout.tabs_pane);
         self.draw_current_tab(state, buf, layout.content_pane);
+        self.draw_summary(buf, layout.summary_pane);
     }
 }
 
@@ -360,11 +422,12 @@ fn build_layout(size: Rect) -> ResViewerLayout {
         size.height.saturating_sub(2),
     );
 
-    let [tabs_pane, _, content_pane] = Layout::default()
+    let [tabs_pane, _, content_pane, summary_pane] = Layout::default()
         .constraints([
             Constraint::Length(1),
             Constraint::Length(1),
             Constraint::Fill(1),
+            Constraint::Length(1),
         ])
         .direction(Direction::Vertical)
         .areas(size);
@@ -372,6 +435,7 @@ fn build_layout(size: Rect) -> ResViewerLayout {
     ResViewerLayout {
         tabs_pane,
         content_pane,
+        summary_pane,
     }
 }
 

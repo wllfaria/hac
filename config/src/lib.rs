@@ -1,5 +1,5 @@
 pub mod config;
-mod data;
+pub mod data;
 mod default_config;
 
 pub use config::{

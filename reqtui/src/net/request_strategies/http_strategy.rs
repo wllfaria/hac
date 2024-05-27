@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use crate::{
     collection::types::{Request, RequestMethod},
     net::{
@@ -36,7 +38,11 @@ impl HttpResponse {
                 let decoder = decoder_from_headers(response.headers());
                 decoder.decode(response, now).await
             }
-            Err(_) => todo!(),
+            Err(e) => {
+                tracing::error!("{:?}", e.source());
+                tracing::debug!("{e:?}");
+                todo!();
+            }
         }
     }
 

@@ -9,10 +9,14 @@ use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Debug, PartialEq)]
 pub struct Response {
-    pub body: String,
-    pub pretty_body: TextObject<Readonly>,
+    pub body: Option<String>,
+    pub pretty_body: Option<TextObject<Readonly>>,
     pub headers: HeaderMap<HeaderValue>,
     pub duration: Duration,
+    pub status: reqwest::StatusCode,
+    pub headers_size: u64,
+    pub body_size: u64,
+    pub size: u64,
 }
 
 pub struct RequestManager;
