@@ -187,7 +187,6 @@ impl<'ae> CollectionViewer<'ae> {
             config,
 
             editor: ReqEditor::new(colors, selected_request.clone(), layout.req_editor, config),
-
             res_viewer: ResViewer::new(colors, None, layout.response_preview),
 
             hovered_request,

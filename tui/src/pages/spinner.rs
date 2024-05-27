@@ -1,5 +1,3 @@
-use std::ops::Add;
-
 use rand::Rng;
 use ratatui::{
     buffer::Buffer,
@@ -8,11 +6,8 @@ use ratatui::{
     text::{Line, Span},
     widgets::Widget,
 };
+use std::ops::Add;
 
-/// Renders a spinning widget to the screen.
-///
-/// Can either be used as a StatefulWidget which will allow fine grained control,
-/// or used as a Widget, which will render a random symbol that updates
 #[derive(Debug, Clone)]
 pub struct Spinner {
     step: usize,
@@ -54,6 +49,8 @@ impl Spinner {
         }
     }
 
+    /// adds a label to the spinner, which will be displayed at the right
+    /// to the
     pub fn with_label<S>(self, label: S) -> Self
     where
         S: Into<Span<'static>>,

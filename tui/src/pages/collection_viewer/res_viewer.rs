@@ -156,8 +156,18 @@ impl<'a> ResViewer<'a> {
                     &mut rand::thread_rng(),
                 )
                 .iter()
-                .map(|line| line.to_string().into())
-                .chain(vec!["".into(), cause.fg(self.colors.normal.red).into()])
+                .map(|line| Line::from(line.to_string()).centered())
+                .chain(vec!["".into()])
+                .chain(
+                    cause
+                        .chars()
+                        .collect::<Vec<_>>()
+                        .chunks(self.layout.content_pane.width.sub(3).into())
+                        .map(|chunk| {
+                            Line::from(chunk.iter().collect::<String>().fg(self.colors.normal.red))
+                        })
+                        .collect::<Vec<_>>(),
+                )
                 .collect::<Vec<Line>>(),
             )
         };
@@ -225,7 +235,7 @@ impl<'a> ResViewer<'a> {
                 .sub(self.error_lines.as_ref().unwrap().len().div_ceil(2) as u16);
 
             let size = Rect::new(
-                request_pane.x,
+                request_pane.x.add(1),
                 center,
                 request_pane.width,
                 self.error_lines.as_ref().unwrap().len() as u16,
@@ -233,7 +243,6 @@ impl<'a> ResViewer<'a> {
 
             Paragraph::new(self.error_lines.clone().unwrap())
                 .fg(self.colors.bright.black)
-                .centered()
                 .render(size, buf);
         }
     }
