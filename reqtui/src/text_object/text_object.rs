@@ -340,7 +340,7 @@ impl TextObject<Write> {
         let start_idx = self.content.line_to_char(cursor.row()).add(cursor.col());
         let mut end_idx = start_idx.saturating_sub(1);
 
-        if let Some(initial_char) = self.content.get_char(start_idx) {
+        if let Some(initial_char) = self.content.get_char(start_idx.saturating_sub(1)) {
             for _ in (0..start_idx.saturating_sub(1)).rev() {
                 let char = self.content.char(end_idx);
                 match (initial_char.is_alphanumeric(), char.is_alphanumeric()) {
@@ -352,7 +352,8 @@ impl TextObject<Write> {
             }
         };
 
-        end_idx.sub(start_idx)
+        self.content.try_remove(end_idx.add(1)..start_idx).ok();
+        start_idx.sub(end_idx.add(1))
     }
 
     pub fn insert_line_below(&mut self, cursor: &Cursor, tree: Option<&Tree>) {

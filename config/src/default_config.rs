@@ -52,5 +52,5 @@ pub static DEFAULT_CONFIG: &str = r##"
 "Backspace" = "DeletePreviousChar"
 "Esc" = { EnterMode = "Normal" }
 "C-c" = { EnterMode = "Normal" }
-"C-W" = "DeleteBack"
+"C-w" = "DeleteBack"
 "##;
