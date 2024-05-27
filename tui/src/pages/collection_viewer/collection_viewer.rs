@@ -122,10 +122,10 @@ pub enum CreateReqKind {
 }
 
 #[derive(Debug)]
-pub struct CollectionViewer<'ae> {
+pub struct CollectionViewer<'cv> {
     collection: Collection,
-    colors: &'ae colors::Colors,
-    config: &'ae config::Config,
+    colors: &'cv colors::Colors,
+    config: &'cv config::Config,
     layout: ExplorerLayout,
     response_rx: UnboundedReceiver<Response>,
     request_tx: UnboundedSender<Response>,
@@ -135,7 +135,7 @@ pub struct CollectionViewer<'ae> {
     focused_pane: PaneFocus,
     selected_pane: Option<PaneFocus>,
 
-    res_viewer: ResViewer<'ae>,
+    res_viewer: ResViewer<'cv>,
     preview_tab: ResViewerTabs,
     raw_preview_scroll: usize,
     preview_header_scroll_y: usize,
@@ -146,7 +146,7 @@ pub struct CollectionViewer<'ae> {
     create_req_form_state: CreateReqFormState,
 
     sync_interval: std::time::Instant,
-    editor: ReqEditor<'ae>,
+    editor: ReqEditor<'cv>,
 
     sender: Option<UnboundedSender<Command>>,
     pending_request: bool,
@@ -154,12 +154,12 @@ pub struct CollectionViewer<'ae> {
     responses_map: HashMap<String, Rc<RefCell<Response>>>,
 }
 
-impl<'ae> CollectionViewer<'ae> {
+impl<'cv> CollectionViewer<'cv> {
     pub fn new(
         size: Rect,
         collection: Collection,
-        colors: &'ae colors::Colors,
-        config: &'ae config::Config,
+        colors: &'cv colors::Colors,
+        config: &'cv config::Config,
     ) -> Self {
         let layout = build_layout(size);
 
@@ -187,7 +187,6 @@ impl<'ae> CollectionViewer<'ae> {
             colors,
             config,
 
-            // TODO: we have a synchronization problem here.
             editor: ReqEditor::new(
                 colors,
                 selected_request.as_ref().cloned(),
@@ -237,6 +236,7 @@ impl<'ae> CollectionViewer<'ae> {
                         }
                         RequestKind::Single(req) => {
                             self.selected_request = Some(Arc::clone(req));
+                            self.res_viewer.update(None);
                             self.editor = ReqEditor::new(
                                 self.colors,
                                 self.selected_request.clone(),
@@ -968,6 +968,28 @@ impl Eventful for CollectionViewer<'_> {
             };
 
             return Ok(None);
+        }
+
+        if self.selected_pane.is_none() {
+            match key_event.code {
+                KeyCode::Char('r') => {
+                    self.focused_pane = PaneFocus::Sidebar;
+                    return Ok(None);
+                }
+                KeyCode::Char('u') => {
+                    self.focused_pane = PaneFocus::ReqUri;
+                    return Ok(None);
+                }
+                KeyCode::Char('p') => {
+                    self.focused_pane = PaneFocus::Preview;
+                    return Ok(None);
+                }
+                KeyCode::Char('e') => {
+                    self.focused_pane = PaneFocus::Editor;
+                    return Ok(None);
+                }
+                _ => (),
+            }
         }
 
         if let KeyCode::Tab = key_event.code {

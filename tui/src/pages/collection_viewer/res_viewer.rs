@@ -2,7 +2,7 @@ use rand::Rng;
 use reqtui::{net::request_manager::Response, syntax::highlighter::HIGHLIGHTER};
 
 use crate::{
-    ascii::{BIG_ERROR_ARTS, SMALL_ERROR_ARTS},
+    ascii::{BIG_ERROR_ARTS, LOGO_ART, SMALL_ERROR_ARTS},
     pages::spinner::Spinner,
     utils::build_syntax_highlighted_lines,
 };
@@ -85,6 +85,7 @@ pub struct ResViewer<'a> {
     tree: Option<Tree>,
     lines: Vec<Line<'static>>,
     error_lines: Option<Vec<Line<'static>>>,
+    empty_lines: Vec<Line<'static>>,
     preview_layout: PreviewLayout,
     layout: ResViewerLayout,
 }
@@ -106,6 +107,9 @@ impl<'a> ResViewer<'a> {
         });
 
         let layout = build_layout(size);
+        let preview_layout = build_preview_layout(layout.content_pane);
+
+        let empty_lines = make_empty_ascii_art(colors);
 
         ResViewer {
             colors,
@@ -113,7 +117,8 @@ impl<'a> ResViewer<'a> {
             tree,
             lines: vec![],
             error_lines: None,
-            preview_layout: build_preview_layout(layout.content_pane),
+            empty_lines,
+            preview_layout,
             layout,
         }
     }
@@ -172,6 +177,7 @@ impl<'a> ResViewer<'a> {
             )
         };
 
+        self.empty_lines = make_empty_ascii_art(self.colors);
         self.response = response;
     }
 
@@ -247,6 +253,33 @@ impl<'a> ResViewer<'a> {
         }
     }
 
+    fn draw_waiting_for_request(&self, buf: &mut Buffer) {
+        let request_pane = self.preview_layout.content_pane;
+        Widget::render(Clear, request_pane, buf);
+        Widget::render(
+            Block::default().bg(self.colors.primary.background),
+            request_pane,
+            buf,
+        );
+
+        let center = request_pane
+            .y
+            .add(request_pane.height.div_ceil(2))
+            .sub(self.empty_lines.len().div_ceil(2) as u16);
+
+        let size = Rect::new(
+            request_pane.x.add(1),
+            center,
+            request_pane.width,
+            self.empty_lines.len() as u16,
+        );
+
+        Paragraph::new(self.empty_lines.clone())
+            .fg(self.colors.normal.red)
+            .centered()
+            .render(size, buf);
+    }
+
     fn draw_current_tab(&self, state: &mut ResViewerState, buf: &mut Buffer, size: Rect) {
         if self
             .response
@@ -254,7 +287,17 @@ impl<'a> ResViewer<'a> {
             .is_some_and(|res| res.borrow().is_error)
         {
             self.draw_network_error(buf);
-        } else {
+        };
+
+        if self.response.is_none() {
+            self.draw_waiting_for_request(buf);
+        }
+
+        if self
+            .response
+            .as_ref()
+            .is_some_and(|res| !res.borrow().is_error)
+        {
             match state.curr_tab {
                 ResViewerTabs::Preview => self.draw_pretty_response(state, buf, size),
                 ResViewerTabs::Raw => self.draw_raw_response(state, buf, size),
@@ -597,6 +640,22 @@ where
             full_range_arts[index]
         }
     }
+}
+
+fn make_empty_ascii_art(colors: &colors::Colors) -> Vec<Line<'static>> {
+    LOGO_ART
+        .iter()
+        .map(|line| line.to_string().into())
+        .chain(vec![
+            "".into(),
+            "your handy API client".fg(colors.bright.blue).into(),
+            "".into(),
+            "".into(),
+            "make a request and the result will appear here"
+                .fg(colors.bright.black)
+                .into(),
+        ])
+        .collect::<Vec<_>>()
 }
 
 #[cfg(test)]
