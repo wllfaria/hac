@@ -1,5 +1,3 @@
-use std::error::Error;
-
 use crate::{
     collection::types::{Request, RequestMethod},
     net::{
@@ -13,7 +11,7 @@ pub struct HttpResponse;
 
 #[async_trait::async_trait]
 impl RequestStrategy for HttpResponse {
-    async fn handle(&self, request: Request) -> anyhow::Result<Response> {
+    async fn handle(&self, request: Request) -> Response {
         let client = reqwest::Client::new();
 
         match request.method {
@@ -27,30 +25,29 @@ impl RequestStrategy for HttpResponse {
 }
 
 impl HttpResponse {
-    async fn handle_get_request(
-        &self,
-        client: reqwest::Client,
-        request: Request,
-    ) -> anyhow::Result<Response> {
+    async fn handle_get_request(&self, client: reqwest::Client, request: Request) -> Response {
         let now = std::time::Instant::now();
         match client.get(request.uri).send().await {
             Ok(response) => {
                 let decoder = decoder_from_headers(response.headers());
                 decoder.decode(response, now).await
             }
-            Err(e) => {
-                tracing::error!("{:?}", e.source());
-                tracing::debug!("{e:?}");
-                todo!();
-            }
+            Err(e) => Response {
+                is_error: true,
+                cause: Some(e.to_string()),
+                body: None,
+                pretty_body: None,
+                body_size: None,
+                size: None,
+                headers_size: None,
+                status: None,
+                headers: None,
+                duration: now.elapsed(),
+            },
         }
     }
 
-    async fn handle_post_request(
-        &self,
-        client: reqwest::Client,
-        request: Request,
-    ) -> anyhow::Result<Response> {
+    async fn handle_post_request(&self, client: reqwest::Client, request: Request) -> Response {
         let now = std::time::Instant::now();
         match client
             .post(request.uri)
@@ -62,15 +59,22 @@ impl HttpResponse {
                 let decoder = decoder_from_headers(response.headers());
                 decoder.decode(response, now).await
             }
-            Err(_) => todo!(),
+            Err(e) => Response {
+                is_error: true,
+                cause: Some(e.to_string()),
+                body: None,
+                pretty_body: None,
+                body_size: None,
+                size: None,
+                headers_size: None,
+                status: None,
+                headers: None,
+                duration: now.elapsed(),
+            },
         }
     }
 
-    async fn handle_put_request(
-        &self,
-        client: reqwest::Client,
-        request: Request,
-    ) -> anyhow::Result<Response> {
+    async fn handle_put_request(&self, client: reqwest::Client, request: Request) -> Response {
         let now = std::time::Instant::now();
         match client
             .put(request.uri)
@@ -82,15 +86,22 @@ impl HttpResponse {
                 let decoder = decoder_from_headers(response.headers());
                 decoder.decode(response, now).await
             }
-            Err(_) => todo!(),
+            Err(e) => Response {
+                is_error: true,
+                cause: Some(e.to_string()),
+                body: None,
+                pretty_body: None,
+                body_size: None,
+                size: None,
+                headers_size: None,
+                status: None,
+                headers: None,
+                duration: now.elapsed(),
+            },
         }
     }
 
-    async fn handle_patch_request(
-        &self,
-        client: reqwest::Client,
-        request: Request,
-    ) -> anyhow::Result<Response> {
+    async fn handle_patch_request(&self, client: reqwest::Client, request: Request) -> Response {
         let now = std::time::Instant::now();
         match client
             .patch(request.uri)
@@ -102,15 +113,22 @@ impl HttpResponse {
                 let decoder = decoder_from_headers(response.headers());
                 decoder.decode(response, now).await
             }
-            Err(_) => todo!(),
+            Err(e) => Response {
+                is_error: true,
+                cause: Some(e.to_string()),
+                body: None,
+                pretty_body: None,
+                body_size: None,
+                size: None,
+                headers_size: None,
+                status: None,
+                headers: None,
+                duration: now.elapsed(),
+            },
         }
     }
 
-    async fn handle_delete_request(
-        &self,
-        client: reqwest::Client,
-        request: Request,
-    ) -> anyhow::Result<Response> {
+    async fn handle_delete_request(&self, client: reqwest::Client, request: Request) -> Response {
         let now = std::time::Instant::now();
         match client
             .delete(request.uri)
@@ -122,7 +140,18 @@ impl HttpResponse {
                 let decoder = decoder_from_headers(response.headers());
                 decoder.decode(response, now).await
             }
-            Err(_) => todo!(),
+            Err(e) => Response {
+                is_error: true,
+                cause: Some(e.to_string()),
+                body: None,
+                pretty_body: None,
+                body_size: None,
+                size: None,
+                headers_size: None,
+                status: None,
+                headers: None,
+                duration: now.elapsed(),
+            },
         }
     }
 }

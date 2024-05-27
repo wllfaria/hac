@@ -9,8 +9,7 @@ use std::time::Instant;
 
 #[async_trait::async_trait]
 pub trait ResponseDecoder {
-    async fn decode(&self, response: reqwest::Response, start: Instant)
-        -> anyhow::Result<Response>;
+    async fn decode(&self, response: reqwest::Response, start: Instant) -> Response;
 }
 
 pub fn decoder_from_headers(headers: &HeaderMap) -> impl ResponseDecoder {

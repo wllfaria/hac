@@ -60,7 +60,7 @@ pub struct ReqEditorState {
     is_selected: bool,
 }
 
-impl<'re> ReqEditorState {
+impl ReqEditorState {
     pub fn new(is_focused: bool, is_selected: bool) -> Self {
         ReqEditorState {
             is_focused,
@@ -129,7 +129,7 @@ impl<'re> ReqEditor<'re> {
             curr_tab: request
                 .as_ref()
                 .map(request_has_no_body)
-                .unwrap()
+                .unwrap_or(false)
                 .then_some(ReqEditorTabs::Headers)
                 .unwrap_or_default(),
             request,
@@ -242,7 +242,12 @@ impl<'re> ReqEditor<'re> {
     }
 
     fn draw_tabs(&self, buf: &mut Buffer, size: Rect) {
-        let (tabs, active) = if self.request.as_ref().map(request_has_no_body).unwrap() {
+        let (tabs, active) = if self
+            .request
+            .as_ref()
+            .map(request_has_no_body)
+            .unwrap_or(true)
+        {
             let tabs = vec!["Headers", "Query", "Auth"];
             let active = match self.curr_tab {
                 ReqEditorTabs::Headers => 0,

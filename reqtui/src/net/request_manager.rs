@@ -11,23 +11,24 @@ use tokio::sync::mpsc::UnboundedSender;
 pub struct Response {
     pub body: Option<String>,
     pub pretty_body: Option<TextObject<Readonly>>,
-    pub headers: HeaderMap<HeaderValue>,
+    pub headers: Option<HeaderMap<HeaderValue>>,
     pub duration: Duration,
-    pub status: reqwest::StatusCode,
-    pub headers_size: u64,
-    pub body_size: u64,
-    pub size: u64,
+    pub status: Option<reqwest::StatusCode>,
+    pub headers_size: Option<u64>,
+    pub body_size: Option<u64>,
+    pub size: Option<u64>,
+    pub is_error: bool,
+    pub cause: Option<String>,
 }
 
 pub struct RequestManager;
 
 impl RequestManager {
-    pub async fn handle<S>(strategy: S, request: Request) -> anyhow::Result<Response>
+    pub async fn handle<S>(strategy: S, request: Request) -> Response
     where
         S: RequestStrategy,
     {
-        let response = strategy.handle(request).await?;
-        Ok(response)
+        strategy.handle(request).await
     }
 }
 
@@ -59,7 +60,7 @@ impl From<&str> for ContentType {
 pub fn handle_request(request: Request, response_tx: UnboundedSender<Response>) {
     tracing::debug!("starting to handle user request");
     tokio::spawn(async move {
-        let result = match request.body_type.as_ref() {
+        let response = match request.body_type.as_ref() {
             // if we dont have a body type, this is a GET request, so we use HTTP strategy
             None => RequestManager::handle(HttpResponse, request).await,
             Some(body_type) => match body_type {
@@ -67,12 +68,9 @@ pub fn handle_request(request: Request, response_tx: UnboundedSender<Response>) 
             },
         };
 
-        match result {
-            Ok(response) => response_tx.send(response).ok(),
-            Err(e) => {
-                tracing::error!("{e:?}");
-                todo!();
-            }
-        }
+        response_tx
+            .send(response)
+            .is_err()
+            .then(|| std::process::abort());
     });
 }

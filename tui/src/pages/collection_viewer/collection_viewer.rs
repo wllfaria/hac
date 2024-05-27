@@ -148,6 +148,7 @@ pub struct CollectionViewer<'ae> {
     editor: ReqEditor<'ae>,
 
     sender: Option<UnboundedSender<Command>>,
+    pending_request: bool,
 
     responses_map: HashMap<Request, Rc<RefCell<Response>>>,
 }
@@ -187,7 +188,7 @@ impl<'ae> CollectionViewer<'ae> {
 
             editor: ReqEditor::new(colors, selected_request.clone(), layout.req_editor, config),
 
-            res_viewer: ResViewer::new(colors, None),
+            res_viewer: ResViewer::new(colors, None, layout.response_preview),
 
             hovered_request,
             selected_request,
@@ -195,6 +196,7 @@ impl<'ae> CollectionViewer<'ae> {
             responses_map: HashMap::default(),
 
             sender: None,
+            pending_request: false,
 
             preview_tab: ResViewerTabs::Preview,
             raw_preview_scroll: 0,
@@ -291,9 +293,14 @@ impl<'ae> CollectionViewer<'ae> {
                 }
             }
             KeyCode::Enter => {
-                if let Some(req) = self.selected_request.as_ref() {
+                if self
+                    .selected_request
+                    .as_ref()
+                    .is_some_and(|_| !self.pending_request)
+                {
+                    self.pending_request = true;
                     reqtui::net::handle_request(
-                        req.clone().borrow().clone(),
+                        self.selected_request.as_ref().unwrap().borrow().clone(),
                         self.request_tx.clone(),
                     )
                 }
@@ -347,18 +354,20 @@ impl<'ae> CollectionViewer<'ae> {
     }
 
     fn draw_res_viewer(&mut self, frame: &mut Frame) {
-        let mut state = ResViewerState::new(
-            self.focused_pane.eq(&PaneFocus::Preview),
-            self.selected_pane
+        let mut state = ResViewerState {
+            is_focused: self.focused_pane.eq(&PaneFocus::Preview),
+            is_selected: self
+                .selected_pane
                 .as_ref()
                 .map(|sel| sel.eq(&PaneFocus::Preview))
                 .unwrap_or(false),
-            &self.preview_tab,
-            &mut self.raw_preview_scroll,
-            &mut self.pretty_preview_scroll,
-            &mut self.preview_header_scroll_y,
-            &mut self.preview_header_scroll_x,
-        );
+            curr_tab: &self.preview_tab,
+            raw_scroll: &mut self.raw_preview_scroll,
+            pretty_scroll: &mut self.pretty_preview_scroll,
+            headers_scroll_y: &mut self.preview_header_scroll_y,
+            headers_scroll_x: &mut self.preview_header_scroll_x,
+            pending_request: self.pending_request,
+        };
 
         frame.render_stateful_widget(
             self.res_viewer.clone(),
@@ -387,6 +396,10 @@ impl<'ae> CollectionViewer<'ae> {
                     .insert(req.borrow().clone(), Rc::clone(&res))
             });
             self.res_viewer.update(Some(Rc::clone(&res)));
+
+            self.response_rx
+                .is_empty()
+                .then(|| self.pending_request = false);
         }
     }
 
@@ -920,6 +933,7 @@ impl Page for CollectionViewer<'_> {
     fn resize(&mut self, new_size: Rect) {
         let new_layout = build_layout(new_size);
         self.editor.resize(new_layout.req_editor);
+        self.res_viewer.resize(new_layout.response_preview);
         self.layout = new_layout;
     }
 }
