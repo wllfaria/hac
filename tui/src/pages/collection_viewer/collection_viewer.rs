@@ -1,6 +1,6 @@
 use crate::pages::{
     collection_viewer::{
-        req_editor::{ReqEditor, ReqEditorState, ReqEditorTabs},
+        req_editor::{ReqEditor, ReqEditorState},
         req_uri::{ReqUri, ReqUriState},
         res_viewer::{ResViewer, ResViewerState, ResViewerTabs},
         sidebar::{Sidebar, SidebarState},
@@ -146,7 +146,6 @@ pub struct CollectionViewer<'ae> {
 
     sync_interval: std::time::Instant,
     editor: ReqEditor<'ae>,
-    editor_tab: ReqEditorTabs,
 
     sender: Option<UnboundedSender<Command>>,
 
@@ -162,7 +161,7 @@ impl<'ae> CollectionViewer<'ae> {
     ) -> Self {
         let layout = build_layout(size);
 
-        let mut selected_request = collection.requests.as_ref().and_then(|requests| {
+        let selected_request = collection.requests.as_ref().and_then(|requests| {
             requests.first().and_then(|req| {
                 if let RequestKind::Single(req) = req {
                     Some(Rc::new(RefCell::new(req.clone())))
@@ -186,8 +185,7 @@ impl<'ae> CollectionViewer<'ae> {
             colors,
             config,
 
-            editor: ReqEditor::new(colors, selected_request.as_mut(), layout.req_editor, config),
-            editor_tab: ReqEditorTabs::Request,
+            editor: ReqEditor::new(colors, selected_request.clone(), layout.req_editor, config),
 
             res_viewer: ResViewer::new(colors, None),
 
@@ -232,7 +230,7 @@ impl<'ae> CollectionViewer<'ae> {
                             self.selected_request = Some(Rc::new(RefCell::new(req.clone())));
                             self.editor = ReqEditor::new(
                                 self.colors,
-                                self.selected_request.as_mut(),
+                                self.selected_request.clone(),
                                 self.layout.req_editor,
                                 self.config,
                             );
@@ -376,7 +374,6 @@ impl<'ae> CollectionViewer<'ae> {
                 .as_ref()
                 .map(|sel| sel.eq(&PaneFocus::Editor))
                 .unwrap_or(false),
-            &self.editor_tab,
         );
         self.editor
             .get_components(self.layout.req_editor, frame, &mut state);

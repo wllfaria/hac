@@ -10,7 +10,7 @@ use ratatui::{
     Frame,
 };
 use reqtui::{
-    collection::types::Request,
+    collection::types::{Request, RequestMethod},
     command::Command,
     syntax::highlighter::HIGHLIGHTER,
     text_object::{cursor::Cursor, TextObject, Write},
@@ -26,7 +26,7 @@ use tree_sitter::Tree;
 #[derive(Debug, Default, Clone)]
 pub enum ReqEditorTabs {
     #[default]
-    Request,
+    Body,
     Headers,
     Query,
     Auth,
@@ -38,21 +38,10 @@ pub struct ReqEditorLayout {
     pub content_pane: Rect,
 }
 
-impl From<ReqEditorTabs> for usize {
-    fn from(value: ReqEditorTabs) -> Self {
-        match value {
-            ReqEditorTabs::Request => 0,
-            ReqEditorTabs::Headers => 1,
-            ReqEditorTabs::Query => 2,
-            ReqEditorTabs::Auth => 3,
-        }
-    }
-}
-
 impl Display for ReqEditorTabs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ReqEditorTabs::Request => f.write_str("Request"),
+            ReqEditorTabs::Body => f.write_str("Request"),
             ReqEditorTabs::Headers => f.write_str("Headers"),
             ReqEditorTabs::Query => f.write_str("Query"),
             ReqEditorTabs::Auth => f.write_str("Auth"),
@@ -66,17 +55,15 @@ impl AsRef<ReqEditorTabs> for ReqEditorTabs {
     }
 }
 
-pub struct ReqEditorState<'re> {
+pub struct ReqEditorState {
     is_focused: bool,
     is_selected: bool,
-    curr_tab: &'re ReqEditorTabs,
 }
 
-impl<'re> ReqEditorState<'re> {
-    pub fn new(is_focused: bool, is_selected: bool, curr_tab: &'re ReqEditorTabs) -> Self {
+impl<'re> ReqEditorState {
+    pub fn new(is_focused: bool, is_selected: bool) -> Self {
         ReqEditorState {
             is_focused,
-            curr_tab,
             is_selected,
         }
     }
@@ -94,6 +81,9 @@ pub struct ReqEditor<'re> {
     col_scroll: usize,
     layout: ReqEditorLayout,
     config: &'re config::Config,
+    request: Option<Rc<RefCell<Request>>>,
+
+    curr_tab: ReqEditorTabs,
 
     /// whenever we press a key that is a subset of any keymap, we buffer the keymap until we can
     /// determine which keymap was pressed or cancel if no matches.
@@ -106,7 +96,8 @@ pub struct ReqEditor<'re> {
 impl<'re> ReqEditor<'re> {
     pub fn new(
         colors: &'re colors::Colors,
-        request: Option<&mut Rc<RefCell<Request>>>,
+        request: Option<Rc<RefCell<Request>>>,
+
         size: Rect,
         config: &'re config::Config,
     ) -> Self {
@@ -135,7 +126,13 @@ impl<'re> ReqEditor<'re> {
             row_scroll: 0,
             col_scroll: 0,
             layout: build_layout(size),
-
+            curr_tab: request
+                .as_ref()
+                .map(request_has_no_body)
+                .unwrap()
+                .then_some(ReqEditorTabs::Headers)
+                .unwrap_or_default(),
+            request,
             keymap_buffer: None,
         }
     }
@@ -233,14 +230,9 @@ impl<'re> ReqEditor<'re> {
         Paragraph::new(lines_in_view).render(request_pane, buf);
     }
 
-    fn draw_current_tab(
-        &self,
-        state: &mut ReqEditorState,
-        buf: &mut Buffer,
-        size: Rect,
-    ) -> anyhow::Result<()> {
-        match state.curr_tab {
-            ReqEditorTabs::Request => self.draw_editor(buf, size),
+    fn draw_current_tab(&self, buf: &mut Buffer, size: Rect) -> anyhow::Result<()> {
+        match self.curr_tab {
+            ReqEditorTabs::Body => self.draw_editor(buf, size),
             ReqEditorTabs::Headers => {}
             ReqEditorTabs::Query => {}
             ReqEditorTabs::Auth => {}
@@ -249,16 +241,36 @@ impl<'re> ReqEditor<'re> {
         Ok(())
     }
 
-    fn draw_tabs(&self, buf: &mut Buffer, state: &ReqEditorState, size: Rect) {
-        let tabs = Tabs::new(["Request", "Headers", "Query", "Auth"])
+    fn draw_tabs(&self, buf: &mut Buffer, size: Rect) {
+        let (tabs, active) = if self.request.as_ref().map(request_has_no_body).unwrap() {
+            let tabs = vec!["Headers", "Query", "Auth"];
+            let active = match self.curr_tab {
+                ReqEditorTabs::Headers => 0,
+                ReqEditorTabs::Query => 1,
+                ReqEditorTabs::Auth => 2,
+                _ => 0,
+            };
+            (tabs, active)
+        } else {
+            let tabs = vec!["Body", "Headers", "Query", "Auth"];
+            let active = match self.curr_tab {
+                ReqEditorTabs::Body => 0,
+                ReqEditorTabs::Headers => 1,
+                ReqEditorTabs::Query => 2,
+                ReqEditorTabs::Auth => 3,
+            };
+            (tabs, active)
+        };
+
+        Tabs::new(tabs)
             .style(Style::default().fg(self.colors.bright.black))
-            .select(state.curr_tab.clone().into())
+            .select(active)
             .highlight_style(
                 Style::default()
                     .fg(self.colors.normal.white)
                     .bg(self.colors.normal.blue),
-            );
-        tabs.render(size, buf);
+            )
+            .render(size, buf);
     }
 
     fn draw_container(&self, size: Rect, buf: &mut Buffer, state: &mut ReqEditorState) {
@@ -282,8 +294,8 @@ impl<'re> ReqEditor<'re> {
 
     pub fn get_components(&self, size: Rect, frame: &mut Frame, state: &mut ReqEditorState) {
         self.draw_container(size, frame.buffer_mut(), state);
-        self.draw_tabs(frame.buffer_mut(), state, self.layout.tabs_pane);
-        self.draw_current_tab(state, frame.buffer_mut(), self.layout.content_pane)
+        self.draw_tabs(frame.buffer_mut(), self.layout.tabs_pane);
+        self.draw_current_tab(frame.buffer_mut(), self.layout.content_pane)
             .ok();
     }
 
@@ -783,4 +795,11 @@ fn keycode_as_string(key_event: KeyEvent) -> String {
         (KeyCode::Esc, _) => "Esc".into(),
         _ => String::default(),
     }
+}
+
+fn request_has_no_body(request: &Rc<RefCell<Request>>) -> bool {
+    matches!(
+        request.borrow().method,
+        RequestMethod::Get | RequestMethod::Delete
+    )
 }
