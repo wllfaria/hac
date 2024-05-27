@@ -151,11 +151,14 @@ impl<'a> ResViewer<'a> {
                 .unwrap_or(String::default());
 
             self.error_lines = Some(
-                get_error_ascii_art(self.preview_layout.content_pane.width)
-                    .iter()
-                    .map(|line| line.to_string().into())
-                    .chain(vec!["".into(), cause.fg(self.colors.normal.red).into()])
-                    .collect::<Vec<Line>>(),
+                get_error_ascii_art(
+                    self.preview_layout.content_pane.width,
+                    &mut rand::thread_rng(),
+                )
+                .iter()
+                .map(|line| line.to_string().into())
+                .chain(vec!["".into(), cause.fg(self.colors.normal.red).into()])
+                .collect::<Vec<Line>>(),
             )
         };
 
@@ -567,19 +570,59 @@ fn build_preview_layout(size: Rect) -> PreviewLayout {
     }
 }
 
-fn get_error_ascii_art(width: u16) -> &'static [&'static str] {
+fn get_error_ascii_art<R>(width: u16, rng: &mut R) -> &'static [&'static str]
+where
+    R: Rng,
+{
     match width.gt(&60) {
-        true => {
-            let index = rand::thread_rng().gen_range(0..SMALL_ERROR_ARTS.len());
+        false => {
+            let index = rng.gen_range(0..SMALL_ERROR_ARTS.len());
             SMALL_ERROR_ARTS[index]
         }
-        false => {
-            let full_range_arts = SMALL_ERROR_ARTS
+        true => {
+            let full_range_arts = BIG_ERROR_ARTS
                 .iter()
-                .chain(BIG_ERROR_ARTS)
+                .chain(SMALL_ERROR_ARTS)
                 .collect::<Vec<_>>();
-            let index = rand::thread_rng().gen_range(0..full_range_arts.len());
+            let index = rng.gen_range(0..full_range_arts.len());
             full_range_arts[index]
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rand::{rngs::StdRng, SeedableRng};
+
+    use super::*;
+    #[test]
+    fn test_ascii_with_size() {
+        let seed = [0u8; 32];
+        let mut rng = StdRng::from_seed(seed);
+
+        let too_small = 59;
+        let art = get_error_ascii_art(too_small, &mut rng);
+
+        let expected = [
+            r#"  ____  ____ ____ ___   ____ "#,
+            r#" / _  )/ ___) ___) _ \ / ___)"#,
+            r#"( (/ /| |  | |  | |_| | |    "#,
+            r#" \____)_|  |_|   \___/|_|    "#,
+        ];
+
+        assert_eq!(art, expected);
+
+        let expected = [
+            r#"     dBBBP dBBBBBb  dBBBBBb    dBBBBP dBBBBBb"#,
+            r#"               dBP      dBP   dBP.BP      dBP"#,
+            r#"   dBBP    dBBBBK   dBBBBK   dBP.BP   dBBBBK "#,
+            r#"  dBP     dBP  BB  dBP  BB  dBP.BP   dBP  BB "#,
+            r#" dBBBBP  dBP  dB' dBP  dB' dBBBBP   dBP  dB' "#,
+        ];
+
+        let big_enough = 100;
+        let art = get_error_ascii_art(big_enough, &mut rng);
+
+        assert_eq!(art, expected);
     }
 }
