@@ -962,7 +962,11 @@ impl Page for CollectionViewer<'_> {
             frame.set_cursor(col_with_offset, row_with_offset);
         }
 
-        if self.focused_pane.eq(&PaneFocus::ReqUri) {
+        if self
+            .selected_pane
+            .as_ref()
+            .is_some_and(|pane| pane.eq(&PaneFocus::ReqUri))
+        {
             if let Some(request) = self.selected_request.as_ref() {
                 frame.set_cursor(
                     self.layout
