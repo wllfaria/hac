@@ -1,15 +1,15 @@
 use std::sync::{Arc, RwLock};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
-use lazy_static::lazy_static;
-use ratatui::{backend::TestBackend, layout::Rect, Terminal};
-use reqtui::{
+use hac::{
     collection::{
         types::{BodyType, Info, Request, RequestKind, RequestMethod},
         Collection,
     },
     syntax::highlighter::Highlighter,
 };
+use lazy_static::lazy_static;
+use ratatui::{backend::TestBackend, layout::Rect, Terminal};
 use tree_sitter::Tree;
 use tui::{
     pages::{collection_viewer::CollectionViewer, Eventful, Page},

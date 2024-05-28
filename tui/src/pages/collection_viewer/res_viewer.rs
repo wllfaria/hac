@@ -1,5 +1,5 @@
+use hac::{net::request_manager::Response, syntax::highlighter::HIGHLIGHTER};
 use rand::Rng;
-use reqtui::{net::request_manager::Response, syntax::highlighter::HIGHLIGHTER};
 
 use crate::{
     ascii::{BIG_ERROR_ARTS, LOGO_ART, SMALL_ERROR_ARTS},
@@ -190,7 +190,10 @@ impl<'a> ResViewer<'a> {
 
         let block = Block::default()
             .borders(Borders::ALL)
-            .title("Preview")
+            .title(vec![
+                "P".fg(self.colors.normal.red).bold(),
+                "review".fg(self.colors.bright.black),
+            ])
             .border_style(block_border);
 
         block.render(size, buf);

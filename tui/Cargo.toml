@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-reqtui.workspace = true
+hac.workspace = true
 config.workspace = true
 colors.workspace = true
 cli.workspace = true
@@ -32,7 +32,7 @@ tempfile = "3.10.1"
 mutants = "0.0.3"
 
 [[bin]]
-name = "rqt"
+name = "hac"
 test = false
 bench = false
 path = "src/main.rs"

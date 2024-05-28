@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use hac::collection;
 use ratatui::{backend::TestBackend, layout::Rect, Frame, Terminal};
-use reqtui::collection;
 use std::{
     fs::{create_dir, File},
     io::Write,

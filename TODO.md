@@ -7,7 +7,7 @@
 - [ ] support HTML, XML, plain text and other response types
 - [ ] support other types of bodies, Multipart, URL encoded forms
 - [ ] prevent from synchronizing to disk when no changes were made
-- [ ] force synchronization when switching from dirty requests
+- [x] force synchronization when switching from dirty requests
 - [ ] allow for saving a sample response from a request
 - [ ] moving requests from folders to others
 - [ ] creating requests inside of folders

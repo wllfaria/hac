@@ -5,7 +5,7 @@ use crate::{
         terminal_too_small::TerminalTooSmall, Eventful, Page,
     },
 };
-use reqtui::{collection::Collection, command::Command};
+use hac::{collection::Collection, command::Command};
 
 use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;
@@ -176,8 +176,8 @@ impl Eventful for ScreenManager<'_> {
 mod tests {
     use super::*;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use hac::collection::{self, types::*};
     use ratatui::{backend::TestBackend, Terminal};
-    use reqtui::collection::{self, types::*};
     use std::{
         fs::{create_dir, File},
         io::Write,

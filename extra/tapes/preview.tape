@@ -64,7 +64,7 @@ Type "D"
 Sleep 1s
 Type "i"
 Sleep 1s
-Type@100ms 'reqtui@is_awesome.com",'
+Type@100ms 'hac@is_awesome.com",'
 Sleep 0.2s
 Escape
 Sleep 3s

@@ -12,16 +12,16 @@ use crate::pages::{
 use anyhow::Context;
 use config::EditorMode;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use hac::{
+    collection::types::{BodyType, Collection, Directory, Request, RequestKind, RequestMethod},
+    command::Command,
+    net::request_manager::Response,
+};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Style, Stylize},
     widgets::{Block, Borders, Clear, Padding, Paragraph, StatefulWidget},
     Frame,
-};
-use reqtui::{
-    collection::types::{BodyType, Collection, Directory, Request, RequestKind, RequestMethod},
-    command::Command,
-    net::request_manager::Response,
 };
 use std::{
     cell::RefCell,
@@ -226,30 +226,46 @@ impl<'cv> CollectionViewer<'cv> {
             return Ok(Some(Command::Quit));
         };
 
-        match key_event.code {
-            KeyCode::Enter => {
-                if let Some(req) = self.hovered_request.as_ref() {
-                    match req {
-                        RequestKind::Nested(dir) => {
-                            let entry = self.dirs_expanded.entry(dir.id.clone()).or_insert(false);
-                            *entry = !*entry;
-                        }
-                        RequestKind::Single(req) => {
-                            self.selected_request = Some(Arc::clone(req));
-                            self.res_viewer.update(None);
-                            self.editor = ReqEditor::new(
-                                self.colors,
-                                self.selected_request.clone(),
-                                self.layout.req_editor,
-                                self.config,
-                            );
+        if let KeyCode::Esc = key_event.code {
+            self.selected_pane = None;
+            return Ok(None);
+        }
+
+        if let (KeyCode::Enter, None) = (key_event.code, self.selected_pane.as_ref()) {
+            self.selected_pane = Some(PaneFocus::Sidebar);
+            return Ok(None);
+        }
+
+        if self
+            .selected_pane
+            .as_ref()
+            .is_some_and(|pane| pane.eq(&PaneFocus::Sidebar))
+        {
+            match key_event.code {
+                KeyCode::Enter => {
+                    if let Some(req) = self.hovered_request.as_ref() {
+                        match req {
+                            RequestKind::Nested(dir) => {
+                                let entry =
+                                    self.dirs_expanded.entry(dir.id.clone()).or_insert(false);
+                                *entry = !*entry;
+                            }
+                            RequestKind::Single(req) => {
+                                self.selected_request = Some(Arc::clone(req));
+                                self.res_viewer.update(None);
+                                self.editor = ReqEditor::new(
+                                    self.colors,
+                                    self.selected_request.clone(),
+                                    self.layout.req_editor,
+                                    self.config,
+                                );
+                            }
                         }
                     }
                 }
-            }
-            KeyCode::Char('j') => {
-                if let Some(ref req) = self.hovered_request {
-                    self.hovered_request = find_next_entry(
+                KeyCode::Char('j') => {
+                    if let Some(ref req) = self.hovered_request {
+                        self.hovered_request = find_next_entry(
                         self.collection.requests.as_ref().context(
                             "should never have a selected request without any requests on collection",
                         )?,
@@ -258,13 +274,13 @@ impl<'cv> CollectionViewer<'cv> {
                         req,
                     )
                     .or(Some(req.clone()));
-                } else if let Some(requests) = self.collection.requests.as_ref() {
-                    self.hovered_request = requests.first().cloned();
+                    } else if let Some(requests) = self.collection.requests.as_ref() {
+                        self.hovered_request = requests.first().cloned();
+                    }
                 }
-            }
-            KeyCode::Char('k') => {
-                if let Some(ref id) = self.hovered_request {
-                    self.hovered_request = find_next_entry(
+                KeyCode::Char('k') => {
+                    if let Some(ref id) = self.hovered_request {
+                        self.hovered_request = find_next_entry(
                         self.collection.requests.as_ref().context(
                             "should never have a selected request without any requests on collection",
                         )?,
@@ -273,12 +289,13 @@ impl<'cv> CollectionViewer<'cv> {
                         id,
                     )
                     .or(Some(id.clone()));
-                } else if let Some(requests) = self.collection.requests.as_ref() {
-                    self.hovered_request = requests.first().cloned();
+                    } else if let Some(requests) = self.collection.requests.as_ref() {
+                        self.hovered_request = requests.first().cloned();
+                    }
                 }
+                KeyCode::Char('n') => self.curr_overlay = Overlays::CreateRequest,
+                _ => {}
             }
-            KeyCode::Char('n') => self.curr_overlay = Overlays::CreateRequest,
-            _ => {}
         }
 
         Ok(None)
@@ -289,31 +306,48 @@ impl<'cv> CollectionViewer<'cv> {
             self.before_quit();
             return Ok(Some(Command::Quit));
         };
-        match key_event.code {
-            KeyCode::Char(c) => {
-                if let Some(req) = self.selected_request.as_mut() {
-                    req.write().unwrap().uri.push(c);
+
+        if let KeyCode::Esc = key_event.code {
+            self.selected_pane = None;
+            return Ok(None);
+        }
+
+        if let (KeyCode::Enter, None) = (key_event.code, self.selected_pane.as_ref()) {
+            self.selected_pane = Some(PaneFocus::ReqUri);
+            return Ok(None);
+        }
+
+        if self
+            .selected_pane
+            .as_ref()
+            .is_some_and(|pane| pane.eq(&PaneFocus::ReqUri))
+        {
+            match key_event.code {
+                KeyCode::Char(c) => {
+                    if let Some(req) = self.selected_request.as_mut() {
+                        req.write().unwrap().uri.push(c);
+                    }
                 }
-            }
-            KeyCode::Backspace => {
-                if let Some(req) = self.selected_request.as_mut() {
-                    req.write().unwrap().uri.pop();
+                KeyCode::Backspace => {
+                    if let Some(req) = self.selected_request.as_mut() {
+                        req.write().unwrap().uri.pop();
+                    }
                 }
-            }
-            KeyCode::Enter => {
-                if self
-                    .selected_request
-                    .as_ref()
-                    .is_some_and(|_| !self.pending_request)
-                {
-                    self.pending_request = true;
-                    reqtui::net::handle_request(
-                        self.selected_request.as_ref().unwrap(),
-                        self.request_tx.clone(),
-                    )
+                KeyCode::Enter => {
+                    if self
+                        .selected_request
+                        .as_ref()
+                        .is_some_and(|_| !self.pending_request)
+                    {
+                        self.pending_request = true;
+                        hac::net::handle_request(
+                            self.selected_request.as_ref().unwrap(),
+                            self.request_tx.clone(),
+                        )
+                    }
                 }
+                _ => {}
             }
-            _ => {}
         }
         Ok(None)
     }
@@ -347,7 +381,10 @@ impl<'cv> CollectionViewer<'cv> {
             &self.selected_request,
             self.hovered_request.as_ref(),
             &mut self.dirs_expanded,
-            self.focused_pane == PaneFocus::Sidebar,
+            self.focused_pane.eq(&PaneFocus::Sidebar),
+            self.selected_pane
+                .as_ref()
+                .is_some_and(|pane| pane.eq(&PaneFocus::Sidebar)),
         );
 
         Sidebar::new(self.colors).render(self.layout.sidebar, frame.buffer_mut(), &mut state);
@@ -356,7 +393,10 @@ impl<'cv> CollectionViewer<'cv> {
     fn draw_req_uri(&mut self, frame: &mut Frame) {
         let mut state = ReqUriState::new(
             &self.selected_request,
-            self.focused_pane == PaneFocus::ReqUri,
+            self.focused_pane.eq(&PaneFocus::ReqUri),
+            self.selected_pane
+                .as_ref()
+                .is_some_and(|pane| pane.eq(&PaneFocus::ReqUri)),
         );
         ReqUri::new(self.colors).render(self.layout.req_uri, frame.buffer_mut(), &mut state);
     }
@@ -859,7 +899,7 @@ impl<'cv> CollectionViewer<'cv> {
 
         self.sync_interval = std::time::Instant::now();
         tokio::spawn(async move {
-            match reqtui::fs::sync_collection(collection).await {
+            match hac::fs::sync_collection(collection).await {
                 Ok(_) => {}
                 Err(e) => {
                     if sender.send(Command::Error(e.to_string())).is_err() {
@@ -974,18 +1014,22 @@ impl Eventful for CollectionViewer<'_> {
             match key_event.code {
                 KeyCode::Char('r') => {
                     self.focused_pane = PaneFocus::Sidebar;
+                    self.selected_pane = Some(PaneFocus::Sidebar);
                     return Ok(None);
                 }
                 KeyCode::Char('u') => {
                     self.focused_pane = PaneFocus::ReqUri;
+                    self.selected_pane = Some(PaneFocus::ReqUri);
                     return Ok(None);
                 }
                 KeyCode::Char('p') => {
                     self.focused_pane = PaneFocus::Preview;
+                    self.selected_pane = Some(PaneFocus::Preview);
                     return Ok(None);
                 }
                 KeyCode::Char('e') => {
                     self.focused_pane = PaneFocus::Editor;
+                    self.selected_pane = Some(PaneFocus::Editor);
                     return Ok(None);
                 }
                 _ => (),
@@ -1160,7 +1204,7 @@ fn find_next_entry(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use reqtui::collection::types::{Directory, Request, RequestMethod};
+    use hac::collection::types::{Directory, Request, RequestMethod};
     use std::collections::HashMap;
 
     fn create_root_one() -> RequestKind {

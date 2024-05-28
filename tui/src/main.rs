@@ -1,5 +1,5 @@
 use cli::RuntimeBehavior;
-use reqtui::collection::collection;
+use hac::collection::collection;
 use tui::app;
 
 fn setup_tracing() -> anyhow::Result<tracing_appender::non_blocking::WorkerGuard> {

@@ -670,6 +670,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "hac"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "cc",
+ "config",
+ "jsonxf",
+ "lazy_static",
+ "ratatui",
+ "reqwest",
+ "ropey",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tree-sitter",
+ "tree-sitter-json",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1295,27 +1316,6 @@ name = "regex-syntax"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adad44e29e4c806119491a7f06f03de4d1af22c3a680dd47f1e6e179439d1f56"
-
-[[package]]
-name = "reqtui"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "cc",
- "config",
- "jsonxf",
- "lazy_static",
- "ratatui",
- "reqwest",
- "ropey",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tree-sitter",
- "tree-sitter-json",
-]
 
 [[package]]
 name = "reqwest"
@@ -1987,11 +1987,11 @@ dependencies = [
  "crossterm",
  "divan",
  "futures",
+ "hac",
  "lazy_static",
  "mutants",
  "rand",
  "ratatui",
- "reqtui",
  "reqwest",
  "serde_json",
  "tempfile",

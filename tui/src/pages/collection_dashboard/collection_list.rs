@@ -3,6 +3,7 @@ use std::{
     ops::{Add, Div, Mul},
 };
 
+use hac::collection::Collection;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Flex, Layout, Rect},
@@ -12,7 +13,6 @@ use ratatui::{
         StatefulWidget, Widget,
     },
 };
-use reqtui::collection::Collection;
 
 #[derive(Debug)]
 pub struct CollectionListState {
@@ -180,8 +180,8 @@ mod tests {
     use std::ops::Sub;
 
     use super::*;
+    use hac::collection::types::*;
     use ratatui::{backend::TestBackend, buffer::Cell, Terminal};
-    use reqtui::collection::types::*;
 
     fn sample_collection() -> Collection {
         Collection {

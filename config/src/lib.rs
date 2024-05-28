@@ -16,11 +16,11 @@ pub enum EditorMode {
     Normal,
 }
 
-pub static APP_NAME: &str = "reqtui";
+pub static APP_NAME: &str = "hac";
 pub static COLLECTIONS_DIR: &str = "collections";
-pub static CONFIG_FILE: &str = "reqtui.toml";
+pub static CONFIG_FILE: &str = "hac.toml";
 pub static THEMES_DIR: &str = "themes";
-pub static CONFIG_ENV_VAR: &str = "REQTUI_CONFIG";
+pub static CONFIG_ENV_VAR: &str = "HAC_CONFIG";
 
 #[cfg(unix)]
 static XDG_ENV_VARS: [&str; 2] = ["XDG_CONFIG_HOME", "XDG_DATA_HOME"];

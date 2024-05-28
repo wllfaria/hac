@@ -8,7 +8,7 @@ use crate::pages::{
     overlay::draw_overlay,
     Eventful, Page,
 };
-use reqtui::{collection::types::Collection, command::Command};
+use hac::{collection::types::Collection, command::Command};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
@@ -237,7 +237,7 @@ impl<'a> CollectionDashboard<'a> {
                         .expect("should always have a sender at this point");
 
                     tokio::spawn(async move {
-                        match reqtui::fs::create_collection(name, description).await {
+                        match hac::fs::create_collection(name, description).await {
                             Ok(collection) => {
                                 if sender_copy
                                     .send(Command::CreateCollection(collection))
@@ -295,7 +295,7 @@ impl<'a> CollectionDashboard<'a> {
 
                 tokio::spawn(async move {
                     tracing::debug!("attempting to delete collection: {:?}", path);
-                    reqtui::fs::delete_collection(&path)
+                    hac::fs::delete_collection(&path)
                         .await
                         .expect("failed to delete collection from filesystem");
                 });
@@ -624,8 +624,8 @@ fn build_layout(size: Rect) -> DashboardLayout {
 
 #[cfg(test)]
 mod tests {
+    use hac::collection;
     use ratatui::{backend::TestBackend, buffer::Cell, Terminal};
-    use reqtui::collection;
     use std::{
         fs::{create_dir, File},
         io::Write,

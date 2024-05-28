@@ -9,8 +9,8 @@ pub mod terminal_too_small;
 
 use crate::event_pool::Event;
 use crossterm::event::KeyEvent;
+use hac::command::Command;
 use ratatui::{layout::Rect, Frame};
-use reqtui::command::Command;
 use tokio::sync::mpsc::UnboundedSender;
 
 /// A `Page` is anything that is a top level page and can be drawn to the screen

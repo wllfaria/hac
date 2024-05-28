@@ -1,5 +1,4 @@
-use reqtui::collection::types::{Request, RequestKind, RequestMethod};
-
+use hac::collection::types::{Request, RequestKind, RequestMethod};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -18,6 +17,7 @@ pub struct SidebarState<'a> {
     hovered_requet: Option<&'a RequestKind>,
     dirs_expanded: &'a mut HashMap<String, bool>,
     is_focused: bool,
+    is_selected: bool,
 }
 
 impl<'a> SidebarState<'a> {
@@ -27,6 +27,7 @@ impl<'a> SidebarState<'a> {
         hovered_requet: Option<&'a RequestKind>,
         dirs_expanded: &'a mut HashMap<String, bool>,
         is_focused: bool,
+        is_selected: bool,
     ) -> Self {
         SidebarState {
             requests,
@@ -34,6 +35,7 @@ impl<'a> SidebarState<'a> {
             hovered_requet,
             dirs_expanded,
             is_focused,
+            is_selected,
         }
     }
 }
@@ -75,17 +77,17 @@ impl<'a> StatefulWidget for Sidebar<'a> {
             .map(|l| l.line.clone())
             .collect::<Vec<Paragraph>>();
 
-        let block_border = if state.is_focused {
-            Style::default().fg(self.colors.bright.blue)
-        } else {
-            Style::default().fg(self.colors.bright.black)
+        let block_border = match (state.is_focused, state.is_selected) {
+            (true, false) => Style::default().fg(self.colors.bright.blue),
+            (true, true) => Style::default().fg(self.colors.normal.red),
+            (false, _) => Style::default().fg(self.colors.bright.black),
         };
 
         let block = Block::default()
             .borders(Borders::ALL)
             .title(vec![
-                "C".fg(self.colors.normal.red).bold(),
-                "ollections".into(),
+                "R".fg(self.colors.normal.red).bold(),
+                "equests".fg(self.colors.bright.black),
             ])
             .border_style(block_border);
 

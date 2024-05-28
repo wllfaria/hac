@@ -1,6 +1,12 @@
 use crate::{pages::Eventful, utils::build_syntax_highlighted_lines};
 use config::{Action, EditorMode, KeyAction};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use hac::{
+    collection::types::{Request, RequestMethod},
+    command::Command,
+    syntax::highlighter::HIGHLIGHTER,
+    text_object::{cursor::Cursor, TextObject, Write},
+};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
@@ -8,12 +14,6 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Tabs, Widget},
     Frame,
-};
-use reqtui::{
-    collection::types::{Request, RequestMethod},
-    command::Command,
-    syntax::highlighter::HIGHLIGHTER,
-    text_object::{cursor::Cursor, TextObject, Write},
 };
 use std::{
     fmt::Display,
@@ -288,7 +288,10 @@ impl<'re> ReqEditor<'re> {
 
         let block = Block::default()
             .borders(Borders::ALL)
-            .title("Editor")
+            .title(vec![
+                "E".fg(self.colors.normal.red).bold(),
+                "ditor".fg(self.colors.bright.black),
+            ])
             .border_style(block_border);
 
         block.render(size, buf);
@@ -667,7 +670,7 @@ impl Eventful for ReqEditor<'_> {
     fn handle_key_event(
         &mut self,
         key_event: KeyEvent,
-    ) -> anyhow::Result<Option<reqtui::command::Command>> {
+    ) -> anyhow::Result<Option<hac::command::Command>> {
         let key_str = keycode_as_string(key_event);
 
         if let Some(buffered_keymap) = self.keymap_buffer.to_owned() {

@@ -3,8 +3,8 @@ use crate::{
     pages::{Eventful, Page},
     screen_manager::ScreenManager,
 };
+use hac::{collection::Collection, command::Command};
 use ratatui::{backend::CrosstermBackend, Terminal};
-use reqtui::{collection::Collection, command::Command};
 use std::io::Stdout;
 use tokio::sync::mpsc;
 

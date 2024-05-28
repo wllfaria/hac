@@ -1,11 +1,11 @@
 [workspace]
-members = ["config", "reqtui", "tui", "colors", "cli"]
+members = ["config", "hac", "tui", "colors", "cli"]
 default-members = ["tui"]
 resolver = "2"
 
 [workspace.dependencies]
 config = { path = "config" }
-reqtui = { path = "reqtui" }
+hac = { path = "hac" }
 colors = { path = "colors" }
 cli = { path = "cli" }
 

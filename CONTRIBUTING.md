@@ -1,10 +1,10 @@
 # Contributing
 
-Thanks for taking the time to submit code to `reqTUI` if you're reading this!
+Thanks for taking the time to submit code to `hac` if you're reading this!
 We love having new contributors and love seeing the community come around and
 help making it better.
 
-There are opportunities to contribute to `reqTUI` at any level. It doesn't
+There are opportunities to contribute to `hac` at any level. It doesn't
 matter if you are just getting started with Rust or are the most weathered
 expert, we can use your help.
 
@@ -63,6 +63,6 @@ in order to evaluate whether the changes are correct and necessary.
 
 Be aware that *how* you communicate requests and reviews in your feedback can
 have a significant impact on the success of the Pull Request. Yes, we may land
-a particular change that makes `reqTUI` better, but the individual might just
-not want to have anything to do with `reqTUI` ever again. The goal is not
+a particular change that makes `hac` better, but the individual might just
+not want to have anything to do with `hac` ever again. The goal is not
 just having good code.
