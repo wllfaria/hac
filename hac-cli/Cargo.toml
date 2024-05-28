@@ -2,6 +2,16 @@
 name = "hac-cli"
 version = "0.1.0"
 edition = "2021"
+description = "your handy API client, on your terminal!"
+repository = "https://github.com/wllfaria/hac"
+homepage = "https://github.com/wllfaria/hac"
+documentation = "https://github.com/wllfaria/hac/wiki"
+authors = ["Willians Faria <dev.willians.faria@gmail.com>"]
+license = "MIT"
+readme = "../README.md"
+keywords = ["api", "api-client", "insomnia", "postman"]
+categories = ["command-line-utilities"]
+workspace = "../"
 
 [dependencies]
 clap = { version = "4.5.4", features = ["derive"] }
