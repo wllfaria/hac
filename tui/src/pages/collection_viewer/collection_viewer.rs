@@ -1165,7 +1165,7 @@ mod tests {
 
     fn create_root_one() -> RequestKind {
         RequestKind::Single(Arc::new(RwLock::new(Request {
-            id: "any id".to_string(),
+            id: "root".to_string(),
             method: RequestMethod::Get,
             name: "Root1".to_string(),
             uri: "/root1".to_string(),
@@ -1176,7 +1176,7 @@ mod tests {
 
     fn create_child_one() -> RequestKind {
         RequestKind::Single(Arc::new(RwLock::new(Request {
-            id: "any id".to_string(),
+            id: "child_one".to_string(),
             method: RequestMethod::Post,
             name: "Child1".to_string(),
             uri: "/nested1/child1".to_string(),
@@ -1187,7 +1187,7 @@ mod tests {
 
     fn create_child_two() -> RequestKind {
         RequestKind::Single(Arc::new(RwLock::new(Request {
-            id: "any id".to_string(),
+            id: "child_two".to_string(),
             method: RequestMethod::Put,
             name: "Child2".to_string(),
             uri: "/nested1/child2".to_string(),
@@ -1198,7 +1198,7 @@ mod tests {
 
     fn create_not_used() -> RequestKind {
         RequestKind::Single(Arc::new(RwLock::new(Request {
-            id: "any id".to_string(),
+            id: "not_used".to_string(),
             method: RequestMethod::Put,
             name: "NotUsed".to_string(),
             uri: "/not/used".to_string(),
@@ -1209,7 +1209,7 @@ mod tests {
 
     fn create_dir() -> Directory {
         Directory {
-            id: "any id".to_string(),
+            id: "dir".to_string(),
             name: "Nested1".to_string(),
             requests: vec![create_child_one(), create_child_two()],
         }
@@ -1221,7 +1221,7 @@ mod tests {
 
     fn create_root_two() -> RequestKind {
         RequestKind::Single(Arc::new(RwLock::new(Request {
-            id: "any id".to_string(),
+            id: "root_two".to_string(),
             method: RequestMethod::Delete,
             name: "Root2".to_string(),
             uri: "/root2".to_string(),
