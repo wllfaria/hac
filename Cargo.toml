@@ -1,6 +1,6 @@
 [workspace]
-members = ["hac-config", "hac-core", "hac-tui", "hac-colors", "hac-cli"]
-default-members = ["hac-tui"]
+members = ["hac-config", "hac-core", "hac-client", "hac-colors", "hac-cli"]
+default-members = ["hac-client"]
 resolver = "2"
 
 [workspace.dependencies]

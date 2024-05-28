@@ -1,6 +1,6 @@
 use hac_cli::RuntimeBehavior;
+use hac_client::app;
 use hac_core::collection::collection;
-use hac_tui::app;
 
 fn setup_tracing() -> anyhow::Result<tracing_appender::non_blocking::WorkerGuard> {
     let (data_dir, logfile) = hac_config::log_file();

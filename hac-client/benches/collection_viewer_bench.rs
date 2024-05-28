@@ -1,16 +1,16 @@
 use std::sync::{Arc, RwLock};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
+use hac_client::{
+    pages::{collection_viewer::CollectionViewer, Eventful, Page},
+    utils::build_syntax_highlighted_lines,
+};
 use hac_core::{
     collection::{
         types::{BodyType, Info, Request, RequestKind, RequestMethod},
         Collection,
     },
     syntax::highlighter::Highlighter,
-};
-use hac_tui::{
-    pages::{collection_viewer::CollectionViewer, Eventful, Page},
-    utils::build_syntax_highlighted_lines,
 };
 use lazy_static::lazy_static;
 use ratatui::{backend::TestBackend, layout::Rect, Terminal};
