@@ -1,13 +1,13 @@
 [workspace]
-members = ["config", "hac", "tui", "colors", "cli"]
-default-members = ["tui"]
+members = ["hac-config", "hac-core", "hac-tui", "hac-colors", "hac-cli"]
+default-members = ["hac-tui"]
 resolver = "2"
 
 [workspace.dependencies]
-config = { path = "config" }
-hac = { path = "hac" }
-colors = { path = "colors" }
-cli = { path = "cli" }
+hac-config = { path = "hac-config" }
+hac-core = { path = "hac-core" }
+hac-colors = { path = "hac-colors" }
+hac-cli = { path = "hac-cli" }
 
 anyhow = "1.0.81"
 crossterm = { version = "0.27.0", features = ["event-stream"] }

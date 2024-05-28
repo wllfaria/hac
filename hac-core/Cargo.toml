@@ -1,0 +1,25 @@
+[package]
+name = "hac-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+hac-config.workspace = true
+
+anyhow.workspace = true
+tracing.workspace = true
+serde.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+serde_json.workspace = true
+ratatui.workspace = true
+tree-sitter.workspace = true
+tree-sitter-json.workspace = true
+lazy_static.workspace = true
+
+ropey = "1.6.1"
+jsonxf = "1.1.1"
+async-trait = "0.1.80"
+
+[build-dependencies]
+cc="*"

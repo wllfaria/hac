@@ -1,0 +1,12 @@
+[package]
+name = "hac-config"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+tracing.workspace = true
+serde.workspace = true
+
+dirs = "5.0.1"
+toml = "0.8.12"

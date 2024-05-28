@@ -1,0 +1,13 @@
+[package]
+name = "hac-colors"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tracing.workspace = true
+anyhow.workspace = true
+crossterm.workspace = true
+ratatui.workspace = true
+serde.workspace = true
+
+toml = { version = "0.8.12" }
