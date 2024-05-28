@@ -92,47 +92,42 @@ where
 /// on windows
 /// if the above fails, we return None for the default configuration to be loaded
 pub fn get_config_dir_path() -> Option<PathBuf> {
-    let var = match std::env::var(CONFIG_ENV_VAR) {
-        Ok(config_path) => {
-            tracing::debug!("loading config file from $REQTUI_CONFIG: {config_path:?}");
-            Some(PathBuf::from(&config_path).join(CONFIG_FILE))
-        }
-        Err(_) => match std::env::var(XDG_ENV_VARS[0]) {
-            Ok(config_path) => {
-                tracing::debug!(
-                    "loading config file from $XDG_CONFIG_HOME: {config_path}/lucky/config.toml"
-                );
-                Some(Path::new(&config_path).join(APP_NAME).join(CONFIG_FILE))
-            }
-            Err(_) => match std::env::var(
-                dirs::home_dir()
-                    .expect("failed to get the home directory path")
-                    .join(XDG_DEFAULTS[0]),
-            ) {
-                Ok(home_path) => {
-                    tracing::debug!(
-                        "loading config file from $HOME: {home_path}/.config/lucky/config.toml"
-                    );
-                    Some(
-                        Path::new(&home_path)
-                            .join(".config")
-                            .join(APP_NAME)
-                            .join(CONFIG_FILE),
-                    )
-                }
-                Err(_) => {
-                    tracing::debug!("no config file found, loading default");
-                    None
-                }
-            },
-        },
-    };
+    let config_path = std::env::var(CONFIG_ENV_VAR).ok().map(|config_path| {
+        tracing::debug!("loading config file from $HAC_CONFIG: {config_path:?}");
+        PathBuf::from(config_path).join(CONFIG_FILE)
+    });
 
-    var
+    if config_path.is_some() {
+        return config_path;
+    }
+
+    let xdg_config_path = std::env::var(XDG_ENV_VARS[0]).ok().map(|config_path| {
+        tracing::debug!("loading config file from $XDG_CONFIG_HOME: {config_path}/hac/hac.toml");
+        Path::new(&config_path).join(APP_NAME).join(CONFIG_FILE)
+    });
+
+    if xdg_config_path.is_some() {
+        return xdg_config_path;
+    }
+
+    let xdg_config_path = dirs::home_dir().map(|home_path| {
+        tracing::debug!("loading config file from $HOME: {home_path:?}/.config/hac/hac.toml");
+        Path::new(&home_path)
+            .join(XDG_DEFAULTS[0])
+            .join(APP_NAME)
+            .join(CONFIG_FILE)
+    });
+
+    if xdg_config_path.is_some() {
+        return xdg_config_path;
+    }
+
+    tracing::debug!("no config file found, loading default");
+    None
 }
 
 fn load_default_config() -> Config {
-    toml::from_str::<Config>(DEFAULT_CONFIG).expect("failed to load deafult config")
+    toml::from_str::<Config>(DEFAULT_CONFIG).expect("failed to parse default config string")
 }
 
 pub fn default_as_str() -> &'static str {
@@ -140,10 +135,13 @@ pub fn default_as_str() -> &'static str {
 }
 
 pub fn load_config() -> Config {
-    get_config_dir_path()
-        .map(load_config_from_file)
-        .unwrap_or(Ok(load_default_config()))
-        .expect("failed to load default configuration")
+    let config = get_config_dir_path().and_then(|path| load_config_from_file(path).ok());
+
+    if let Some(config) = config {
+        config
+    } else {
+        load_default_config()
+    }
 }
 
 pub fn get_usual_path() -> PathBuf {

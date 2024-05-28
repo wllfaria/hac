@@ -28,9 +28,9 @@ async fn main() -> anyhow::Result<()> {
             cli::Cli::print_default_config(config::default_as_str())
         }
         RuntimeBehavior::Run => {
+            let _guard = setup_tracing()?;
             config::get_or_create_data_dir();
             let config = config::load_config();
-            let _guard = setup_tracing()?;
 
             let colors = colors::Colors::default();
             let mut collections = collection::get_collections_from_config()?;
