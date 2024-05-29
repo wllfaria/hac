@@ -19,7 +19,9 @@ fn setup_tracing() -> anyhow::Result<tracing_appender::non_blocking::WorkerGuard
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    match hac_cli::Cli::parse_args() {
+    let runtime_behavior = hac_cli::Cli::parse_args();
+
+    match runtime_behavior {
         RuntimeBehavior::PrintConfigPath => hac_cli::Cli::print_config_path(
             hac_config::get_config_dir_path(),
             hac_config::get_usual_path(),
@@ -30,18 +32,20 @@ async fn main() -> anyhow::Result<()> {
         RuntimeBehavior::DumpDefaultConfig => {
             hac_cli::Cli::print_default_config(hac_config::default_as_str())
         }
-        RuntimeBehavior::Run => {
-            let _guard = setup_tracing()?;
-            hac_config::get_or_create_data_dir();
-            let config = hac_config::load_config();
-
-            let colors = hac_colors::Colors::default();
-            let mut collections = collection::get_collections_from_config()?;
-            collections.sort_by_key(|key| key.info.name.clone());
-            let mut app = app::App::new(&colors, collections, &config)?;
-            app.run().await?;
-        }
+        _ => {}
     }
+
+    let dry_run = runtime_behavior.eq(&RuntimeBehavior::DryRun);
+
+    let _guard = setup_tracing()?;
+    hac_config::get_or_create_data_dir();
+    let config = hac_config::load_config();
+
+    let colors = hac_colors::Colors::default();
+    let mut collections = collection::get_collections_from_config()?;
+    collections.sort_by_key(|key| key.info.name.clone());
+    let mut app = app::App::new(&colors, collections, &config, dry_run)?;
+    app.run().await?;
 
     Ok(())
 }

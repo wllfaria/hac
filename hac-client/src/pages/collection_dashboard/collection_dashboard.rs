@@ -46,6 +46,7 @@ pub struct CollectionDashboard<'a> {
     pane_focus: PaneFocus,
     pub command_sender: Option<UnboundedSender<Command>>,
     error_message: String,
+    dry_run: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -63,6 +64,7 @@ impl<'a> CollectionDashboard<'a> {
         size: Rect,
         colors: &'a hac_colors::Colors,
         collections: Vec<Collection>,
+        dry_run: bool,
     ) -> anyhow::Result<Self> {
         let mut list_state = CollectionListState::new(collections.clone());
         collections
@@ -81,6 +83,7 @@ impl<'a> CollectionDashboard<'a> {
             command_sender: None,
             error_message: String::default(),
             pane_focus: PaneFocus::List,
+            dry_run,
         })
     }
 
@@ -236,8 +239,10 @@ impl<'a> CollectionDashboard<'a> {
                         .clone()
                         .expect("should always have a sender at this point");
 
+                    let dry_run = self.dry_run;
+
                     tokio::spawn(async move {
-                        match hac_core::fs::create_collection(name, description).await {
+                        match hac_core::fs::create_collection(name, description, dry_run).await {
                             Ok(collection) => {
                                 if sender_copy
                                     .send(Command::CreateCollection(collection))
@@ -293,12 +298,14 @@ impl<'a> CollectionDashboard<'a> {
                     .expect("should never attempt to delete a non existing item");
                 let path = collection.path.clone();
 
-                tokio::spawn(async move {
-                    tracing::debug!("attempting to delete collection: {:?}", path);
-                    hac_core::fs::delete_collection(&path)
-                        .await
-                        .expect("failed to delete collection from filesystem");
-                });
+                if !self.dry_run {
+                    tokio::spawn(async move {
+                        tracing::debug!("attempting to delete collection: {:?}", path);
+                        hac_core::fs::delete_collection(&path)
+                            .await
+                            .expect("failed to delete collection from filesystem");
+                    });
+                }
 
                 self.collections.remove(selected);
                 self.list_state.set_items(self.collections.clone());
@@ -687,7 +694,7 @@ mod tests {
         let (_guard, path) = setup_temp_collections(1);
         let collection = collection::collection::get_collections(path).unwrap();
 
-        let mut dashboard = CollectionDashboard::new(size, &colors, collection).unwrap();
+        let mut dashboard = CollectionDashboard::new(size, &colors, collection, false).unwrap();
 
         assert_eq!(dashboard.collections.len(), 1);
         assert_eq!(dashboard.list_state.selected(), Some(0));
@@ -713,7 +720,7 @@ mod tests {
     fn test_actions_without_any_collections() {
         let size = Rect::new(0, 0, 80, 24);
         let colors = hac_colors::Colors::default();
-        let mut dashboard = CollectionDashboard::new(size, &colors, vec![]).unwrap();
+        let mut dashboard = CollectionDashboard::new(size, &colors, vec![], false).unwrap();
 
         assert!(dashboard.collections.is_empty());
         assert_eq!(dashboard.list_state.selected(), None);
@@ -740,7 +747,7 @@ mod tests {
         let (_guard, path) = setup_temp_collections(10);
         let collections = collection::collection::get_collections(path).unwrap();
 
-        let mut dashboard = CollectionDashboard::new(size, &colors, collections).unwrap();
+        let mut dashboard = CollectionDashboard::new(size, &colors, collections, false).unwrap();
 
         assert_eq!(dashboard.collections.len(), 10);
         assert_eq!(dashboard.list_state.selected(), Some(0));
@@ -808,7 +815,7 @@ mod tests {
         let (_guard, path) = setup_temp_collections(3);
         let collections = collection::collection::get_collections(path).unwrap();
 
-        let mut dashboard = CollectionDashboard::new(size, &colors, collections).unwrap();
+        let mut dashboard = CollectionDashboard::new(size, &colors, collections, false).unwrap();
 
         feed_keys(
             &mut dashboard,
@@ -846,7 +853,7 @@ mod tests {
         let (_guard, path) = setup_temp_collections(3);
         let collections = collection::collection::get_collections(path).unwrap();
 
-        let mut dashboard = CollectionDashboard::new(size, &colors, collections).unwrap();
+        let mut dashboard = CollectionDashboard::new(size, &colors, collections, false).unwrap();
 
         feed_keys(
             &mut dashboard,
@@ -922,7 +929,7 @@ mod tests {
         let colors = hac_colors::Colors::default();
         let (_guard, path) = setup_temp_collections(3);
         let collections = collection::collection::get_collections(path).unwrap();
-        let mut dashboard = CollectionDashboard::new(size, &colors, collections).unwrap();
+        let mut dashboard = CollectionDashboard::new(size, &colors, collections, false).unwrap();
 
         feed_keys(
             &mut dashboard,
@@ -943,7 +950,7 @@ mod tests {
     fn test_display_error() {
         let size = Rect::new(0, 0, 80, 24);
         let colors = hac_colors::Colors::default();
-        let mut dashboard = CollectionDashboard::new(size, &colors, vec![]).unwrap();
+        let mut dashboard = CollectionDashboard::new(size, &colors, vec![], false).unwrap();
 
         dashboard.display_error("any error message".into());
 
@@ -955,7 +962,7 @@ mod tests {
     fn test_draw_background() {
         let colors = hac_colors::Colors::default();
         let size = Rect::new(0, 0, 80, 22);
-        let dashboard = CollectionDashboard::new(size, &colors, vec![]).unwrap();
+        let dashboard = CollectionDashboard::new(size, &colors, vec![], false).unwrap();
 
         let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
         let mut frame = terminal.get_frame();
@@ -977,7 +984,7 @@ mod tests {
         let size = Rect::new(0, 0, 80, 22);
         let (_guard, path) = setup_temp_collections(3);
         let collections = collection::collection::get_collections(path).unwrap();
-        let mut dashboard = CollectionDashboard::new(size, &colors, collections).unwrap();
+        let mut dashboard = CollectionDashboard::new(size, &colors, collections, false).unwrap();
 
         dashboard.display_error("any_error_message".into());
         assert_eq!(dashboard.pane_focus, PaneFocus::Error);
@@ -996,7 +1003,7 @@ mod tests {
         let new_size = Rect::new(0, 0, 80, 24);
         let (_guard, path) = setup_temp_collections(3);
         let collections = collection::collection::get_collections(path).unwrap();
-        let mut dashboard = CollectionDashboard::new(size, &colors, collections).unwrap();
+        let mut dashboard = CollectionDashboard::new(size, &colors, collections, false).unwrap();
         let expected = DashboardLayout {
             collections_pane: Rect::new(1, 6, 79, 17),
             hint_pane: Rect::new(1, 23, 79, 1),

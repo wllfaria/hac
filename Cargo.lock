@@ -647,15 +647,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hac-cli"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fe8ba9352b306da682c30865eb0a37408db4523e1d3494a3a570ca41965d1fa"
-dependencies = [
- "clap",
-]
-
-[[package]]
 name = "hac-client"
 version = "0.1.0"
 dependencies = [
@@ -663,10 +654,10 @@ dependencies = [
  "crossterm",
  "divan",
  "futures",
- "hac-cli 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "hac-colors 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "hac-config 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "hac-core 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hac-cli",
+ "hac-colors",
+ "hac-config",
+ "hac-core",
  "lazy_static",
  "mutants",
  "rand",
@@ -696,35 +687,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "hac-colors"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "692a9e7c130535cd9640a4cdf26b0d35db711fd0ca923af1c7d407c55ed14857"
-dependencies = [
- "anyhow",
- "crossterm",
- "ratatui",
- "serde",
- "toml",
- "tracing",
-]
-
-[[package]]
 name = "hac-config"
 version = "0.1.0"
-dependencies = [
- "anyhow",
- "dirs",
- "serde",
- "toml",
- "tracing",
-]
-
-[[package]]
-name = "hac-config"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "408228d6c8794a5254f95affe460231d41d8a30856eb6fc31ee4ccb1dd29f289"
 dependencies = [
  "anyhow",
  "dirs",
@@ -739,29 +703,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "hac-config 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonxf",
- "lazy_static",
- "ratatui",
- "reqwest",
- "ropey",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tree-sitter",
- "tree-sitter-json",
-]
-
-[[package]]
-name = "hac-core"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ab04f8c7f968491844c122f82bef9c2bc6faec44d325393c62fe502db793b5e"
-dependencies = [
- "anyhow",
- "async-trait",
- "hac-config 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hac-config",
  "jsonxf",
  "lazy_static",
  "ratatui",

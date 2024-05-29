@@ -1,15 +1,41 @@
-# HAC
+<div align="center">
 
-`HAC` is a API Client, much like Postman or Insomnia, but for your terminal.
-hac has the goal of providing a good experience for testing APIs without the
-need of creating an account. It is completely offline, free and open source.
+            ,--,                          
+          ,--.'|   ,---,         ,----..  
+       ,--,  | :  '  .' \       /   /   \ 
+    ,---.'|  : ' /  ;    '.    |   :     :
+    |   | : _' |:  :       \   .   |  ;. /
+    :   : |.'  |:  |   /\   \  .   ; /--` 
+    |   ' '  ; :|  :  ' ;.   : ;   | ;    
+    '   |  .'. ||  |  ;/  \   \|   : |    
+    |   | :  | ''  :  | \  \ ,'.   | '___ 
+    '   : |  : ;|  |  '  '--'  '   ; : .'|
+    |   | '  ,/ |  :  :        '   | '/  :
+    ;   : ;--'  |  | ,'        |   :    / 
+    |   ,/      `--''           \   \ .'  
+    '---'                        `---`    
+
+
+A handy API client for your terminal!
+
+</div>
+
+<hr />
+
+`HAC` is an API client like Postman that runs on your terminal. We have the
+goal of making easy to test and document APIs while being completely offline,
+free and open source.
 
 ![Preview](./extra/preview.gif)
 
 <details>
 <summary>Expand to see more examples</summary>
 
-> this section will be filled with more examples soon
+![Creating a new request](./extra/creating-new-request.gif)
+
+![Making a new request](./extra/making-a-request.gif)
+
+![Error on invalid uri](./extra/error-invalid-uri.gif)
 
 </details>
 
@@ -22,11 +48,9 @@ need of creating an account. It is completely offline, free and open source.
 
 ## Installation
 
-This section should guide you through the installation process and how to use
-hac.
+This section should guide you through the hac installation process.
 
-You can get hac with cargo, or get the latest release
-[tag](https://github.com/wllfaria/hac/tags).
+You can get hac with cargo, or get the latest release [tag](https://github.com/wllfaria/hac/tags).
 
 ### Installing with cargo
 
@@ -36,7 +60,7 @@ You can get hac with cargo, or get the latest release
 You can get hac from crates.io with:
 
 ```sh
-cargo install hac
+cargo install hac-client
 ```
 
 ### Building from source
@@ -89,10 +113,13 @@ configuration and colorscheme to the configuration directory by using:
 
 ```sh
 hac --config-dump
+```
 
-# alternatively, you can specify a path
+> [!TIP]
+> If you want to save the config to a file, you can do as follows.
 
-hac --config-dump <path>
+```sh
+hac --config-dump > hac.toml
 ```
 
 ## Contributing

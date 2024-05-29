@@ -20,10 +20,17 @@ impl<'app> App<'app> {
         colors: &'app hac_colors::Colors,
         collections: Vec<Collection>,
         config: &'app hac_config::Config,
+        dry_run: bool,
     ) -> anyhow::Result<Self> {
         let terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
         Ok(Self {
-            screen_manager: ScreenManager::new(terminal.size()?, colors, collections, config)?,
+            screen_manager: ScreenManager::new(
+                terminal.size()?,
+                colors,
+                collections,
+                config,
+                dry_run,
+            )?,
             event_pool: EventPool::new(60f64, 30f64),
             should_quit: false,
             terminal,

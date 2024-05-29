@@ -150,6 +150,7 @@ pub struct CollectionViewer<'cv> {
 
     sender: Option<UnboundedSender<Command>>,
     pending_request: bool,
+    dry_run: bool,
 
     responses_map: HashMap<String, Rc<RefCell<Response>>>,
 }
@@ -160,6 +161,7 @@ impl<'cv> CollectionViewer<'cv> {
         collection: Collection,
         colors: &'cv hac_colors::Colors,
         config: &'cv hac_config::Config,
+        dry_run: bool,
     ) -> Self {
         let layout = build_layout(size);
 
@@ -216,6 +218,7 @@ impl<'cv> CollectionViewer<'cv> {
             response_rx,
             request_tx,
             layout,
+            dry_run,
         }
     }
 
@@ -898,6 +901,11 @@ impl<'cv> CollectionViewer<'cv> {
         }
 
         self.sync_interval = std::time::Instant::now();
+
+        if self.dry_run {
+            return;
+        }
+
         tokio::spawn(async move {
             match hac_core::fs::sync_collection(collection).await {
                 Ok(_) => {}

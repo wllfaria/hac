@@ -34,6 +34,7 @@ pub struct ScreenManager<'sm> {
     size: Rect,
     colors: &'sm hac_colors::Colors,
     config: &'sm hac_config::Config,
+    dry_run: bool,
 
     // we hold a copy of the sender so we can pass it to the editor when we first
     // build one
@@ -46,17 +47,19 @@ impl<'sm> ScreenManager<'sm> {
         colors: &'sm hac_colors::Colors,
         collections: Vec<Collection>,
         config: &'sm hac_config::Config,
+        dry_run: bool,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             curr_screen: Screens::CollectionDashboard,
             prev_screen: Screens::CollectionDashboard,
             collection_viewer: None,
             terminal_too_small: TerminalTooSmall::new(colors),
-            collection_list: CollectionDashboard::new(size, colors, collections)?,
+            collection_list: CollectionDashboard::new(size, colors, collections, dry_run)?,
             size,
             colors,
             config,
             sender: None,
+            dry_run,
         })
     }
 
@@ -80,8 +83,13 @@ impl<'sm> ScreenManager<'sm> {
             Command::SelectCollection(collection) | Command::CreateCollection(collection) => {
                 tracing::debug!("changing to api explorer: {}", collection.info.name);
                 self.switch_screen(Screens::CollectionViewer);
-                let mut collection_viewer =
-                    CollectionViewer::new(self.size, collection, self.colors, self.config);
+                let mut collection_viewer = CollectionViewer::new(
+                    self.size,
+                    collection,
+                    self.colors,
+                    self.config,
+                    self.dry_run,
+                );
                 collection_viewer
                     .register_command_handler(
                         self.sender
@@ -214,7 +222,8 @@ mod tests {
         let (_guard, path) = setup_temp_collections(10);
         let collections = collection::collection::get_collections(path).unwrap();
         let config = hac_config::load_config();
-        let mut sm = ScreenManager::new(small_in_width, &colors, collections, &config).unwrap();
+        let mut sm =
+            ScreenManager::new(small_in_width, &colors, collections, &config, false).unwrap();
         let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
 
         sm.draw(&mut terminal.get_frame(), small_in_width).unwrap();
@@ -232,7 +241,7 @@ mod tests {
         let (_guard, path) = setup_temp_collections(10);
         let collections = collection::collection::get_collections(path).unwrap();
         let config = hac_config::load_config();
-        let mut sm = ScreenManager::new(small, &colors, collections, &config).unwrap();
+        let mut sm = ScreenManager::new(small, &colors, collections, &config, false).unwrap();
         let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
 
         terminal.resize(small).unwrap();
@@ -254,7 +263,7 @@ mod tests {
         let (_guard, path) = setup_temp_collections(10);
         let collection = collection::collection::get_collections(path).unwrap();
         let config = hac_config::load_config();
-        let mut sm = ScreenManager::new(initial, &colors, collection, &config).unwrap();
+        let mut sm = ScreenManager::new(initial, &colors, collection, &config, false).unwrap();
 
         sm.resize(expected);
 
@@ -278,7 +287,7 @@ mod tests {
         let collection = collection::collection::get_collections(path).unwrap();
         let config = hac_config::load_config();
         let (tx, _) = tokio::sync::mpsc::unbounded_channel::<Command>();
-        let mut sm = ScreenManager::new(initial, &colors, collection, &config).unwrap();
+        let mut sm = ScreenManager::new(initial, &colors, collection, &config, false).unwrap();
         _ = sm.register_command_handler(tx.clone());
         assert_eq!(sm.curr_screen, Screens::CollectionDashboard);
 
@@ -293,7 +302,7 @@ mod tests {
         let (_guard, path) = setup_temp_collections(10);
         let collections = collection::collection::get_collections(path).unwrap();
         let config = hac_config::load_config();
-        let mut sm = ScreenManager::new(initial, &colors, collections, &config).unwrap();
+        let mut sm = ScreenManager::new(initial, &colors, collections, &config, false).unwrap();
 
         let (tx, _) = tokio::sync::mpsc::unbounded_channel::<Command>();
 
@@ -309,7 +318,7 @@ mod tests {
         let (_guard, path) = setup_temp_collections(10);
         let collections = collection::collection::get_collections(path).unwrap();
         let config = hac_config::load_config();
-        let mut sm = ScreenManager::new(initial, &colors, collections, &config).unwrap();
+        let mut sm = ScreenManager::new(initial, &colors, collections, &config, false).unwrap();
 
         let event = Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
 

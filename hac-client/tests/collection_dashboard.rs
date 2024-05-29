@@ -49,7 +49,7 @@ fn get_rendered_from_buffer(frame: &mut Frame, size: Rect) -> Vec<String> {
 fn test_draw_empty_message() {
     let colors = hac_colors::Colors::default();
     let size = Rect::new(0, 0, 80, 22);
-    let mut dashboard = CollectionDashboard::new(size, &colors, vec![]).unwrap();
+    let mut dashboard = CollectionDashboard::new(size, &colors, vec![], false).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
 
@@ -80,7 +80,7 @@ fn test_draw_no_matches_message() {
     let size = Rect::new(0, 0, 80, 22);
     let (_guard, path) = setup_temp_collections(3);
     let collections = collection::collection::get_collections(path).unwrap();
-    let mut dashboard = CollectionDashboard::new(size, &colors, collections).unwrap();
+    let mut dashboard = CollectionDashboard::new(size, &colors, collections, false).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
 
@@ -130,7 +130,7 @@ fn draw_hint_text() {
     let size = Rect::new(0, 0, 80, 22);
     let (_guard, path) = setup_temp_collections(3);
     let collections = collection::collection::get_collections(path).unwrap();
-    let mut dashboard = CollectionDashboard::new(size, &colors, collections).unwrap();
+    let mut dashboard = CollectionDashboard::new(size, &colors, collections, false).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
 
@@ -150,7 +150,7 @@ fn draw_filter_prompt() {
     let size = Rect::new(0, 0, 80, 22);
     let (_guard, path) = setup_temp_collections(3);
     let collections = collection::collection::get_collections(path).unwrap();
-    let mut dashboard = CollectionDashboard::new(size, &colors, collections).unwrap();
+    let mut dashboard = CollectionDashboard::new(size, &colors, collections, false).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
     let expected =
@@ -184,7 +184,7 @@ fn draw_filter_prompt() {
 fn test_draw_title() {
     let colors = hac_colors::Colors::default();
     let size = Rect::new(0, 0, 80, 22);
-    let mut dashboard = CollectionDashboard::new(size, &colors, vec![]).unwrap();
+    let mut dashboard = CollectionDashboard::new(size, &colors, vec![], false).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
 
@@ -213,7 +213,7 @@ fn test_draw_title() {
 fn test_draw_error() {
     let colors = hac_colors::Colors::default();
     let size = Rect::new(0, 0, 80, 22);
-    let mut dashboard = CollectionDashboard::new(size, &colors, vec![]).unwrap();
+    let mut dashboard = CollectionDashboard::new(size, &colors, vec![], false).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
 
@@ -259,7 +259,7 @@ fn test_draw_error() {
 fn test_draw_help() {
     let colors = hac_colors::Colors::default();
     let size = Rect::new(0, 0, 80, 22);
-    let mut dashboard = CollectionDashboard::new(size, &colors, vec![]).unwrap();
+    let mut dashboard = CollectionDashboard::new(size, &colors, vec![], false).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
 
@@ -308,7 +308,7 @@ fn test_draw_help() {
 fn test_draw_form_popup() {
     let colors = hac_colors::Colors::default();
     let size = Rect::new(0, 0, 80, 22);
-    let mut dashboard = CollectionDashboard::new(size, &colors, vec![]).unwrap();
+    let mut dashboard = CollectionDashboard::new(size, &colors, vec![], false).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
 
@@ -361,7 +361,7 @@ fn test_draw_delete_prompt() {
     let size = Rect::new(0, 0, 80, 22);
     let (_guard, path) = setup_temp_collections(3);
     let collections = collection::collection::get_collections(path).unwrap();
-    let mut dashboard = CollectionDashboard::new(size, &colors, collections).unwrap();
+    let mut dashboard = CollectionDashboard::new(size, &colors, collections, false).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
 
@@ -414,7 +414,7 @@ fn test_draw_collections_list() {
     let size = Rect::new(0, 0, 80, 22);
     let (_guard, path) = setup_temp_collections(3);
     let collections = collection::collection::get_collections(path).unwrap();
-    let mut dashboard = CollectionDashboard::new(size, &colors, collections).unwrap();
+    let mut dashboard = CollectionDashboard::new(size, &colors, collections, false).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
     let mut frame = terminal.get_frame();
 

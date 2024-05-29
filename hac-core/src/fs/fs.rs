@@ -18,6 +18,7 @@ pub async fn delete_collection(path: &PathBuf) -> anyhow::Result<(), FsError> {
 pub async fn create_collection(
     name: String,
     description: String,
+    dry_run: bool,
 ) -> anyhow::Result<Collection, FsError> {
     let collection = create_from_form(name, description);
 
@@ -30,9 +31,12 @@ pub async fn create_collection(
     let serialized_collection = serde_json::to_string(&collection)
         .map_err(|e| FsError::SerializationError(e.to_string()))?;
 
-    tokio::fs::write(&collection.path, serialized_collection)
-        .await
-        .map_err(|e| FsError::IOError(format!("failed to write collection: {:?}", e)))?;
+    // if we are on a dry_run, we skip syncing
+    if !dry_run {
+        tokio::fs::write(&collection.path, serialized_collection)
+            .await
+            .map_err(|e| FsError::IOError(format!("failed to write collection: {:?}", e)))?;
+    }
 
     tracing::debug!("successfully created new collection: {:?}", collection.path);
     Ok(collection)
