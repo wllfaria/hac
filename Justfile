@@ -36,8 +36,9 @@ release:
     git cliff -t "{{new_version}}" > CHANGELOG.md
     cargo check
     git checkout -b hac-release-v"{{new_version}}"
-    git commit -asm "chore(release): release hac v{{new_version}}"
-    git push
+    git add -A
+    git commit -m "chore(release): release hac v{{new_version}}"
+    git push --set-upstream origin hac-release-v"{{new_version}}"
     @echo "waiting 10 seconds so github catches up"
     sleep 10
     gh pr create --draft --title "chore: release hac v{{new_version}}" --body "This is an CI auto-generated PR" --reviewer wllfaria
