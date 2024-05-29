@@ -50,4 +50,4 @@ gh-release:
     mkdir -p ./target/"release-notes-$(convco version)"
     git cliff -t "v$(convco version)" --current > ./target/"release-notes-$(convco version)/RELEASE.md"
     git push origin "v{{new_version}}"
-    gh release create "v$(convco version)" --target "$(git rev-parse HEAD)" --title "hac v$(convco version)" -d -F ./target/"release-notes-$(convco version)/RELEASE.md" ./target/"bin-$(convco version)"/*
+    gh release create "v$(convco version)" --target "$(git rev-parse HEAD)" --title "hac v$(convco version)" -d -F ./target/"release-notes-$(convco version)/RELEASE.md"
