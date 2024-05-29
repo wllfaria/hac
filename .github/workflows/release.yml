@@ -7,11 +7,6 @@ on:
   release:
     types: [published]
 
-env:
-  OPENSSL_DIR: /usr
-  OPENSSL_LIB_DIR: /usr/lib/x86_64-linux-gnu
-  OPENSSL_INCLUDE_DIR: /usr/include/openssl
-
 jobs:
   upload-assets:
     name: ${{ matrix.target }}
@@ -44,16 +39,42 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Install dependencies
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt update
+          sudo apt-get install -y libssl-dev pkg-config openssl
+
+      - name: Set OpenSSL environment variables (Ubuntu)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          echo "OPENSSL_DIR=/usr" >> $GITHUB_ENV
+          echo "OPENSSL_INCLUDE_DIR=/usr/include" >> $GITHUB_ENV
+          echo "OPENSSL_LIB_DIR=/usr/lib" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=/usr/lib/pkgconfig" >> $GITHUB_ENV
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
       - uses: taiki-e/setup-cross-toolchain-action@v1
         with:
           target: ${{ matrix.target }}
         if: startsWith(matrix.os, 'ubuntu') && !contains(matrix.target, '-musl')
+
       - uses: taiki-e/install-action@cross
         if: contains(matrix.target, '-musl')
+
+      - name: Install static OpenSSL libraries for musl
+        if: contains(matrix.target, '-musl')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl musl-dev musl-tools
+          sudo apt-get install -y libssl-dev libssl-static
+
       - run: echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static" >> "${GITHUB_ENV}"
         if: endsWith(matrix.target, 'windows-msvc')
+
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
           bin: hac
