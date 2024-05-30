@@ -3,6 +3,12 @@ members = ["hac-config", "hac-core", "hac-client", "hac-colors", "hac-cli"]
 default-members = ["hac-client"]
 resolver = "2"
 
+[workspace.metadata.crane]
+name = "hac"
+
+[workspace.package]
+version = "0.1.0"
+
 [workspace.dependencies]
 hac-config = { path = "hac-config" }
 hac-core = { path = "hac-core" }
