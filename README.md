@@ -40,11 +40,27 @@ free and open source.
 </details>
 
 ## Table of contents
+- [Try it](#try-it)
 - [Installation](#installation)
 - [Documentation](#usage)
 - [Customization](#customization)
 - [Contributing](#contributing)
 - [Changelog](#changelog)
+
+## Try it
+
+### Nix ❄️
+
+If you already have Nix setup with flake support, you can try out hac with the
+nix run command:
+
+```sh
+nix run github:wllfaria/hac
+```
+
+Nix will build and run hac.
+
+If you want to pass arguments this way, use e.g. `nix run github:wllfaria/hac -- -h`
 
 ## Installation
 
