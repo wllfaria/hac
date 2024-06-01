@@ -1,6 +1,6 @@
 use crate::{
     event_pool::{Event, EventPool},
-    pages::{Component, Eventful},
+    pages::{Eventful, Page},
     screen_manager::ScreenManager,
 };
 use hac_core::{collection::Collection, command::Command};
@@ -49,6 +49,15 @@ impl<'app> App<'app> {
             .register_command_handler(command_tx.clone())?;
 
         loop {
+            {
+                while let Ok(command) = command_rx.try_recv() {
+                    match command {
+                        Command::Quit => self.should_quit = true,
+                        _ => self.screen_manager.handle_command(command),
+                    }
+                }
+            }
+
             if let Some(event) = self.event_pool.next().await {
                 match event {
                     Event::Tick => self.screen_manager.handle_tick()?,
@@ -73,13 +82,6 @@ impl<'app> App<'app> {
                         }
                     }
                 };
-            }
-
-            while let Ok(command) = command_rx.try_recv() {
-                match command {
-                    Command::Quit => self.should_quit = true,
-                    _ => self.screen_manager.handle_command(command),
-                }
             }
 
             if self.should_quit {

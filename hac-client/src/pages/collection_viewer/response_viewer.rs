@@ -4,7 +4,7 @@ use hac_core::syntax::highlighter::HIGHLIGHTER;
 
 use crate::ascii::{BIG_ERROR_ARTS, LOGO_ART, SMALL_ERROR_ARTS};
 use crate::pages::collection_viewer::collection_viewer::PaneFocus;
-use crate::pages::{spinner::Spinner, Component, Eventful};
+use crate::pages::{spinner::Spinner, Eventful, Page};
 use crate::utils::build_syntax_highlighted_lines;
 
 use std::cell::RefCell;
@@ -223,6 +223,7 @@ impl<'a> ResViewer<'a> {
         let size = Rect::new(request_pane.x, center, request_pane.width, 1);
         let spinner = Spinner::default()
             .with_label("Sending request".fg(self.colors.bright.black))
+            .with_style(Style::default().fg(self.colors.normal.red))
             .into_centered_line();
 
         frame.render_widget(Clear, request_pane);
@@ -571,7 +572,7 @@ impl<'a> ResViewer<'a> {
     }
 }
 
-impl<'a> Component for ResViewer<'a> {
+impl<'a> Page for ResViewer<'a> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         self.draw_tabs(frame, self.layout.tabs_pane);
         self.draw_current_tab(frame, self.layout.content_pane);
@@ -585,6 +586,8 @@ impl<'a> Component for ResViewer<'a> {
 }
 
 impl<'a> Eventful for ResViewer<'a> {
+    type Result = Command;
+
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         if let KeyCode::Tab = key_event.code {
             self.active_tab = ResViewerTabs::next(&self.active_tab);

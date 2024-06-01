@@ -2,13 +2,14 @@ use hac_core::collection::types::*;
 use hac_core::command::Command;
 use hac_core::net::request_manager::Response;
 
+use crate::pages::collection_viewer::collection_store::{CollectionStore, CollectionStoreAction};
 use crate::pages::collection_viewer::req_uri::{ReqUri, ReqUriState};
 use crate::pages::collection_viewer::request_editor::{ReqEditor, ReqEditorState};
 use crate::pages::collection_viewer::response_viewer::ResViewer;
 use crate::pages::collection_viewer::sidebar::Sidebar;
 use crate::pages::input::Input;
 use crate::pages::overlay::draw_overlay;
-use crate::pages::{Component, Eventful};
+use crate::pages::{Eventful, Page};
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -16,16 +17,14 @@ use std::ops::{Add, Div, Sub};
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 
-use anyhow::Context;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use hac_config::EditorMode;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, StatefulWidget};
 use ratatui::Frame;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use super::sidebar;
+use super::sidebar::{self, SidebarEvent};
 
 #[derive(Debug, PartialEq)]
 pub struct ExplorerLayout {
@@ -44,19 +43,32 @@ pub enum Overlays {
     RequestMethod,
 }
 
-#[derive(PartialEq)]
-enum VisitNode {
-    Next,
-    Prev,
-    Curr,
-}
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PaneFocus {
     Sidebar,
     ReqUri,
     Preview,
     Editor,
+}
+
+impl PaneFocus {
+    fn next(&self) -> Self {
+        match self {
+            PaneFocus::Sidebar => PaneFocus::ReqUri,
+            PaneFocus::ReqUri => PaneFocus::Editor,
+            PaneFocus::Editor => PaneFocus::Preview,
+            PaneFocus::Preview => PaneFocus::Sidebar,
+        }
+    }
+
+    fn prev(&self) -> Self {
+        match self {
+            PaneFocus::Sidebar => PaneFocus::Preview,
+            PaneFocus::ReqUri => PaneFocus::Sidebar,
+            PaneFocus::Editor => PaneFocus::ReqUri,
+            PaneFocus::Preview => PaneFocus::Editor,
+        }
+    }
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -127,12 +139,8 @@ pub struct CollectionViewer<'cv> {
     config: &'cv hac_config::Config,
     layout: ExplorerLayout,
     global_command_sender: Option<UnboundedSender<Command>>,
-    collection: Collection,
     collection_sync_timer: std::time::Instant,
-
-    selected_request: Option<Arc<RwLock<Request>>>,
-    hovered_request: Option<String>,
-    dirs_expanded: HashMap<String, bool>,
+    collection_store: Rc<RefCell<CollectionStore>>,
 
     focused_pane: PaneFocus,
     selected_pane: Option<PaneFocus>,
@@ -151,7 +159,7 @@ pub struct CollectionViewer<'cv> {
 impl<'cv> CollectionViewer<'cv> {
     pub fn new(
         size: Rect,
-        collection: Collection,
+        collection_store: Rc<RefCell<CollectionStore>>,
         colors: &'cv hac_colors::Colors,
         config: &'cv hac_config::Config,
         dry_run: bool,
@@ -159,53 +167,41 @@ impl<'cv> CollectionViewer<'cv> {
         let layout = build_layout(size);
         let (request_tx, response_rx) = unbounded_channel::<Response>();
 
-        let selected_request = collection.requests.as_ref().and_then(|requests| {
-            requests.first().and_then(|req| {
-                if let RequestKind::Single(req) = req {
-                    Some(Arc::clone(req))
-                } else {
-                    None
-                }
-            })
-        });
-
-        let hovered_request = collection
-            .requests
-            .as_ref()
-            .and_then(|items| items.first().map(|item| item.get_id()));
+        //let selected_request = collection.requests.as_ref().and_then(|requests| {
+        //    requests.read().unwrap().first().and_then(|req| {
+        //        if let RequestKind::Single(req) = req {
+        //            Some(Arc::clone(req))
+        //        } else {
+        //            None
+        //        }
+        //    })
+        //});
+        //
+        //let dirs_expanded = Rc::new(RefCell::new(HashMap::default()));
+        //
+        //let hovered_request = collection.requests.as_ref().and_then(|items| {
+        //    items
+        //        .read()
+        //        .unwrap()
+        //        .first()
+        //        .map(|item| Rc::new(RefCell::new(item.get_id())))
+        //});
 
         CollectionViewer {
             request_editor: ReqEditor::new(
                 colors,
                 config,
-                selected_request.as_ref().cloned(),
+                collection_store.clone(),
                 layout.req_editor,
             ),
             response_viewer: ResViewer::new(colors, None, layout.response_preview),
-            sidebar: Sidebar::new(
-                colors,
-                true,
-                false,
-                sidebar::build_lines(
-                    collection.requests.as_ref(),
-                    0,
-                    &selected_request.as_ref(),
-                    hovered_request.as_ref(),
-                    &mut HashMap::new(),
-                    colors,
-                ),
-            ),
+            sidebar: sidebar::Sidebar::new(colors, true, false, collection_store.clone()),
 
             colors,
             config,
             layout,
             global_command_sender: None,
-            collection,
             collection_sync_timer: std::time::Instant::now(),
-
-            selected_request,
-            hovered_request,
-            dirs_expanded: HashMap::default(),
 
             focused_pane: PaneFocus::Sidebar,
             selected_pane: None,
@@ -219,106 +215,11 @@ impl<'cv> CollectionViewer<'cv> {
             request_tx,
 
             dry_run,
+            collection_store,
         }
-    }
-
-    #[tracing::instrument(skip_all, err)]
-    fn handle_sidebar_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
-        if let KeyCode::Esc = key_event.code {
-            self.selected_pane = None;
-            self.update_selection();
-            return Ok(None);
-        }
-
-        if self
-            .selected_pane
-            .as_ref()
-            .is_some_and(|pane| pane.eq(&PaneFocus::Sidebar))
-        {
-            match key_event.code {
-                KeyCode::Enter => {
-                    if let Some(id) = self.hovered_request.as_ref() {
-                        let req = get_request_by_id(
-                            self.collection.requests.as_ref().unwrap(),
-                            &self.dirs_expanded,
-                            id,
-                        );
-                        match req {
-                            RequestKind::Nested(dir) => {
-                                let entry =
-                                    self.dirs_expanded.entry(dir.id.clone()).or_insert(false);
-                                *entry = !*entry;
-                            }
-                            RequestKind::Single(req) => {
-                                self.selected_request = Some(Arc::clone(&req));
-                                self.response_viewer.update(None);
-                                self.request_editor = ReqEditor::new(
-                                    self.colors,
-                                    self.config,
-                                    self.selected_request.clone(),
-                                    self.layout.req_editor,
-                                );
-                            }
-                        }
-                        self.build_sidebar_treeview();
-                    }
-                }
-                KeyCode::Char('j') => {
-                    if let Some(id) = self.hovered_request.as_mut() {
-                        if let Some(next) = find_next_entry(
-                            self.collection.requests.as_ref().context(
-                                "should never have a selected request without any requests on collection",
-                            )?,
-                            VisitNode::Next,
-                            &self.dirs_expanded,
-                            id,
-                        ) {
-                            *id = next.get_id();
-                            self.build_sidebar_treeview();
-                        };
-                    }
-                }
-                KeyCode::Char('k') => {
-                    if let Some(id) = self.hovered_request.as_mut() {
-                        if let Some(next) = find_next_entry(
-                            self.collection.requests.as_ref().expect(
-                                "should never have a selected request without any requests on collection",
-                            ),
-                            VisitNode::Prev,
-                            &self.dirs_expanded,
-                            id,
-                        ) {
-                            *id = next.get_id();
-                            self.build_sidebar_treeview();
-                        }
-                    }
-                }
-                KeyCode::Char('n') => self.curr_overlay = Overlays::CreateRequest,
-                _ => {}
-            }
-        }
-
-        Ok(None)
-    }
-
-    fn build_sidebar_treeview(&mut self) {
-        self.sidebar.set_lines(sidebar::build_lines(
-            self.collection.requests.as_ref(),
-            0,
-            &self.selected_request.as_ref(),
-            self.hovered_request.as_ref(),
-            &mut HashMap::new(),
-            self.colors,
-        ));
     }
 
     fn handle_req_uri_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
-        if let KeyCode::Esc = key_event.code {
-            self.selected_pane = None;
-            self.update_selection();
-            return Ok(None);
-        }
-
         if self
             .selected_pane
             .as_ref()
@@ -326,25 +227,41 @@ impl<'cv> CollectionViewer<'cv> {
         {
             match key_event.code {
                 KeyCode::Char(c) => {
-                    if let Some(req) = self.selected_request.as_mut() {
+                    if let Some(req) = self
+                        .collection_store
+                        .borrow()
+                        .get_selected_request()
+                        .as_mut()
+                    {
                         req.write().unwrap().uri.push(c);
                     }
                 }
                 KeyCode::Backspace => {
-                    if let Some(req) = self.selected_request.as_mut() {
+                    if let Some(req) = self
+                        .collection_store
+                        .borrow()
+                        .get_selected_request()
+                        .as_mut()
+                    {
                         req.write().unwrap().uri.pop();
                     }
                 }
                 KeyCode::Enter => {
                     if self
-                        .selected_request
+                        .collection_store
+                        .borrow()
+                        .get_selected_request()
                         .as_ref()
                         .is_some_and(|_| !self.has_pending_request)
                     {
                         self.has_pending_request = true;
                         self.response_viewer.set_pending_request(true);
                         hac_core::net::handle_request(
-                            self.selected_request.as_ref().unwrap(),
+                            self.collection_store
+                                .borrow()
+                                .get_selected_request()
+                                .as_ref()
+                                .unwrap(),
                             self.request_tx.clone(),
                         )
                     }
@@ -356,14 +273,6 @@ impl<'cv> CollectionViewer<'cv> {
     }
 
     fn handle_editor_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
-        match (key_event.code, &self.selected_pane) {
-            (KeyCode::Esc, Some(_)) if self.request_editor.mode().eq(&EditorMode::Normal) => {
-                self.selected_pane = None;
-                self.update_selection();
-                return Ok(None);
-            }
-            _ => {}
-        }
         if key_event.code.eq(&KeyCode::Enter) && self.selected_pane.is_none() {
             return Ok(None);
         }
@@ -371,8 +280,9 @@ impl<'cv> CollectionViewer<'cv> {
     }
 
     fn draw_req_uri(&mut self, frame: &mut Frame) {
+        let selected_request = self.collection_store.borrow().get_selected_request();
         let mut state = ReqUriState::new(
-            &self.selected_request,
+            &selected_request,
             self.focused_pane.eq(&PaneFocus::ReqUri),
             self.selected_pane
                 .as_ref()
@@ -399,30 +309,20 @@ impl<'cv> CollectionViewer<'cv> {
     fn drain_responses_channel(&mut self) {
         while let Ok(res) = self.response_rx.try_recv() {
             let res = Rc::new(RefCell::new(res));
-            self.selected_request.as_ref().and_then(|req| {
-                self.responses_map
-                    .insert(req.read().unwrap().id.to_string(), Rc::clone(&res))
-            });
+            self.collection_store
+                .borrow()
+                .get_selected_request()
+                .as_ref()
+                .and_then(|req| {
+                    self.responses_map
+                        .insert(req.read().unwrap().id.to_string(), Rc::clone(&res))
+                });
             self.response_viewer.update(Some(Rc::clone(&res)));
             self.response_rx.is_empty().then(|| {
                 self.has_pending_request = false;
                 self.response_viewer.set_pending_request(false);
             });
         }
-    }
-
-    fn handle_preview_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
-        match key_event.code {
-            KeyCode::Esc => {
-                self.selected_pane = None;
-                self.update_selection();
-            }
-            _ => {
-                self.response_viewer.handle_key_event(key_event)?;
-            }
-        }
-
-        Ok(None)
     }
 
     fn draw_req_uri_hint(&self, frame: &mut Frame) {
@@ -742,30 +642,28 @@ impl<'cv> CollectionViewer<'cv> {
             CreateReqKind::Directory => RequestKind::Nested(Directory {
                 id: uuid::Uuid::new_v4().to_string(),
                 name: form_state.req_name.clone(),
-                requests: vec![],
+                requests: Arc::new(RwLock::new(vec![])),
             }),
         };
 
+        let mut collection_store_mut = self.collection_store.borrow_mut();
         if let RequestKind::Single(ref req) = new_request {
-            self.selected_request = Some(Arc::clone(req));
-            self.hovered_request = Some(new_request.get_id());
-            self.sidebar.set_lines(sidebar::build_lines(
-                self.collection.requests.as_ref(),
-                0,
-                &self.selected_request.as_ref(),
-                self.hovered_request.as_ref(),
-                &mut HashMap::new(),
-                self.colors,
-            ));
+            collection_store_mut
+                .dispatch(CollectionStoreAction::SetSelectedRequest(Some(req.clone())));
+            collection_store_mut.dispatch(CollectionStoreAction::SetHoveredRequest(Some(
+                new_request.get_id(),
+            )));
+            self.sidebar.rebuild_tree_view();
         }
 
-        self.collection
-            .requests
-            .get_or_insert_with(Vec::new)
-            .push(new_request);
+        collection_store_mut.dispatch(CollectionStoreAction::InsertRequest(new_request));
+        // dropping the borrow so we can sync the changes
+        drop(collection_store_mut);
 
         self.create_req_form_state = CreateReqFormState::default();
         self.curr_overlay = Overlays::None;
+
+        // TODO: maybe the collection store should be responsible for syncing to disk
         self.sync_collection_changes();
     }
 
@@ -776,8 +674,15 @@ impl<'cv> CollectionViewer<'cv> {
             .expect("should have a sender at this point")
             .clone();
 
-        let mut collection = self.collection.clone();
-        if let Some(request) = self.selected_request.as_ref() {
+        let mut collection = self
+            .collection_store
+            .borrow()
+            .get_collection()
+            .clone()
+            .expect("tried to sync collection to disk without having a collection")
+            .borrow()
+            .clone();
+        if let Some(request) = self.collection_store.borrow().get_selected_request() {
             let request = request.clone();
             let body = self.request_editor.body().to_string();
             // this is not the best idea for when we start implementing other kinds of
@@ -794,6 +699,8 @@ impl<'cv> CollectionViewer<'cv> {
                 .requests
                 .as_mut()
                 .expect("no requests on collection, but we have a selected request")
+                .write()
+                .unwrap()
                 .iter_mut()
                 .for_each(|other| match other {
                     RequestKind::Single(inner) => {
@@ -801,13 +708,15 @@ impl<'cv> CollectionViewer<'cv> {
                             *inner = request.clone();
                         }
                     }
-                    RequestKind::Nested(dir) => dir.requests.iter_mut().for_each(|other| {
-                        if let RequestKind::Single(inner) = other {
-                            if request.read().unwrap().id.eq(&inner.read().unwrap().id) {
-                                *inner = request.clone();
+                    RequestKind::Nested(dir) => {
+                        dir.requests.write().unwrap().iter_mut().for_each(|other| {
+                            if let RequestKind::Single(inner) = other {
+                                if request.read().unwrap().id.eq(&inner.read().unwrap().id) {
+                                    *inner = request.clone();
+                                }
                             }
-                        }
-                    }),
+                        })
+                    }
                 });
         }
 
@@ -830,19 +739,21 @@ impl<'cv> CollectionViewer<'cv> {
         });
     }
 
-    fn update_selection(&mut self) {
-        self.response_viewer
-            .maybe_select(self.selected_pane.as_ref());
-        self.sidebar.maybe_select(self.selected_pane.as_ref());
+    fn update_selection(&mut self, pane_to_select: Option<PaneFocus>) {
+        self.selected_pane = pane_to_select;
+
+        self.response_viewer.maybe_select(pane_to_select.as_ref());
+        self.sidebar.maybe_select(pane_to_select.as_ref());
     }
 
-    fn update_focus(&mut self) {
+    fn update_focus(&mut self, pane_to_focus: PaneFocus) {
+        self.focused_pane = pane_to_focus;
         self.response_viewer.maybe_focus(&self.focused_pane);
         self.sidebar.maybe_focus(&self.focused_pane);
     }
 }
 
-impl Component for CollectionViewer<'_> {
+impl Page for CollectionViewer<'_> {
     #[tracing::instrument(skip_all)]
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         // we redraw the background to prevent weird "transparent" spots when popups are
@@ -906,7 +817,12 @@ impl Component for CollectionViewer<'_> {
             .as_ref()
             .is_some_and(|pane| pane.eq(&PaneFocus::ReqUri))
         {
-            if let Some(request) = self.selected_request.as_ref() {
+            if let Some(request) = self
+                .collection_store
+                .borrow()
+                .get_selected_request()
+                .as_ref()
+            {
                 frame.set_cursor(
                     self.layout
                         .req_uri
@@ -942,18 +858,9 @@ impl Component for CollectionViewer<'_> {
 }
 
 impl Eventful for CollectionViewer<'_> {
+    type Result = Command;
+
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
-        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
-            self.sync_collection_changes();
-            return Ok(Some(Command::Quit));
-        };
-
-        if let (KeyCode::Enter, None) = (key_event.code, self.selected_pane.as_ref()) {
-            self.selected_pane = Some(self.focused_pane.clone());
-            self.update_selection();
-            return Ok(None);
-        }
-
         if self.curr_overlay.ne(&Overlays::None) {
             match self.curr_overlay {
                 Overlays::CreateRequest => return self.handle_create_request_key_event(key_event),
@@ -967,91 +874,49 @@ impl Eventful for CollectionViewer<'_> {
         if self.selected_pane.is_none() {
             match key_event.code {
                 KeyCode::Char('r') => {
-                    self.focused_pane = PaneFocus::Sidebar;
-                    self.selected_pane = Some(PaneFocus::Sidebar);
-                    self.update_selection();
-                    return Ok(None);
+                    self.update_focus(PaneFocus::Sidebar);
+                    self.update_selection(Some(PaneFocus::Sidebar));
                 }
                 KeyCode::Char('u') => {
-                    self.focused_pane = PaneFocus::ReqUri;
-                    self.selected_pane = Some(PaneFocus::ReqUri);
-                    self.update_selection();
-                    return Ok(None);
+                    self.update_focus(PaneFocus::ReqUri);
+                    self.update_selection(Some(PaneFocus::ReqUri));
                 }
                 KeyCode::Char('p') => {
-                    self.focused_pane = PaneFocus::Preview;
-                    self.selected_pane = Some(PaneFocus::Preview);
-                    self.update_selection();
-                    return Ok(None);
+                    self.update_focus(PaneFocus::Preview);
+                    self.update_selection(Some(PaneFocus::Preview));
                 }
                 KeyCode::Char('e') => {
-                    self.focused_pane = PaneFocus::Editor;
-                    self.selected_pane = Some(PaneFocus::Editor);
-                    self.update_selection();
-                    return Ok(None);
+                    self.update_focus(PaneFocus::Editor);
+                    self.update_selection(Some(PaneFocus::Editor));
                 }
-                _ => (),
-            }
-        }
-
-        if let KeyCode::Tab = key_event.code {
-            match (&self.focused_pane, &self.selected_pane, key_event.modifiers) {
-                (PaneFocus::Sidebar, None, KeyModifiers::NONE) => {
-                    self.focused_pane = PaneFocus::ReqUri;
-                    self.update_focus();
-                }
-                (PaneFocus::ReqUri, None, KeyModifiers::NONE) => {
-                    self.focused_pane = PaneFocus::Editor;
-                    self.update_focus();
-                }
-                (PaneFocus::Editor, None, KeyModifiers::NONE) => {
-                    self.focused_pane = PaneFocus::Preview;
-                    self.update_focus();
-                }
-                (PaneFocus::Preview, None, KeyModifiers::NONE) => {
-                    self.focused_pane = PaneFocus::Sidebar;
-                    self.update_focus();
-                }
-                (PaneFocus::Editor, Some(_), KeyModifiers::NONE) => {
-                    self.request_editor.handle_key_event(key_event)?;
-                }
-                (PaneFocus::Preview, Some(_), _) => {
-                    self.handle_preview_key_event(key_event)?;
-                }
-                _ => {}
-            }
-            return Ok(None);
-        }
-
-        if let KeyCode::BackTab = key_event.code {
-            match (&self.focused_pane, &self.selected_pane, key_event.modifiers) {
-                (PaneFocus::Sidebar, None, KeyModifiers::SHIFT) => {
-                    self.focused_pane = PaneFocus::Preview;
-                    self.update_focus();
-                }
-                (PaneFocus::ReqUri, None, KeyModifiers::SHIFT) => {
-                    self.focused_pane = PaneFocus::Sidebar;
-                    self.update_focus();
-                }
-                (PaneFocus::Editor, None, KeyModifiers::SHIFT) => {
-                    self.focused_pane = PaneFocus::ReqUri;
-                    self.update_focus();
-                }
-                (PaneFocus::Preview, None, KeyModifiers::SHIFT) => {
-                    self.focused_pane = PaneFocus::Editor;
-                    self.update_focus();
-                }
+                KeyCode::Tab => self.update_focus(self.focused_pane.next()),
+                KeyCode::BackTab => self.update_focus(self.focused_pane.prev()),
+                KeyCode::Enter => self.update_selection(Some(self.focused_pane)),
                 _ => {}
             }
             return Ok(None);
         }
 
         match self.focused_pane {
-            PaneFocus::Sidebar => self.handle_sidebar_key_event(key_event),
-            PaneFocus::ReqUri => self.handle_req_uri_key_event(key_event),
-            PaneFocus::Preview => self.handle_preview_key_event(key_event),
-            PaneFocus::Editor => self.handle_editor_key_event(key_event),
-        }
+            PaneFocus::Sidebar => match self.sidebar.handle_key_event(key_event)? {
+                Some(SidebarEvent::CreateRequest) => self.curr_overlay = Overlays::CreateRequest,
+                Some(SidebarEvent::Quit) => return Ok(Some(Command::Quit)),
+                // no event so we do nothing
+                None => {}
+            },
+            PaneFocus::ReqUri => {
+                self.handle_req_uri_key_event(key_event)?;
+            }
+            PaneFocus::Preview => match self.response_viewer.handle_key_event(key_event)? {
+                Some(_) => todo!(),
+                None => todo!(),
+            },
+            PaneFocus::Editor => {
+                self.handle_editor_key_event(key_event)?;
+            }
+        };
+
+        Ok(None)
     }
 }
 
@@ -1098,103 +963,6 @@ pub fn build_layout(size: Rect) -> ExplorerLayout {
         response_preview,
         create_req_form,
     }
-}
-
-fn traverse(
-    found: &mut bool,
-    visit: &VisitNode,
-    dirs_expanded: &HashMap<String, bool>,
-    current: &RequestKind,
-    needle: &str,
-    path: &mut Vec<RequestKind>,
-) -> bool {
-    let node_match = current.get_id().eq(needle);
-
-    match (&visit, node_match, &found) {
-        // We are looking for the next item and we already found the current one (needle), so the
-        // current item must be the next... we add it to the path and return found = true
-        (VisitNode::Next, false, true) => {
-            path.push(current.clone());
-            return *found;
-        }
-        // We are looking for the previous item and we just found the current one (needle), so we
-        // simply return found = true as we dont want the current one on the path
-        (VisitNode::Prev, true, false) => {
-            *found = true;
-            return *found;
-        }
-        // We are looking for the next and just found the current one, so we set the flag to
-        // true in order to know when to return the next.
-        (VisitNode::Next, true, false) => *found = true,
-        (VisitNode::Curr, true, _) => {
-            path.push(current.clone());
-            *found = true;
-            return *found;
-        }
-        _ => {}
-    }
-
-    // visit the node in order to have the full traversed path...
-    path.push(current.clone());
-
-    if let RequestKind::Nested(dir) = current {
-        // if we are on a collapsed directory we should not recurse into its children
-        if !dirs_expanded.get(&dir.id).unwrap() {
-            return false;
-        }
-
-        // recurse into children when expanded
-        for node in dir.requests.iter() {
-            if traverse(found, visit, dirs_expanded, node, needle, path) {
-                return true;
-            }
-        }
-    }
-
-    false
-}
-
-fn get_request_by_id(
-    tree: &[RequestKind],
-    dirs_expanded: &HashMap<String, bool>,
-    id: &str,
-) -> RequestKind {
-    let mut found = false;
-    let mut path = vec![];
-
-    for node in tree {
-        if traverse(
-            &mut found,
-            &VisitNode::Curr,
-            dirs_expanded,
-            node,
-            id,
-            &mut path,
-        ) {
-            break;
-        }
-    }
-
-    path.pop()
-        .expect("attempting to find an unexisting request")
-}
-
-fn find_next_entry(
-    tree: &[RequestKind],
-    visit: VisitNode,
-    dirs_expanded: &HashMap<String, bool>,
-    needle: &str,
-) -> Option<RequestKind> {
-    let mut found = false;
-    let mut path = vec![];
-
-    for node in tree {
-        if traverse(&mut found, &visit, dirs_expanded, node, needle, &mut path) {
-            break;
-        }
-    }
-
-    found.then(|| path.pop()).flatten()
 }
 
 #[cfg(test)]

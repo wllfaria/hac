@@ -1,3 +1,4 @@
+use crate::pages::collection_viewer::collection_store::CollectionStore;
 use crate::{pages::Eventful, utils::build_syntax_highlighted_lines};
 
 use hac_config::{Action, EditorMode, KeyAction};
@@ -6,8 +7,10 @@ use hac_core::command::Command;
 use hac_core::syntax::highlighter::HIGHLIGHTER;
 use hac_core::text_object::{cursor::Cursor, TextObject, Write};
 
+use std::cell::RefCell;
 use std::fmt::Display;
 use std::ops::{Add, Div, Mul, Sub};
+use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -92,10 +95,10 @@ impl<'re> ReqEditor<'re> {
     pub fn new(
         colors: &'re hac_colors::Colors,
         config: &'re hac_config::Config,
-        request: Option<Arc<RwLock<Request>>>,
+        collection_store: Rc<RefCell<CollectionStore>>,
         size: Rect,
     ) -> Self {
-        let (body, tree) = if let Some(request) = request.as_ref() {
+        let (body, tree) = if let Some(request) = collection_store.borrow().get_selected_request() {
             if let Some(body) = request.read().unwrap().body.as_ref() {
                 let mut highlighter = HIGHLIGHTER.write().unwrap();
                 let tree = highlighter.parse(body);
@@ -122,7 +125,9 @@ impl<'re> ReqEditor<'re> {
             row_scroll: 0,
             col_scroll: 0,
             layout: build_layout(size),
-            curr_tab: request
+            curr_tab: collection_store
+                .borrow()
+                .get_selected_request()
                 .as_ref()
                 .map(request_has_no_body)
                 .unwrap_or(false)
@@ -644,6 +649,8 @@ impl<'re> ReqEditor<'re> {
 }
 
 impl Eventful for ReqEditor<'_> {
+    type Result = Command;
+
     fn handle_key_event(
         &mut self,
         key_event: KeyEvent,

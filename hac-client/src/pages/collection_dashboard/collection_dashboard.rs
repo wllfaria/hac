@@ -6,7 +6,7 @@ use crate::pages::{
     confirm_popup::ConfirmPopup,
     error_popup::ErrorPopup,
     overlay::draw_overlay,
-    Component, Eventful,
+    Eventful, Page,
 };
 use hac_core::{collection::types::Collection, command::Command};
 
@@ -520,7 +520,7 @@ impl<'a> CollectionDashboard<'a> {
     }
 }
 
-impl Component for CollectionDashboard<'_> {
+impl Page for CollectionDashboard<'_> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         self.draw_background(size, frame);
         self.draw_title(frame)?;
@@ -558,6 +558,8 @@ impl Component for CollectionDashboard<'_> {
 }
 
 impl Eventful for CollectionDashboard<'_> {
+    type Result = Command;
+
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
             return Ok(Some(Command::Quit));

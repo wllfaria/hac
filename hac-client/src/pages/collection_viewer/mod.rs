@@ -1,3 +1,4 @@
+pub mod collection_store;
 #[allow(clippy::module_inception)]
 mod collection_viewer;
 mod req_uri;

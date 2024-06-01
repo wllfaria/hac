@@ -1,8 +1,12 @@
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_core::collection::types::{Request, RequestKind, RequestMethod};
 
-use crate::pages::Component;
+use crate::pages::collection_viewer::collection_store::{CollectionStore, CollectionStoreAction};
+use crate::pages::{Eventful, Page};
 
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 
 use ratatui::layout::Rect;
@@ -14,30 +18,32 @@ use ratatui::Frame;
 use super::collection_viewer::PaneFocus;
 
 #[derive(Debug)]
-pub struct Sidebar<'s> {
-    colors: &'s hac_colors::Colors,
+pub struct Sidebar<'sbar> {
+    colors: &'sbar hac_colors::Colors,
     is_focused: bool,
     is_selected: bool,
     lines: Vec<Paragraph<'static>>,
+    collection_store: Rc<RefCell<CollectionStore>>,
 }
 
-impl<'s> Sidebar<'s> {
+impl<'sbar> Sidebar<'sbar> {
     pub fn new(
-        colors: &'s hac_colors::Colors,
+        colors: &'sbar hac_colors::Colors,
         is_focused: bool,
         is_selected: bool,
-        lines: Vec<Paragraph<'static>>,
+        collection_store: Rc<RefCell<CollectionStore>>,
     ) -> Self {
-        Self {
+        let mut sidebar = Self {
             colors,
             is_focused,
             is_selected,
-            lines,
-        }
-    }
+            lines: vec![],
+            collection_store,
+        };
 
-    pub fn set_lines(&mut self, lines: Vec<Paragraph<'static>>) {
-        self.lines = lines;
+        sidebar.rebuild_tree_view();
+
+        sidebar
     }
 
     pub fn maybe_select(&mut self, selected_pane: Option<&PaneFocus>) {
@@ -47,9 +53,21 @@ impl<'s> Sidebar<'s> {
     pub fn maybe_focus(&mut self, focused_pane: &PaneFocus) {
         self.is_focused = focused_pane.eq(&PaneFocus::Sidebar);
     }
+
+    pub fn rebuild_tree_view(&mut self) {
+        let mut collection_store = self.collection_store.borrow_mut();
+        self.lines = build_lines(
+            collection_store.get_requests(),
+            0,
+            collection_store.get_selected_request(),
+            collection_store.get_hovered_request(),
+            collection_store.get_dirs_expanded().unwrap().clone(),
+            self.colors,
+        );
+    }
 }
 
-impl<'s> Component for Sidebar<'s> {
+impl<'sbar> Page for Sidebar<'sbar> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         let mut requests_size = Rect::new(size.x + 1, size.y, size.width.saturating_sub(2), 1);
 
@@ -80,21 +98,88 @@ impl<'s> Component for Sidebar<'s> {
     fn resize(&mut self, _new_size: Rect) {}
 }
 
+#[derive(Debug)]
+pub enum SidebarEvent {
+    CreateRequest,
+    Quit,
+}
+
+impl<'a> Eventful for Sidebar<'a> {
+    type Result = SidebarEvent;
+
+    fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
+        assert!(
+            self.is_selected,
+            "handled an event to the sidebar while it was not selected"
+        );
+
+        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            return Ok(Some(SidebarEvent::Quit));
+        }
+
+        let mut store = self.collection_store.borrow_mut();
+        match key_event.code {
+            KeyCode::Enter => {
+                if store.get_hovered_request().is_some() && store.get_requests().is_some() {
+                    let request = store.find_hovered_request();
+                    match request {
+                        RequestKind::Nested(_) => {
+                            store
+                                .dispatch(CollectionStoreAction::ToggleDirectory(request.get_id()));
+                            drop(store);
+                            self.rebuild_tree_view();
+                        }
+                        RequestKind::Single(req) => {
+                            store.dispatch(CollectionStoreAction::SetSelectedRequest(Some(req)));
+                            drop(store);
+                            self.rebuild_tree_view();
+                        }
+                    }
+                }
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if store.get_hovered_request().is_some() && store.get_requests().is_some() {
+                    store.dispatch(CollectionStoreAction::HoverNext);
+                    drop(store);
+                    self.rebuild_tree_view();
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                if store.get_hovered_request().is_some() && store.get_requests().is_some() {
+                    store.dispatch(CollectionStoreAction::HoverPrev);
+                    drop(store);
+                    self.rebuild_tree_view();
+                }
+            }
+
+            KeyCode::Char('n') => return Ok(Some(SidebarEvent::CreateRequest)),
+            _ => {}
+        }
+
+        Ok(None)
+    }
+}
+
 pub fn build_lines(
-    requests: Option<&Vec<RequestKind>>,
+    requests: Option<Arc<RwLock<Vec<RequestKind>>>>,
     level: usize,
-    selected_request: &Option<&Arc<RwLock<Request>>>,
-    hovered_request: Option<&String>,
-    dirs_expanded: &mut HashMap<String, bool>,
+    selected_request: Option<Arc<RwLock<Request>>>,
+    hovered_request: Option<String>,
+    dirs_expanded: Rc<RefCell<HashMap<String, bool>>>,
     colors: &hac_colors::Colors,
 ) -> Vec<Paragraph<'static>> {
     requests
-        .unwrap_or(&vec![])
+        .unwrap_or(Arc::new(RwLock::new(vec![])))
+        .read()
+        .unwrap()
         .iter()
         .flat_map(|item| match item {
             RequestKind::Nested(dir) => {
-                let is_hovered = hovered_request.is_some_and(|id| id.eq(&item.get_id()));
-                let is_expanded = dirs_expanded.entry(dir.id.to_string()).or_insert(false);
+                let is_hovered = hovered_request
+                    .as_ref()
+                    .is_some_and(|id| id.eq(&item.get_id()));
+                let mut dirs = dirs_expanded.borrow_mut();
+                let is_expanded = dirs.entry(dir.id.to_string()).or_insert(false);
 
                 let dir_style = match is_hovered {
                     true => Style::default()
@@ -116,11 +201,11 @@ pub fn build_lines(
 
                 let nested_lines = if *is_expanded {
                     build_lines(
-                        Some(&dir.requests),
+                        Some(dir.requests.clone()),
                         level + 1,
-                        selected_request,
-                        hovered_request,
-                        dirs_expanded,
+                        selected_request.clone(),
+                        hovered_request.clone(),
+                        dirs_expanded.clone(),
                         colors,
                     )
                 } else {
@@ -133,7 +218,9 @@ pub fn build_lines(
                 let is_selected = selected_request.as_ref().is_some_and(|selected| {
                     selected.read().unwrap().id.eq(&req.read().unwrap().id)
                 });
-                let is_hovered = hovered_request.is_some_and(|id| id.eq(&item.get_id()));
+                let is_hovered = hovered_request
+                    .as_ref()
+                    .is_some_and(|id| id.eq(&item.get_id()));
 
                 let req_style = match (is_selected, is_hovered) {
                     (true, true) => Style::default()

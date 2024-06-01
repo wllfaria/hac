@@ -1,10 +1,11 @@
-use crate::{
-    event_pool::Event,
-    pages::{
-        collection_dashboard::CollectionDashboard, collection_viewer::CollectionViewer,
-        terminal_too_small::TerminalTooSmall, Component, Eventful,
-    },
-};
+use std::{cell::RefCell, rc::Rc};
+
+use crate::event_pool::Event;
+use crate::pages::collection_dashboard::CollectionDashboard;
+use crate::pages::collection_viewer::collection_store::CollectionStore;
+use crate::pages::collection_viewer::CollectionViewer;
+use crate::pages::terminal_too_small::TerminalTooSmall;
+use crate::pages::{Eventful, Page};
 use hac_core::{collection::Collection, command::Command};
 
 use ratatui::{layout::Rect, Frame};
@@ -36,6 +37,8 @@ pub struct ScreenManager<'sm> {
     config: &'sm hac_config::Config,
     dry_run: bool,
 
+    collection_store: Rc<RefCell<CollectionStore>>,
+
     // we hold a copy of the sender so we can pass it to the editor when we first
     // build one
     sender: Option<UnboundedSender<Command>>,
@@ -55,6 +58,7 @@ impl<'sm> ScreenManager<'sm> {
             collection_viewer: None,
             terminal_too_small: TerminalTooSmall::new(colors),
             collection_list: CollectionDashboard::new(size, colors, collections, dry_run)?,
+            collection_store: Rc::new(RefCell::new(CollectionStore::default())),
             size,
             colors,
             config,
@@ -83,14 +87,15 @@ impl<'sm> ScreenManager<'sm> {
             Command::SelectCollection(collection) | Command::CreateCollection(collection) => {
                 tracing::debug!("changing to api explorer: {}", collection.info.name);
                 self.switch_screen(Screens::CollectionViewer);
-                let mut collection_viewer = CollectionViewer::new(
+                self.collection_store.borrow_mut().set_state(collection);
+                self.collection_viewer = Some(CollectionViewer::new(
                     self.size,
-                    collection,
+                    self.collection_store.clone(),
                     self.colors,
                     self.config,
                     self.dry_run,
-                );
-                collection_viewer
+                ));
+                self.collection_viewer.as_mut().unwrap()
                     .register_command_handler(
                         self.sender
                             .as_ref()
@@ -98,7 +103,6 @@ impl<'sm> ScreenManager<'sm> {
                             .clone(),
                     )
                     .ok();
-                self.collection_viewer = Some(collection_viewer);
             }
             Command::Error(msg) => {
                 self.collection_list.display_error(msg);
@@ -108,7 +112,7 @@ impl<'sm> ScreenManager<'sm> {
     }
 }
 
-impl Component for ScreenManager<'_> {
+impl Page for ScreenManager<'_> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         match (size.width < 80, size.height < 22) {
             (true, _) => self.switch_screen(Screens::TerminalTooSmall),
@@ -165,6 +169,8 @@ impl Component for ScreenManager<'_> {
 }
 
 impl Eventful for ScreenManager<'_> {
+    type Result = Command;
+
     fn handle_event(&mut self, event: Option<Event>) -> anyhow::Result<Option<Command>> {
         match self.curr_screen {
             Screens::CollectionViewer => self

@@ -9,9 +9,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Collection {
     pub info: Info,
-    pub requests: Option<Vec<RequestKind>>,
+    pub requests: Option<Arc<RwLock<Vec<RequestKind>>>>,
     #[serde(skip)]
     pub path: PathBuf,
+}
+
+impl AsRef<Collection> for Collection {
+    fn as_ref(&self) -> &Collection {
+        self
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -110,7 +116,7 @@ impl Hash for Request {
 pub struct Directory {
     pub id: String,
     pub name: String,
-    pub requests: Vec<RequestKind>,
+    pub requests: Arc<RwLock<Vec<RequestKind>>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]

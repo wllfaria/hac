@@ -1,4 +1,4 @@
-use crate::pages::Component;
+use crate::pages::Page;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
     style::Stylize,
@@ -21,7 +21,7 @@ impl<'a> TerminalTooSmall<'a> {
     }
 }
 
-impl Component for TerminalTooSmall<'_> {
+impl Page for TerminalTooSmall<'_> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         let layout = build_layout(size);
 
