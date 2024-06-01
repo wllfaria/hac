@@ -1,12 +1,11 @@
+use hac_core::collection::types::Request;
+
 use std::sync::{Arc, RwLock};
 
-use hac_core::collection::types::Request;
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-    style::{Style, Stylize},
-    widgets::{Block, Borders, Paragraph, StatefulWidget, Widget},
-};
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::style::{Style, Stylize};
+use ratatui::widgets::{Block, Borders, Paragraph, StatefulWidget, Widget};
 
 #[derive(Debug)]
 pub struct ReqUriState<'a> {

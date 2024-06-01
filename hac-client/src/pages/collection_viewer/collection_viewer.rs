@@ -5,7 +5,7 @@ use hac_core::net::request_manager::Response;
 use crate::pages::collection_viewer::req_uri::{ReqUri, ReqUriState};
 use crate::pages::collection_viewer::request_editor::{ReqEditor, ReqEditorState};
 use crate::pages::collection_viewer::response_viewer::ResViewer;
-use crate::pages::collection_viewer::sidebar::{Sidebar, SidebarState};
+use crate::pages::collection_viewer::sidebar::Sidebar;
 use crate::pages::input::Input;
 use crate::pages::overlay::draw_overlay;
 use crate::pages::{Component, Eventful};
@@ -24,6 +24,8 @@ use ratatui::style::{Style, Stylize};
 use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, StatefulWidget};
 use ratatui::Frame;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+
+use super::sidebar;
 
 #[derive(Debug, PartialEq)]
 pub struct ExplorerLayout {
@@ -46,9 +48,10 @@ pub enum Overlays {
 enum VisitNode {
     Next,
     Prev,
+    Curr,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PaneFocus {
     Sidebar,
     ReqUri,
@@ -118,6 +121,7 @@ pub enum CreateReqKind {
 pub struct CollectionViewer<'cv> {
     response_viewer: ResViewer<'cv>,
     request_editor: ReqEditor<'cv>,
+    sidebar: Sidebar<'cv>,
 
     colors: &'cv hac_colors::Colors,
     config: &'cv hac_config::Config,
@@ -127,7 +131,7 @@ pub struct CollectionViewer<'cv> {
     collection_sync_timer: std::time::Instant,
 
     selected_request: Option<Arc<RwLock<Request>>>,
-    hovered_request: Option<RequestKind>,
+    hovered_request: Option<String>,
     dirs_expanded: HashMap<String, bool>,
 
     focused_pane: PaneFocus,
@@ -168,7 +172,7 @@ impl<'cv> CollectionViewer<'cv> {
         let hovered_request = collection
             .requests
             .as_ref()
-            .and_then(|requests| requests.first().cloned());
+            .and_then(|items| items.first().map(|item| item.get_id()));
 
         CollectionViewer {
             request_editor: ReqEditor::new(
@@ -178,6 +182,19 @@ impl<'cv> CollectionViewer<'cv> {
                 layout.req_editor,
             ),
             response_viewer: ResViewer::new(colors, None, layout.response_preview),
+            sidebar: Sidebar::new(
+                colors,
+                true,
+                false,
+                sidebar::build_lines(
+                    collection.requests.as_ref(),
+                    0,
+                    &selected_request.as_ref(),
+                    hovered_request.as_ref(),
+                    &mut HashMap::new(),
+                    colors,
+                ),
+            ),
 
             colors,
             config,
@@ -209,11 +226,7 @@ impl<'cv> CollectionViewer<'cv> {
     fn handle_sidebar_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         if let KeyCode::Esc = key_event.code {
             self.selected_pane = None;
-            return Ok(None);
-        }
-
-        if let (KeyCode::Enter, None) = (key_event.code, self.selected_pane.as_ref()) {
-            self.selected_pane = Some(PaneFocus::Sidebar);
+            self.update_selection();
             return Ok(None);
         }
 
@@ -224,7 +237,12 @@ impl<'cv> CollectionViewer<'cv> {
         {
             match key_event.code {
                 KeyCode::Enter => {
-                    if let Some(req) = self.hovered_request.as_ref() {
+                    if let Some(id) = self.hovered_request.as_ref() {
+                        let req = get_request_by_id(
+                            self.collection.requests.as_ref().unwrap(),
+                            &self.dirs_expanded,
+                            id,
+                        );
                         match req {
                             RequestKind::Nested(dir) => {
                                 let entry =
@@ -232,7 +250,7 @@ impl<'cv> CollectionViewer<'cv> {
                                 *entry = !*entry;
                             }
                             RequestKind::Single(req) => {
-                                self.selected_request = Some(Arc::clone(req));
+                                self.selected_request = Some(Arc::clone(&req));
                                 self.response_viewer.update(None);
                                 self.request_editor = ReqEditor::new(
                                     self.colors,
@@ -242,36 +260,37 @@ impl<'cv> CollectionViewer<'cv> {
                                 );
                             }
                         }
+                        self.build_sidebar_treeview();
                     }
                 }
                 KeyCode::Char('j') => {
-                    if let Some(ref req) = self.hovered_request {
-                        self.hovered_request = find_next_entry(
-                        self.collection.requests.as_ref().context(
-                            "should never have a selected request without any requests on collection",
-                        )?,
-                        VisitNode::Next,
-                        &self.dirs_expanded,
-                        req,
-                    )
-                    .or(Some(req.clone()));
-                    } else if let Some(requests) = self.collection.requests.as_ref() {
-                        self.hovered_request = requests.first().cloned();
+                    if let Some(id) = self.hovered_request.as_mut() {
+                        if let Some(next) = find_next_entry(
+                            self.collection.requests.as_ref().context(
+                                "should never have a selected request without any requests on collection",
+                            )?,
+                            VisitNode::Next,
+                            &self.dirs_expanded,
+                            id,
+                        ) {
+                            *id = next.get_id();
+                            self.build_sidebar_treeview();
+                        };
                     }
                 }
                 KeyCode::Char('k') => {
-                    if let Some(ref id) = self.hovered_request {
-                        self.hovered_request = find_next_entry(
-                        self.collection.requests.as_ref().context(
-                            "should never have a selected request without any requests on collection",
-                        )?,
-                        VisitNode::Prev,
-                        &self.dirs_expanded,
-                        id,
-                    )
-                    .or(Some(id.clone()));
-                    } else if let Some(requests) = self.collection.requests.as_ref() {
-                        self.hovered_request = requests.first().cloned();
+                    if let Some(id) = self.hovered_request.as_mut() {
+                        if let Some(next) = find_next_entry(
+                            self.collection.requests.as_ref().expect(
+                                "should never have a selected request without any requests on collection",
+                            ),
+                            VisitNode::Prev,
+                            &self.dirs_expanded,
+                            id,
+                        ) {
+                            *id = next.get_id();
+                            self.build_sidebar_treeview();
+                        }
                     }
                 }
                 KeyCode::Char('n') => self.curr_overlay = Overlays::CreateRequest,
@@ -282,14 +301,21 @@ impl<'cv> CollectionViewer<'cv> {
         Ok(None)
     }
 
+    fn build_sidebar_treeview(&mut self) {
+        self.sidebar.set_lines(sidebar::build_lines(
+            self.collection.requests.as_ref(),
+            0,
+            &self.selected_request.as_ref(),
+            self.hovered_request.as_ref(),
+            &mut HashMap::new(),
+            self.colors,
+        ));
+    }
+
     fn handle_req_uri_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         if let KeyCode::Esc = key_event.code {
             self.selected_pane = None;
-            return Ok(None);
-        }
-
-        if let (KeyCode::Enter, None) = (key_event.code, self.selected_pane.as_ref()) {
-            self.selected_pane = Some(PaneFocus::ReqUri);
+            self.update_selection();
             return Ok(None);
         }
 
@@ -331,12 +357,9 @@ impl<'cv> CollectionViewer<'cv> {
 
     fn handle_editor_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         match (key_event.code, &self.selected_pane) {
-            (KeyCode::Enter, None) => {
-                self.selected_pane = Some(PaneFocus::Editor);
-                return Ok(None);
-            }
             (KeyCode::Esc, Some(_)) if self.request_editor.mode().eq(&EditorMode::Normal) => {
                 self.selected_pane = None;
+                self.update_selection();
                 return Ok(None);
             }
             _ => {}
@@ -345,21 +368,6 @@ impl<'cv> CollectionViewer<'cv> {
             return Ok(None);
         }
         self.request_editor.handle_key_event(key_event)
-    }
-
-    fn draw_sidebar(&mut self, frame: &mut Frame) {
-        let mut state = SidebarState::new(
-            self.collection.requests.as_deref(),
-            &self.selected_request,
-            self.hovered_request.as_ref(),
-            &mut self.dirs_expanded,
-            self.focused_pane.eq(&PaneFocus::Sidebar),
-            self.selected_pane
-                .as_ref()
-                .is_some_and(|pane| pane.eq(&PaneFocus::Sidebar)),
-        );
-
-        Sidebar::new(self.colors).render(self.layout.sidebar, frame.buffer_mut(), &mut state);
     }
 
     fn draw_req_uri(&mut self, frame: &mut Frame) {
@@ -405,7 +413,10 @@ impl<'cv> CollectionViewer<'cv> {
 
     fn handle_preview_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
         match key_event.code {
-            KeyCode::Enter => self.selected_pane = Some(PaneFocus::Preview),
+            KeyCode::Esc => {
+                self.selected_pane = None;
+                self.update_selection();
+            }
             _ => {
                 self.response_viewer.handle_key_event(key_event)?;
             }
@@ -423,9 +434,9 @@ impl<'cv> CollectionViewer<'cv> {
     }
     fn draw_sidebar_hint(&self, frame: &mut Frame) {
         let hint =
-            "[j/k -> navigate] [enter -> select item] [n -> create request] [? -> help] [<C-c> -> quit]"
-                .fg(self.colors.normal.magenta)
-                .into_centered_line();
+        "[j/k -> navigate] [enter -> select item] [n -> create request] [? -> help] [<C-c> -> quit]"
+            .fg(self.colors.normal.magenta)
+            .into_centered_line();
 
         frame.render_widget(hint, self.layout.hint_pane);
     }
@@ -737,7 +748,15 @@ impl<'cv> CollectionViewer<'cv> {
 
         if let RequestKind::Single(ref req) = new_request {
             self.selected_request = Some(Arc::clone(req));
-            self.hovered_request = Some(new_request.clone());
+            self.hovered_request = Some(new_request.get_id());
+            self.sidebar.set_lines(sidebar::build_lines(
+                self.collection.requests.as_ref(),
+                0,
+                &self.selected_request.as_ref(),
+                self.hovered_request.as_ref(),
+                &mut HashMap::new(),
+                self.colors,
+            ));
         }
 
         self.collection
@@ -812,17 +831,14 @@ impl<'cv> CollectionViewer<'cv> {
     }
 
     fn update_selection(&mut self) {
-        assert!(
-            self.selected_pane.is_some(),
-            "update selection can only be called when a pane is selected"
-        );
-
         self.response_viewer
-            .maybe_select(self.selected_pane.as_ref().unwrap());
+            .maybe_select(self.selected_pane.as_ref());
+        self.sidebar.maybe_select(self.selected_pane.as_ref());
     }
 
     fn update_focus(&mut self) {
         self.response_viewer.maybe_focus(&self.focused_pane);
+        self.sidebar.maybe_focus(&self.focused_pane);
     }
 }
 
@@ -840,7 +856,7 @@ impl Component for CollectionViewer<'_> {
             .draw(frame, self.layout.response_preview)?;
         self.draw_req_editor(frame);
         self.draw_req_uri(frame);
-        self.draw_sidebar(frame);
+        self.sidebar.draw(frame, self.layout.sidebar)?;
 
         match self.focused_pane {
             PaneFocus::ReqUri => self.draw_req_uri_hint(frame),
@@ -932,6 +948,12 @@ impl Eventful for CollectionViewer<'_> {
             return Ok(Some(Command::Quit));
         };
 
+        if let (KeyCode::Enter, None) = (key_event.code, self.selected_pane.as_ref()) {
+            self.selected_pane = Some(self.focused_pane.clone());
+            self.update_selection();
+            return Ok(None);
+        }
+
         if self.curr_overlay.ne(&Overlays::None) {
             match self.curr_overlay {
                 Overlays::CreateRequest => return self.handle_create_request_key_event(key_event),
@@ -1004,16 +1026,20 @@ impl Eventful for CollectionViewer<'_> {
         if let KeyCode::BackTab = key_event.code {
             match (&self.focused_pane, &self.selected_pane, key_event.modifiers) {
                 (PaneFocus::Sidebar, None, KeyModifiers::SHIFT) => {
-                    self.focused_pane = PaneFocus::Preview
+                    self.focused_pane = PaneFocus::Preview;
+                    self.update_focus();
                 }
                 (PaneFocus::ReqUri, None, KeyModifiers::SHIFT) => {
-                    self.focused_pane = PaneFocus::Sidebar
+                    self.focused_pane = PaneFocus::Sidebar;
+                    self.update_focus();
                 }
                 (PaneFocus::Editor, None, KeyModifiers::SHIFT) => {
-                    self.focused_pane = PaneFocus::ReqUri
+                    self.focused_pane = PaneFocus::ReqUri;
+                    self.update_focus();
                 }
                 (PaneFocus::Preview, None, KeyModifiers::SHIFT) => {
-                    self.focused_pane = PaneFocus::Editor
+                    self.focused_pane = PaneFocus::Editor;
+                    self.update_focus();
                 }
                 _ => {}
             }
@@ -1079,10 +1105,10 @@ fn traverse(
     visit: &VisitNode,
     dirs_expanded: &HashMap<String, bool>,
     current: &RequestKind,
-    needle: &RequestKind,
+    needle: &str,
     path: &mut Vec<RequestKind>,
 ) -> bool {
-    let node_match = current.get_id().eq(&needle.get_id());
+    let node_match = current.get_id().eq(needle);
 
     match (&visit, node_match, &found) {
         // We are looking for the next item and we already found the current one (needle), so the
@@ -1100,6 +1126,11 @@ fn traverse(
         // We are looking for the next and just found the current one, so we set the flag to
         // true in order to know when to return the next.
         (VisitNode::Next, true, false) => *found = true,
+        (VisitNode::Curr, true, _) => {
+            path.push(current.clone());
+            *found = true;
+            return *found;
+        }
         _ => {}
     }
 
@@ -1123,11 +1154,36 @@ fn traverse(
     false
 }
 
+fn get_request_by_id(
+    tree: &[RequestKind],
+    dirs_expanded: &HashMap<String, bool>,
+    id: &str,
+) -> RequestKind {
+    let mut found = false;
+    let mut path = vec![];
+
+    for node in tree {
+        if traverse(
+            &mut found,
+            &VisitNode::Curr,
+            dirs_expanded,
+            node,
+            id,
+            &mut path,
+        ) {
+            break;
+        }
+    }
+
+    path.pop()
+        .expect("attempting to find an unexisting request")
+}
+
 fn find_next_entry(
     tree: &[RequestKind],
     visit: VisitNode,
     dirs_expanded: &HashMap<String, bool>,
-    needle: &RequestKind,
+    needle: &str,
 ) -> Option<RequestKind> {
     let mut found = false;
     let mut path = vec![];
@@ -1226,7 +1282,7 @@ mod tests {
         let needle = create_nested();
         let expected = create_root_two();
 
-        let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle);
+        let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle.get_id());
 
         assert!(next.is_some());
         assert_eq!(next.unwrap().get_id(), expected.get_id());
@@ -1240,7 +1296,7 @@ mod tests {
         let needle = create_nested();
         let expected = create_child_one();
 
-        let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle);
+        let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle.get_id());
 
         assert!(next.is_some());
         assert_eq!(next.unwrap().get_id(), expected.get_id());
@@ -1253,7 +1309,7 @@ mod tests {
         dirs_expanded.insert(create_dir().id, true);
         let needle = create_not_used();
 
-        let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle);
+        let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle.get_id());
 
         assert!(next.is_none());
     }
@@ -1266,7 +1322,7 @@ mod tests {
         let needle = create_child_one();
         let expected = create_nested();
 
-        let next = find_next_entry(&tree, VisitNode::Prev, &dirs_expanded, &needle);
+        let next = find_next_entry(&tree, VisitNode::Prev, &dirs_expanded, &needle.get_id());
 
         assert!(next.is_some());
         assert_eq!(next.unwrap().get_id(), expected.get_id());
@@ -1280,7 +1336,7 @@ mod tests {
         let needle = create_root_two();
         let expected = create_child_two();
 
-        let next = find_next_entry(&tree, VisitNode::Prev, &dirs_expanded, &needle);
+        let next = find_next_entry(&tree, VisitNode::Prev, &dirs_expanded, &needle.get_id());
 
         assert!(next.is_some());
         assert_eq!(next.unwrap().get_id(), expected.get_id());
@@ -1292,7 +1348,7 @@ mod tests {
         let dirs_expanded = HashMap::new();
         let needle = create_root_two();
 
-        let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle);
+        let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle.get_id());
 
         assert!(next.is_none());
     }

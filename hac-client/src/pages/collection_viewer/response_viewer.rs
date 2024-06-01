@@ -558,9 +558,8 @@ impl<'a> ResViewer<'a> {
         }
     }
 
-    pub fn maybe_select(&mut self, selected_pane: &PaneFocus) {
-        self.is_selected = selected_pane.eq(&PaneFocus::Preview);
-        self.is_focused = selected_pane.eq(&PaneFocus::Preview);
+    pub fn maybe_select(&mut self, selected_pane: Option<&PaneFocus>) {
+        self.is_selected = selected_pane.is_some_and(|pane| pane.eq(&PaneFocus::Preview));
     }
 
     pub fn maybe_focus(&mut self, focused_pane: &PaneFocus) {

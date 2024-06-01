@@ -1,5 +1,3 @@
-mod editor_tab;
-
 use crate::{pages::Eventful, utils::build_syntax_highlighted_lines};
 
 use hac_config::{Action, EditorMode, KeyAction};
@@ -79,7 +77,6 @@ pub struct ReqEditor<'re> {
     col_scroll: usize,
     layout: ReqEditorLayout,
     config: &'re hac_config::Config,
-    request: Option<Arc<RwLock<Request>>>,
 
     curr_tab: ReqEditorTabs,
 
@@ -131,7 +128,6 @@ impl<'re> ReqEditor<'re> {
                 .unwrap_or(false)
                 .then_some(ReqEditorTabs::Headers)
                 .unwrap_or_default(),
-            request,
             keymap_buffer: None,
         }
     }

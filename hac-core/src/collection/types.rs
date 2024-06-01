@@ -106,7 +106,7 @@ impl Hash for Request {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct Directory {
     pub id: String,
     pub name: String,
