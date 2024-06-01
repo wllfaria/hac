@@ -14,7 +14,7 @@ use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;
 
 /// A `Page` is anything that is a top level page and can be drawn to the screen
-pub trait Page {
+pub trait Component {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()>;
 
     /// pages need to adapt to change of sizes on the application, this function is called

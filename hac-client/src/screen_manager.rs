@@ -2,7 +2,7 @@ use crate::{
     event_pool::Event,
     pages::{
         collection_dashboard::CollectionDashboard, collection_viewer::CollectionViewer,
-        terminal_too_small::TerminalTooSmall, Eventful, Page,
+        terminal_too_small::TerminalTooSmall, Component, Eventful,
     },
 };
 use hac_core::{collection::Collection, command::Command};
@@ -108,7 +108,7 @@ impl<'sm> ScreenManager<'sm> {
     }
 }
 
-impl Page for ScreenManager<'_> {
+impl Component for ScreenManager<'_> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         match (size.width < 80, size.height < 22) {
             (true, _) => self.switch_screen(Screens::TerminalTooSmall),

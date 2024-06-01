@@ -1,39 +1,28 @@
-use hac_core::{net::request_manager::Response, syntax::highlighter::HIGHLIGHTER};
+use hac_core::command::Command;
+use hac_core::net::request_manager::Response;
+use hac_core::syntax::highlighter::HIGHLIGHTER;
+
+use crate::ascii::{BIG_ERROR_ARTS, LOGO_ART, SMALL_ERROR_ARTS};
+use crate::pages::collection_viewer::collection_viewer::PaneFocus;
+use crate::pages::{spinner::Spinner, Component, Eventful};
+use crate::utils::build_syntax_highlighted_lines;
+
+use std::cell::RefCell;
+use std::iter;
+use std::ops::{Add, Sub};
+use std::rc::Rc;
+
+use crossterm::event::{KeyCode, KeyEvent};
 use rand::Rng;
-
-use crate::{
-    ascii::{BIG_ERROR_ARTS, LOGO_ART, SMALL_ERROR_ARTS},
-    pages::spinner::Spinner,
-    utils::build_syntax_highlighted_lines,
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::style::{Style, Stylize};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{
+    Block, Borders, Clear, Padding, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+    Tabs,
 };
-use ratatui::{
-    buffer::Buffer,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Style, Stylize},
-    text::{Line, Span},
-    widgets::{
-        Block, Borders, Clear, Padding, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
-        StatefulWidget, Tabs, Widget,
-    },
-};
-use std::{
-    cell::RefCell,
-    iter,
-    ops::{Add, Deref, Sub},
-    rc::Rc,
-};
+use ratatui::Frame;
 use tree_sitter::Tree;
-
-pub struct ResViewerState<'a> {
-    pub is_focused: bool,
-    pub is_selected: bool,
-    pub curr_tab: &'a ResViewerTabs,
-    pub raw_scroll: &'a mut usize,
-    pub pretty_scroll: &'a mut usize,
-    pub headers_scroll_y: &'a mut usize,
-    pub headers_scroll_x: &'a mut usize,
-    pub pending_request: bool,
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResViewerTabs {
@@ -88,6 +77,15 @@ pub struct ResViewer<'a> {
     empty_lines: Vec<Line<'static>>,
     preview_layout: PreviewLayout,
     layout: ResViewerLayout,
+
+    active_tab: ResViewerTabs,
+    raw_scroll: usize,
+    headers_scroll_y: usize,
+    headers_scroll_x: usize,
+    pretty_scroll: usize,
+    is_focused: bool,
+    is_selected: bool,
+    pending_request: bool,
 }
 
 impl<'a> ResViewer<'a> {
@@ -120,6 +118,14 @@ impl<'a> ResViewer<'a> {
             empty_lines,
             preview_layout,
             layout,
+            active_tab: ResViewerTabs::Preview,
+            raw_scroll: 0,
+            headers_scroll_y: 0,
+            headers_scroll_x: 0,
+            pretty_scroll: 0,
+            is_focused: false,
+            is_selected: false,
+            pending_request: false,
         }
     }
 
@@ -181,8 +187,8 @@ impl<'a> ResViewer<'a> {
         self.response = response;
     }
 
-    fn draw_container(&self, size: Rect, buf: &mut Buffer, state: &mut ResViewerState) {
-        let block_border = match (state.is_focused, state.is_selected) {
+    fn draw_container(&self, size: Rect, frame: &mut Frame) {
+        let block_border = match (self.is_focused, self.is_selected) {
             (true, false) => Style::default().fg(self.colors.bright.blue),
             (true, true) => Style::default().fg(self.colors.normal.red),
             (_, _) => Style::default().fg(self.colors.bright.black),
@@ -196,22 +202,22 @@ impl<'a> ResViewer<'a> {
             ])
             .border_style(block_border);
 
-        block.render(size, buf);
+        frame.render_widget(block, size);
     }
 
-    fn draw_tabs(&self, buf: &mut Buffer, state: &ResViewerState, size: Rect) {
+    fn draw_tabs(&self, frame: &mut Frame, size: Rect) {
         let tabs = Tabs::new(["Pretty", "Raw", "Headers", "Cookies"])
             .style(Style::default().fg(self.colors.bright.black))
-            .select(state.curr_tab.clone().into())
+            .select(self.active_tab.clone().into())
             .highlight_style(
                 Style::default()
                     .fg(self.colors.normal.white)
                     .bg(self.colors.normal.blue),
             );
-        tabs.render(size, buf);
+        frame.render_widget(tabs, size);
     }
 
-    fn draw_spinner(&self, buf: &mut Buffer) {
+    fn draw_spinner(&self, frame: &mut Frame) {
         let request_pane = self.preview_layout.content_pane;
         let center = request_pane.y.add(request_pane.height.div_ceil(2));
         let size = Rect::new(request_pane.x, center, request_pane.width, 1);
@@ -219,23 +225,22 @@ impl<'a> ResViewer<'a> {
             .with_label("Sending request".fg(self.colors.bright.black))
             .into_centered_line();
 
-        Widget::render(Clear, request_pane, buf);
-        Widget::render(
+        frame.render_widget(Clear, request_pane);
+        frame.render_widget(
             Block::default().bg(self.colors.primary.background),
             request_pane,
-            buf,
         );
-        Widget::render(spinner, size, buf);
+        frame.render_widget(spinner, size);
     }
 
-    fn draw_network_error(&self, buf: &mut Buffer) {
+    fn draw_network_error(&self, frame: &mut Frame) {
         if self.response.as_ref().is_some() {
             let request_pane = self.preview_layout.content_pane;
-            Widget::render(Clear, request_pane, buf);
-            Widget::render(
+
+            frame.render_widget(Clear, request_pane);
+            frame.render_widget(
                 Block::default().bg(self.colors.primary.background),
                 request_pane,
-                buf,
             );
 
             let center = request_pane
@@ -250,19 +255,19 @@ impl<'a> ResViewer<'a> {
                 self.error_lines.as_ref().unwrap().len() as u16,
             );
 
-            Paragraph::new(self.error_lines.clone().unwrap())
-                .fg(self.colors.bright.black)
-                .render(size, buf);
+            frame.render_widget(
+                Paragraph::new(self.error_lines.clone().unwrap()).fg(self.colors.bright.black),
+                size,
+            )
         }
     }
 
-    fn draw_waiting_for_request(&self, buf: &mut Buffer) {
+    fn draw_waiting_for_request(&self, frame: &mut Frame) {
         let request_pane = self.preview_layout.content_pane;
-        Widget::render(Clear, request_pane, buf);
-        Widget::render(
+        frame.render_widget(Clear, request_pane);
+        frame.render_widget(
             Block::default().bg(self.colors.primary.background),
             request_pane,
-            buf,
         );
 
         let center = request_pane
@@ -277,23 +282,25 @@ impl<'a> ResViewer<'a> {
             self.empty_lines.len() as u16,
         );
 
-        Paragraph::new(self.empty_lines.clone())
-            .fg(self.colors.normal.red)
-            .centered()
-            .render(size, buf);
+        frame.render_widget(
+            Paragraph::new(self.empty_lines.clone())
+                .fg(self.colors.normal.red)
+                .centered(),
+            size,
+        )
     }
 
-    fn draw_current_tab(&self, state: &mut ResViewerState, buf: &mut Buffer, size: Rect) {
+    fn draw_current_tab(&mut self, frame: &mut Frame, size: Rect) {
         if self
             .response
             .as_ref()
             .is_some_and(|res| res.borrow().is_error)
         {
-            self.draw_network_error(buf);
+            self.draw_network_error(frame);
         };
 
         if self.response.is_none() {
-            self.draw_waiting_for_request(buf);
+            self.draw_waiting_for_request(frame);
         }
 
         if self
@@ -301,20 +308,20 @@ impl<'a> ResViewer<'a> {
             .as_ref()
             .is_some_and(|res| !res.borrow().is_error)
         {
-            match state.curr_tab {
-                ResViewerTabs::Preview => self.draw_pretty_response(state, buf, size),
-                ResViewerTabs::Raw => self.draw_raw_response(state, buf, size),
-                ResViewerTabs::Headers => self.draw_response_headers(state, buf),
+            match self.active_tab {
+                ResViewerTabs::Preview => self.draw_pretty_response(frame, size),
+                ResViewerTabs::Raw => self.draw_raw_response(frame, size),
+                ResViewerTabs::Headers => self.draw_response_headers(frame),
                 ResViewerTabs::Cookies => {}
             }
         }
 
-        if state.pending_request {
-            self.draw_spinner(buf);
+        if self.pending_request {
+            self.draw_spinner(frame);
         }
     }
 
-    fn draw_response_headers(&self, state: &mut ResViewerState, buf: &mut Buffer) {
+    fn draw_response_headers(&mut self, frame: &mut Frame) {
         if let Some(response) = self.response.as_ref() {
             if let Some(headers) = response.borrow().headers.as_ref() {
                 let mut longest_line: usize = 0;
@@ -332,7 +339,7 @@ impl<'a> ResViewer<'a> {
                         lines.push(Line::from(
                             name_string
                                 .chars()
-                                .skip(*state.headers_scroll_x)
+                                .skip(self.headers_scroll_x)
                                 .collect::<String>()
                                 .bold()
                                 .yellow(),
@@ -340,36 +347,31 @@ impl<'a> ResViewer<'a> {
                         lines.push(Line::from(
                             value
                                 .chars()
-                                .skip(*state.headers_scroll_x)
+                                .skip(self.headers_scroll_x)
                                 .collect::<String>(),
                         ));
                         lines.push(Line::from(""));
                     }
                 }
 
-                if state
+                if self
                     .headers_scroll_y
-                    .deref()
                     // we add a blank line after every entry, we account for that here
                     .ge(&lines.len().saturating_sub(2))
                 {
-                    *state.headers_scroll_y = lines.len().saturating_sub(2);
+                    self.headers_scroll_y = lines.len().saturating_sub(2);
                 }
 
-                if state
-                    .headers_scroll_x
-                    .deref()
-                    .ge(&longest_line.saturating_sub(1))
-                {
-                    *state.headers_scroll_x = longest_line.saturating_sub(1);
+                if self.headers_scroll_x.ge(&longest_line.saturating_sub(1)) {
+                    self.headers_scroll_x = longest_line.saturating_sub(1);
                 }
 
                 let [headers_pane, x_scrollbar_pane] =
                     build_horizontal_scrollbar(self.preview_layout.content_pane);
                 self.draw_scrollbar(
                     lines.len(),
-                    *state.headers_scroll_y,
-                    buf,
+                    self.headers_scroll_y,
+                    frame,
                     self.preview_layout.scrollbar,
                 );
 
@@ -382,7 +384,7 @@ impl<'a> ResViewer<'a> {
 
                 let lines = lines
                     .into_iter()
-                    .skip(*state.headers_scroll_y)
+                    .skip(self.headers_scroll_y)
                     .chain(iter::repeat(Line::from("~".fg(self.colors.bright.black))))
                     .take(lines_to_show as usize)
                     .collect::<Vec<Line>>();
@@ -391,21 +393,22 @@ impl<'a> ResViewer<'a> {
                 if longest_line > self.preview_layout.content_pane.width as usize {
                     self.draw_horizontal_scrollbar(
                         longest_line,
-                        *state.headers_scroll_x,
-                        buf,
+                        self.headers_scroll_x,
+                        frame,
                         x_scrollbar_pane,
                     );
-                    Paragraph::new(lines).block(block).render(headers_pane, buf);
+                    frame.render_widget(Paragraph::new(lines).block(block), headers_pane)
                 } else {
-                    Paragraph::new(lines)
-                        .block(block)
-                        .render(self.preview_layout.content_pane, buf);
+                    frame.render_widget(
+                        Paragraph::new(lines).block(block),
+                        self.preview_layout.content_pane,
+                    );
                 }
             }
         }
     }
 
-    fn draw_raw_response(&self, state: &mut ResViewerState, buf: &mut Buffer, size: Rect) {
+    fn draw_raw_response(&mut self, frame: &mut Frame, size: Rect) {
         if let Some(response) = self.response.as_ref() {
             let lines = if response.borrow().body.is_some() {
                 response
@@ -423,26 +426,26 @@ impl<'a> ResViewer<'a> {
                 vec![Line::from("No body").centered()]
             };
             // allow for scrolling down until theres only one line left into view
-            if state.raw_scroll.deref().ge(&lines.len().saturating_sub(1)) {
-                *state.raw_scroll = lines.len().saturating_sub(1);
+            if self.raw_scroll.ge(&lines.len().saturating_sub(1)) {
+                self.raw_scroll = lines.len().saturating_sub(1);
             }
 
             self.draw_scrollbar(
                 lines.len(),
-                *state.raw_scroll,
-                buf,
+                self.raw_scroll,
+                frame,
                 self.preview_layout.scrollbar,
             );
 
             let lines_in_view = lines
                 .into_iter()
-                .skip(*state.raw_scroll)
+                .skip(self.raw_scroll)
                 .chain(iter::repeat(Line::from("~".fg(self.colors.bright.black))))
                 .take(size.height.into())
                 .collect::<Vec<_>>();
 
             let raw_response = Paragraph::new(lines_in_view);
-            raw_response.render(self.preview_layout.content_pane, buf);
+            frame.render_widget(raw_response, self.preview_layout.content_pane);
         }
     }
 
@@ -450,7 +453,7 @@ impl<'a> ResViewer<'a> {
         &self,
         total_lines: usize,
         current_scroll: usize,
-        buf: &mut Buffer,
+        frame: &mut Frame,
         size: Rect,
     ) {
         let mut scrollbar_state = ScrollbarState::new(total_lines).position(current_scroll);
@@ -460,14 +463,14 @@ impl<'a> ResViewer<'a> {
             .begin_symbol(Some("↑"))
             .end_symbol(Some("↓"));
 
-        scrollbar.render(size, buf, &mut scrollbar_state);
+        frame.render_stateful_widget(scrollbar, size, &mut scrollbar_state);
     }
 
     fn draw_horizontal_scrollbar(
         &self,
         total_columns: usize,
         current_scroll: usize,
-        buf: &mut Buffer,
+        frame: &mut Frame,
         size: Rect,
     ) {
         let mut scrollbar_state = ScrollbarState::new(total_columns).position(current_scroll);
@@ -477,23 +480,19 @@ impl<'a> ResViewer<'a> {
             .begin_symbol(Some("←"))
             .end_symbol(Some("→"));
 
-        scrollbar.render(size, buf, &mut scrollbar_state);
+        frame.render_stateful_widget(scrollbar, size, &mut scrollbar_state);
     }
 
-    fn draw_pretty_response(&self, state: &mut ResViewerState, buf: &mut Buffer, size: Rect) {
+    fn draw_pretty_response(&mut self, frame: &mut Frame, size: Rect) {
         if self.response.as_ref().is_some() {
-            if state
-                .pretty_scroll
-                .deref()
-                .ge(&self.lines.len().saturating_sub(1))
-            {
-                *state.pretty_scroll = self.lines.len().saturating_sub(1);
+            if self.pretty_scroll.ge(&self.lines.len().saturating_sub(1)) {
+                self.pretty_scroll = self.lines.len().saturating_sub(1);
             }
 
             self.draw_scrollbar(
                 self.lines.len(),
-                *state.raw_scroll,
-                buf,
+                self.raw_scroll,
+                frame,
                 self.preview_layout.scrollbar,
             );
 
@@ -505,17 +504,17 @@ impl<'a> ResViewer<'a> {
 
             let lines_in_view = lines
                 .into_iter()
-                .skip(*state.pretty_scroll)
+                .skip(self.pretty_scroll)
                 .chain(iter::repeat(Line::from("~".fg(self.colors.bright.black))))
                 .take(size.height.into())
                 .collect::<Vec<_>>();
 
             let pretty_response = Paragraph::new(lines_in_view);
-            pretty_response.render(self.preview_layout.content_pane, buf);
+            frame.render_widget(pretty_response, self.preview_layout.content_pane);
         }
     }
 
-    fn draw_summary(&self, buf: &mut Buffer, size: Rect) {
+    fn draw_summary(&self, frame: &mut Frame, size: Rect) {
         if let Some(ref response) = self.response {
             let status_color = match response
                 .borrow()
@@ -555,19 +554,78 @@ impl<'a> ResViewer<'a> {
                 pieces.push(format!("{} B", size).fg(self.colors.normal.green))
             };
 
-            Line::from(pieces).render(size, buf);
+            frame.render_widget(Line::from(pieces), size);
         }
+    }
+
+    pub fn maybe_select(&mut self, selected_pane: &PaneFocus) {
+        self.is_selected = selected_pane.eq(&PaneFocus::Preview);
+        self.is_focused = selected_pane.eq(&PaneFocus::Preview);
+    }
+
+    pub fn maybe_focus(&mut self, focused_pane: &PaneFocus) {
+        self.is_focused = focused_pane.eq(&PaneFocus::Preview);
+    }
+
+    pub fn set_pending_request(&mut self, is_pending: bool) {
+        self.pending_request = is_pending;
     }
 }
 
-impl<'a> StatefulWidget for ResViewer<'a> {
-    type State = ResViewerState<'a>;
+impl<'a> Component for ResViewer<'a> {
+    fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
+        self.draw_tabs(frame, self.layout.tabs_pane);
+        self.draw_current_tab(frame, self.layout.content_pane);
+        self.draw_summary(frame, self.layout.summary_pane);
+        self.draw_container(size, frame);
 
-    fn render(self, size: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        self.draw_tabs(buf, state, self.layout.tabs_pane);
-        self.draw_current_tab(state, buf, self.layout.content_pane);
-        self.draw_summary(buf, self.layout.summary_pane);
-        self.draw_container(size, buf, state);
+        Ok(())
+    }
+
+    fn resize(&mut self, _new_size: Rect) {}
+}
+
+impl<'a> Eventful for ResViewer<'a> {
+    fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
+        if let KeyCode::Tab = key_event.code {
+            self.active_tab = ResViewerTabs::next(&self.active_tab);
+        }
+
+        match key_event.code {
+            KeyCode::Char('0') if self.active_tab.eq(&ResViewerTabs::Headers) => {
+                self.headers_scroll_x = 0;
+            }
+            KeyCode::Char('$') if self.active_tab.eq(&ResViewerTabs::Headers) => {
+                self.headers_scroll_x = usize::MAX;
+            }
+            KeyCode::Char('h') => {
+                if let ResViewerTabs::Headers = self.active_tab {
+                    self.headers_scroll_x = self.headers_scroll_x.saturating_sub(1)
+                }
+            }
+            KeyCode::Char('j') => match self.active_tab {
+                ResViewerTabs::Preview => self.pretty_scroll = self.pretty_scroll.add(1),
+                ResViewerTabs::Raw => self.raw_scroll = self.raw_scroll.add(1),
+                ResViewerTabs::Headers => self.headers_scroll_y = self.headers_scroll_y.add(1),
+                ResViewerTabs::Cookies => {}
+            },
+            KeyCode::Char('k') => match self.active_tab {
+                ResViewerTabs::Preview => self.pretty_scroll = self.pretty_scroll.saturating_sub(1),
+                ResViewerTabs::Raw => self.raw_scroll = self.raw_scroll.saturating_sub(1),
+                ResViewerTabs::Headers => {
+                    self.headers_scroll_y = self.headers_scroll_y.saturating_sub(1)
+                }
+                ResViewerTabs::Cookies => {}
+            },
+            KeyCode::Char('l') => {
+                if let ResViewerTabs::Headers = self.active_tab {
+                    self.headers_scroll_x = self.headers_scroll_x.add(1)
+                }
+            }
+            _ => {}
+        }
+
+        Ok(None)
     }
 }
 

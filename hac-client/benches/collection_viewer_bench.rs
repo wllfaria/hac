@@ -2,7 +2,7 @@ use std::sync::{Arc, RwLock};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 use hac_client::{
-    pages::{collection_viewer::CollectionViewer, Eventful, Page},
+    pages::{collection_viewer::CollectionViewer, Component, Eventful},
     utils::build_syntax_highlighted_lines,
 };
 use hac_core::{

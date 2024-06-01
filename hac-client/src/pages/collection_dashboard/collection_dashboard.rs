@@ -6,7 +6,7 @@ use crate::pages::{
     confirm_popup::ConfirmPopup,
     error_popup::ErrorPopup,
     overlay::draw_overlay,
-    Eventful, Page,
+    Component, Eventful,
 };
 use hac_core::{collection::types::Collection, command::Command};
 
@@ -520,7 +520,7 @@ impl<'a> CollectionDashboard<'a> {
     }
 }
 
-impl Page for CollectionDashboard<'_> {
+impl Component for CollectionDashboard<'_> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         self.draw_background(size, frame);
         self.draw_title(frame)?;

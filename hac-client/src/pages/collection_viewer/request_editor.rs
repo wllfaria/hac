@@ -1,25 +1,24 @@
+mod editor_tab;
+
 use crate::{pages::Eventful, utils::build_syntax_highlighted_lines};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
 use hac_config::{Action, EditorMode, KeyAction};
-use hac_core::{
-    collection::types::{Request, RequestMethod},
-    command::Command,
-    syntax::highlighter::HIGHLIGHTER,
-    text_object::{cursor::Cursor, TextObject, Write},
-};
-use ratatui::{
-    buffer::Buffer,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Style, Stylize},
-    text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Tabs, Widget},
-    Frame,
-};
-use std::{
-    fmt::Display,
-    ops::{Add, Div, Mul, Sub},
-    sync::{Arc, RwLock},
-};
+use hac_core::collection::types::{Request, RequestMethod};
+use hac_core::command::Command;
+use hac_core::syntax::highlighter::HIGHLIGHTER;
+use hac_core::text_object::{cursor::Cursor, TextObject, Write};
+
+use std::fmt::Display;
+use std::ops::{Add, Div, Mul, Sub};
+use std::sync::{Arc, RwLock};
+
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::buffer::Buffer;
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::style::{Style, Stylize};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, Paragraph, Tabs, Widget};
+use ratatui::Frame;
 use tree_sitter::Tree;
 
 #[derive(Debug, Default, Clone)]
@@ -95,10 +94,9 @@ pub struct ReqEditor<'re> {
 impl<'re> ReqEditor<'re> {
     pub fn new(
         colors: &'re hac_colors::Colors,
-        request: Option<Arc<RwLock<Request>>>,
-
-        size: Rect,
         config: &'re hac_config::Config,
+        request: Option<Arc<RwLock<Request>>>,
+        size: Rect,
     ) -> Self {
         let (body, tree) = if let Some(request) = request.as_ref() {
             if let Some(body) = request.read().unwrap().body.as_ref() {
@@ -243,29 +241,12 @@ impl<'re> ReqEditor<'re> {
     }
 
     fn draw_tabs(&self, buf: &mut Buffer, size: Rect) {
-        let (tabs, active) = if self
-            .request
-            .as_ref()
-            .map(request_has_no_body)
-            .unwrap_or(true)
-        {
-            let tabs = vec!["Headers", "Query", "Auth"];
-            let active = match self.curr_tab {
-                ReqEditorTabs::Headers => 0,
-                ReqEditorTabs::_Query => 1,
-                ReqEditorTabs::_Auth => 2,
-                _ => 0,
-            };
-            (tabs, active)
-        } else {
-            let tabs = vec!["Body", "Headers", "Query", "Auth"];
-            let active = match self.curr_tab {
-                ReqEditorTabs::Body => 0,
-                ReqEditorTabs::Headers => 1,
-                ReqEditorTabs::_Query => 2,
-                ReqEditorTabs::_Auth => 3,
-            };
-            (tabs, active)
+        let tabs = vec!["Body", "Headers", "Query", "Auth"];
+        let active = match self.curr_tab {
+            ReqEditorTabs::Body => 0,
+            ReqEditorTabs::Headers => 1,
+            ReqEditorTabs::_Query => 2,
+            ReqEditorTabs::_Auth => 3,
         };
 
         Tabs::new(tabs)

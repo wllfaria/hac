@@ -1,8 +1,8 @@
 #[allow(clippy::module_inception)]
 mod collection_viewer;
-mod req_editor;
 mod req_uri;
-mod res_viewer;
+mod request_editor;
+mod response_viewer;
 mod sidebar;
 
 pub use collection_viewer::CollectionViewer;

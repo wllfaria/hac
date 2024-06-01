@@ -1,6 +1,6 @@
 use crate::{
     event_pool::{Event, EventPool},
-    pages::{Eventful, Page},
+    pages::{Component, Eventful},
     screen_manager::ScreenManager,
 };
 use hac_core::{collection::Collection, command::Command};

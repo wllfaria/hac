@@ -1,5 +1,5 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use hac_client::pages::{collection_dashboard::CollectionDashboard, Eventful, Page};
+use hac_client::pages::{collection_dashboard::CollectionDashboard, Component, Eventful};
 use hac_core::collection;
 use ratatui::{backend::TestBackend, layout::Rect, Frame, Terminal};
 use std::{

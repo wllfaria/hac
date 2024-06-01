@@ -1,35 +1,28 @@
-use crate::pages::{
-    collection_viewer::{
-        req_editor::{ReqEditor, ReqEditorState},
-        req_uri::{ReqUri, ReqUriState},
-        res_viewer::{ResViewer, ResViewerState, ResViewerTabs},
-        sidebar::{Sidebar, SidebarState},
-    },
-    input::Input,
-    overlay::draw_overlay,
-    Eventful, Page,
-};
+use hac_core::collection::types::*;
+use hac_core::command::Command;
+use hac_core::net::request_manager::Response;
+
+use crate::pages::collection_viewer::req_uri::{ReqUri, ReqUriState};
+use crate::pages::collection_viewer::request_editor::{ReqEditor, ReqEditorState};
+use crate::pages::collection_viewer::response_viewer::ResViewer;
+use crate::pages::collection_viewer::sidebar::{Sidebar, SidebarState};
+use crate::pages::input::Input;
+use crate::pages::overlay::draw_overlay;
+use crate::pages::{Component, Eventful};
+
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::ops::{Add, Div, Sub};
+use std::rc::Rc;
+use std::sync::{Arc, RwLock};
+
 use anyhow::Context;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_config::EditorMode;
-use hac_core::{
-    collection::types::{BodyType, Collection, Directory, Request, RequestKind, RequestMethod},
-    command::Command,
-    net::request_manager::Response,
-};
-use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Style, Stylize},
-    widgets::{Block, Borders, Clear, Padding, Paragraph, StatefulWidget},
-    Frame,
-};
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    ops::{Add, Div, Sub},
-    rc::Rc,
-    sync::{Arc, RwLock},
-};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::style::{Style, Stylize};
+use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, StatefulWidget};
+use ratatui::Frame;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 #[derive(Debug, PartialEq)]
@@ -56,7 +49,7 @@ enum VisitNode {
 }
 
 #[derive(Debug, PartialEq)]
-enum PaneFocus {
+pub enum PaneFocus {
     Sidebar,
     ReqUri,
     Preview,
@@ -123,36 +116,32 @@ pub enum CreateReqKind {
 
 #[derive(Debug)]
 pub struct CollectionViewer<'cv> {
-    collection: Collection,
+    response_viewer: ResViewer<'cv>,
+    request_editor: ReqEditor<'cv>,
+
     colors: &'cv hac_colors::Colors,
     config: &'cv hac_config::Config,
     layout: ExplorerLayout,
-    response_rx: UnboundedReceiver<Response>,
-    request_tx: UnboundedSender<Response>,
+    global_command_sender: Option<UnboundedSender<Command>>,
+    collection: Collection,
+    collection_sync_timer: std::time::Instant,
+
     selected_request: Option<Arc<RwLock<Request>>>,
     hovered_request: Option<RequestKind>,
     dirs_expanded: HashMap<String, bool>,
+
     focused_pane: PaneFocus,
     selected_pane: Option<PaneFocus>,
-
-    res_viewer: ResViewer<'cv>,
-    preview_tab: ResViewerTabs,
-    raw_preview_scroll: usize,
-    preview_header_scroll_y: usize,
-    preview_header_scroll_x: usize,
-    pretty_preview_scroll: usize,
 
     curr_overlay: Overlays,
     create_req_form_state: CreateReqFormState,
 
-    sync_interval: std::time::Instant,
-    editor: ReqEditor<'cv>,
-
-    sender: Option<UnboundedSender<Command>>,
-    pending_request: bool,
-    dry_run: bool,
-
+    has_pending_request: bool,
     responses_map: HashMap<String, Rc<RefCell<Response>>>,
+    response_rx: UnboundedReceiver<Response>,
+    request_tx: UnboundedSender<Response>,
+
+    dry_run: bool,
 }
 
 impl<'cv> CollectionViewer<'cv> {
@@ -164,6 +153,7 @@ impl<'cv> CollectionViewer<'cv> {
         dry_run: bool,
     ) -> Self {
         let layout = build_layout(size);
+        let (request_tx, response_rx) = unbounded_channel::<Response>();
 
         let selected_request = collection.requests.as_ref().and_then(|requests| {
             requests.first().and_then(|req| {
@@ -180,55 +170,43 @@ impl<'cv> CollectionViewer<'cv> {
             .as_ref()
             .and_then(|requests| requests.first().cloned());
 
-        let (request_tx, response_rx) = unbounded_channel::<Response>();
-
         CollectionViewer {
-            collection,
-            focused_pane: PaneFocus::Sidebar,
-            selected_pane: None,
-            colors,
-            config,
-
-            editor: ReqEditor::new(
+            request_editor: ReqEditor::new(
                 colors,
+                config,
                 selected_request.as_ref().cloned(),
                 layout.req_editor,
-                config,
             ),
-            res_viewer: ResViewer::new(colors, None, layout.response_preview),
+            response_viewer: ResViewer::new(colors, None, layout.response_preview),
 
-            hovered_request,
+            colors,
+            config,
+            layout,
+            global_command_sender: None,
+            collection,
+            collection_sync_timer: std::time::Instant::now(),
+
             selected_request,
+            hovered_request,
             dirs_expanded: HashMap::default(),
-            responses_map: HashMap::default(),
 
-            sender: None,
-            pending_request: false,
-
-            preview_tab: ResViewerTabs::Preview,
-            raw_preview_scroll: 0,
-            preview_header_scroll_y: 0,
-            preview_header_scroll_x: 0,
-            pretty_preview_scroll: 0,
+            focused_pane: PaneFocus::Sidebar,
+            selected_pane: None,
 
             curr_overlay: Overlays::None,
             create_req_form_state: CreateReqFormState::default(),
 
-            sync_interval: std::time::Instant::now(),
+            has_pending_request: false,
+            responses_map: HashMap::default(),
             response_rx,
             request_tx,
-            layout,
+
             dry_run,
         }
     }
 
     #[tracing::instrument(skip_all, err)]
     fn handle_sidebar_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
-        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
-            self.before_quit();
-            return Ok(Some(Command::Quit));
-        };
-
         if let KeyCode::Esc = key_event.code {
             self.selected_pane = None;
             return Ok(None);
@@ -255,12 +233,12 @@ impl<'cv> CollectionViewer<'cv> {
                             }
                             RequestKind::Single(req) => {
                                 self.selected_request = Some(Arc::clone(req));
-                                self.res_viewer.update(None);
-                                self.editor = ReqEditor::new(
+                                self.response_viewer.update(None);
+                                self.request_editor = ReqEditor::new(
                                     self.colors,
+                                    self.config,
                                     self.selected_request.clone(),
                                     self.layout.req_editor,
-                                    self.config,
                                 );
                             }
                         }
@@ -305,11 +283,6 @@ impl<'cv> CollectionViewer<'cv> {
     }
 
     fn handle_req_uri_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
-        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
-            self.before_quit();
-            return Ok(Some(Command::Quit));
-        };
-
         if let KeyCode::Esc = key_event.code {
             self.selected_pane = None;
             return Ok(None);
@@ -340,9 +313,10 @@ impl<'cv> CollectionViewer<'cv> {
                     if self
                         .selected_request
                         .as_ref()
-                        .is_some_and(|_| !self.pending_request)
+                        .is_some_and(|_| !self.has_pending_request)
                     {
-                        self.pending_request = true;
+                        self.has_pending_request = true;
+                        self.response_viewer.set_pending_request(true);
                         hac_core::net::handle_request(
                             self.selected_request.as_ref().unwrap(),
                             self.request_tx.clone(),
@@ -361,7 +335,7 @@ impl<'cv> CollectionViewer<'cv> {
                 self.selected_pane = Some(PaneFocus::Editor);
                 return Ok(None);
             }
-            (KeyCode::Esc, Some(_)) if self.editor.mode().eq(&EditorMode::Normal) => {
+            (KeyCode::Esc, Some(_)) if self.request_editor.mode().eq(&EditorMode::Normal) => {
                 self.selected_pane = None;
                 return Ok(None);
             }
@@ -370,12 +344,7 @@ impl<'cv> CollectionViewer<'cv> {
         if key_event.code.eq(&KeyCode::Enter) && self.selected_pane.is_none() {
             return Ok(None);
         }
-        self.editor.handle_key_event(key_event)
-    }
-
-    fn draw_background(&self, size: Rect, frame: &mut Frame) {
-        frame.render_widget(Clear, size);
-        frame.render_widget(Block::default().bg(self.colors.primary.background), size);
+        self.request_editor.handle_key_event(key_event)
     }
 
     fn draw_sidebar(&mut self, frame: &mut Frame) {
@@ -404,29 +373,6 @@ impl<'cv> CollectionViewer<'cv> {
         ReqUri::new(self.colors).render(self.layout.req_uri, frame.buffer_mut(), &mut state);
     }
 
-    fn draw_res_viewer(&mut self, frame: &mut Frame) {
-        let mut state = ResViewerState {
-            is_focused: self.focused_pane.eq(&PaneFocus::Preview),
-            is_selected: self
-                .selected_pane
-                .as_ref()
-                .map(|sel| sel.eq(&PaneFocus::Preview))
-                .unwrap_or(false),
-            curr_tab: &self.preview_tab,
-            raw_scroll: &mut self.raw_preview_scroll,
-            pretty_scroll: &mut self.pretty_preview_scroll,
-            headers_scroll_y: &mut self.preview_header_scroll_y,
-            headers_scroll_x: &mut self.preview_header_scroll_x,
-            pending_request: self.pending_request,
-        };
-
-        frame.render_stateful_widget(
-            self.res_viewer.clone(),
-            self.layout.response_preview,
-            &mut state,
-        )
-    }
-
     fn draw_req_editor(&mut self, frame: &mut Frame) {
         let mut state = ReqEditorState::new(
             self.focused_pane.eq(&PaneFocus::Editor),
@@ -435,78 +381,34 @@ impl<'cv> CollectionViewer<'cv> {
                 .map(|sel| sel.eq(&PaneFocus::Editor))
                 .unwrap_or(false),
         );
-        self.editor
+        self.request_editor
             .get_components(self.layout.req_editor, frame, &mut state);
     }
 
-    fn drain_response_rx(&mut self) {
+    // collect all pending responses from the channel. Here, I don't see a way we
+    // may have more than one response on this channel at any point, but it shouldn't matter
+    // if we have, so we can drain all the responses and update accordingly
+    fn drain_responses_channel(&mut self) {
         while let Ok(res) = self.response_rx.try_recv() {
             let res = Rc::new(RefCell::new(res));
             self.selected_request.as_ref().and_then(|req| {
                 self.responses_map
                     .insert(req.read().unwrap().id.to_string(), Rc::clone(&res))
             });
-            self.res_viewer.update(Some(Rc::clone(&res)));
-
-            self.response_rx
-                .is_empty()
-                .then(|| self.pending_request = false);
+            self.response_viewer.update(Some(Rc::clone(&res)));
+            self.response_rx.is_empty().then(|| {
+                self.has_pending_request = false;
+                self.response_viewer.set_pending_request(false);
+            });
         }
     }
 
-    fn before_quit(&mut self) {
-        self.sync_collection_changes();
-    }
-
     fn handle_preview_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
-        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
-            self.before_quit();
-            return Ok(Some(Command::Quit));
-        };
-
         match key_event.code {
             KeyCode::Enter => self.selected_pane = Some(PaneFocus::Preview),
-            KeyCode::Tab => self.preview_tab = ResViewerTabs::next(&self.preview_tab),
-            KeyCode::Esc => self.selected_pane = None,
-            KeyCode::Char('0') if self.preview_tab.eq(&ResViewerTabs::Headers) => {
-                self.preview_header_scroll_x = 0;
+            _ => {
+                self.response_viewer.handle_key_event(key_event)?;
             }
-            KeyCode::Char('$') if self.preview_tab.eq(&ResViewerTabs::Headers) => {
-                self.preview_header_scroll_x = usize::MAX;
-            }
-            KeyCode::Char('h') => {
-                if let ResViewerTabs::Headers = self.preview_tab {
-                    self.preview_header_scroll_x = self.preview_header_scroll_x.saturating_sub(1)
-                }
-            }
-            KeyCode::Char('j') => match self.preview_tab {
-                ResViewerTabs::Preview => {
-                    self.pretty_preview_scroll = self.pretty_preview_scroll.add(1)
-                }
-                ResViewerTabs::Raw => self.raw_preview_scroll = self.raw_preview_scroll.add(1),
-                ResViewerTabs::Headers => {
-                    self.preview_header_scroll_y = self.preview_header_scroll_y.add(1)
-                }
-                ResViewerTabs::Cookies => {}
-            },
-            KeyCode::Char('k') => match self.preview_tab {
-                ResViewerTabs::Preview => {
-                    self.pretty_preview_scroll = self.pretty_preview_scroll.saturating_sub(1)
-                }
-                ResViewerTabs::Raw => {
-                    self.raw_preview_scroll = self.raw_preview_scroll.saturating_sub(1)
-                }
-                ResViewerTabs::Headers => {
-                    self.preview_header_scroll_y = self.preview_header_scroll_y.saturating_sub(1)
-                }
-                ResViewerTabs::Cookies => {}
-            },
-            KeyCode::Char('l') => {
-                if let ResViewerTabs::Headers = self.preview_tab {
-                    self.preview_header_scroll_x = self.preview_header_scroll_x.add(1)
-                }
-            }
-            _ => {}
         }
 
         Ok(None)
@@ -684,11 +586,6 @@ impl<'cv> CollectionViewer<'cv> {
         &mut self,
         key_event: KeyEvent,
     ) -> anyhow::Result<Option<Command>> {
-        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
-            self.before_quit();
-            return Ok(Some(Command::Quit));
-        };
-
         match (
             key_event.code,
             key_event.modifiers,
@@ -731,11 +628,6 @@ impl<'cv> CollectionViewer<'cv> {
         &mut self,
         key_event: KeyEvent,
     ) -> anyhow::Result<Option<Command>> {
-        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
-            self.before_quit();
-            return Ok(Some(Command::Quit));
-        };
-
         match (key_event.code, &self.create_req_form_state.method) {
             (KeyCode::Tab, _) => {
                 self.create_req_form_state.method = self.create_req_form_state.method.next();
@@ -860,7 +752,7 @@ impl<'cv> CollectionViewer<'cv> {
 
     fn sync_collection_changes(&mut self) {
         let sender = self
-            .sender
+            .global_command_sender
             .as_ref()
             .expect("should have a sender at this point")
             .clone();
@@ -868,7 +760,7 @@ impl<'cv> CollectionViewer<'cv> {
         let mut collection = self.collection.clone();
         if let Some(request) = self.selected_request.as_ref() {
             let request = request.clone();
-            let body = self.editor.body().to_string();
+            let body = self.request_editor.body().to_string();
             // this is not the best idea for when we start implementing other kinds of
             // body types like GraphQL
             if !body.is_empty() {
@@ -900,7 +792,7 @@ impl<'cv> CollectionViewer<'cv> {
                 });
         }
 
-        self.sync_interval = std::time::Instant::now();
+        self.collection_sync_timer = std::time::Instant::now();
 
         if self.dry_run {
             return;
@@ -918,16 +810,34 @@ impl<'cv> CollectionViewer<'cv> {
             }
         });
     }
+
+    fn update_selection(&mut self) {
+        assert!(
+            self.selected_pane.is_some(),
+            "update selection can only be called when a pane is selected"
+        );
+
+        self.response_viewer
+            .maybe_select(self.selected_pane.as_ref().unwrap());
+    }
+
+    fn update_focus(&mut self) {
+        self.response_viewer.maybe_focus(&self.focused_pane);
+    }
 }
 
-impl Page for CollectionViewer<'_> {
+impl Component for CollectionViewer<'_> {
     #[tracing::instrument(skip_all)]
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
-        self.draw_background(size, frame);
+        // we redraw the background to prevent weird "transparent" spots when popups are
+        // cleared from the buffer
+        frame.render_widget(Clear, size);
+        frame.render_widget(Block::default().bg(self.colors.primary.background), size);
 
-        self.drain_response_rx();
+        self.drain_responses_channel();
 
-        self.draw_res_viewer(frame);
+        self.response_viewer
+            .draw(frame, self.layout.response_preview)?;
         self.draw_req_editor(frame);
         self.draw_req_uri(frame);
         self.draw_sidebar(frame);
@@ -950,21 +860,26 @@ impl Page for CollectionViewer<'_> {
             .as_ref()
             .is_some_and(|pane| pane.eq(&PaneFocus::Editor))
         {
-            let mut editor_position = self.editor.layout().content_pane;
-            editor_position.height = editor_position.height.sub(2);
-            let cursor = self.editor.cursor();
+            // the editor status bar occupies 1 row, so we have to subtract it to prevent the
+            // cursor from going out of the intended spacing, we also subtract the bottom border.
+            let mut editor_position = self.request_editor.layout().content_pane;
+            let statusbar_size = 1;
+            let border_size = 1;
+            editor_position.height = editor_position.height.sub(statusbar_size).sub(border_size);
+
+            let cursor = self.request_editor.cursor();
             let row_with_offset = u16::min(
                 editor_position
                     .y
                     .add(cursor.row_with_offset() as u16)
-                    .saturating_sub(self.editor.row_scroll() as u16),
+                    .saturating_sub(self.request_editor.row_scroll() as u16),
                 editor_position.y.add(editor_position.height),
             );
             let col_with_offset = u16::min(
                 editor_position
                     .x
                     .add(cursor.col_with_offset() as u16)
-                    .saturating_sub(self.editor.col_scroll() as u16),
+                    .saturating_sub(self.request_editor.col_scroll() as u16),
                 editor_position.x.add(editor_position.width),
             );
             frame.set_cursor(col_with_offset, row_with_offset);
@@ -991,27 +906,32 @@ impl Page for CollectionViewer<'_> {
     }
 
     fn handle_tick(&mut self) -> anyhow::Result<()> {
-        if self.sync_interval.elapsed().as_secs().ge(&5) {
+        if self.collection_sync_timer.elapsed().as_secs().ge(&5) {
             self.sync_collection_changes();
         }
         Ok(())
     }
 
     fn register_command_handler(&mut self, sender: UnboundedSender<Command>) -> anyhow::Result<()> {
-        self.sender = Some(sender);
+        self.global_command_sender = Some(sender);
         Ok(())
     }
 
     fn resize(&mut self, new_size: Rect) {
         let new_layout = build_layout(new_size);
-        self.editor.resize(new_layout.req_editor);
-        self.res_viewer.resize(new_layout.response_preview);
+        self.request_editor.resize(new_layout.req_editor);
+        self.response_viewer.resize(new_layout.response_preview);
         self.layout = new_layout;
     }
 }
 
 impl Eventful for CollectionViewer<'_> {
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
+        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            self.sync_collection_changes();
+            return Ok(Some(Command::Quit));
+        };
+
         if self.curr_overlay.ne(&Overlays::None) {
             match self.curr_overlay {
                 Overlays::CreateRequest => return self.handle_create_request_key_event(key_event),
@@ -1027,21 +947,25 @@ impl Eventful for CollectionViewer<'_> {
                 KeyCode::Char('r') => {
                     self.focused_pane = PaneFocus::Sidebar;
                     self.selected_pane = Some(PaneFocus::Sidebar);
+                    self.update_selection();
                     return Ok(None);
                 }
                 KeyCode::Char('u') => {
                     self.focused_pane = PaneFocus::ReqUri;
                     self.selected_pane = Some(PaneFocus::ReqUri);
+                    self.update_selection();
                     return Ok(None);
                 }
                 KeyCode::Char('p') => {
                     self.focused_pane = PaneFocus::Preview;
                     self.selected_pane = Some(PaneFocus::Preview);
+                    self.update_selection();
                     return Ok(None);
                 }
                 KeyCode::Char('e') => {
                     self.focused_pane = PaneFocus::Editor;
                     self.selected_pane = Some(PaneFocus::Editor);
+                    self.update_selection();
                     return Ok(None);
                 }
                 _ => (),
@@ -1051,19 +975,23 @@ impl Eventful for CollectionViewer<'_> {
         if let KeyCode::Tab = key_event.code {
             match (&self.focused_pane, &self.selected_pane, key_event.modifiers) {
                 (PaneFocus::Sidebar, None, KeyModifiers::NONE) => {
-                    self.focused_pane = PaneFocus::ReqUri
+                    self.focused_pane = PaneFocus::ReqUri;
+                    self.update_focus();
                 }
                 (PaneFocus::ReqUri, None, KeyModifiers::NONE) => {
-                    self.focused_pane = PaneFocus::Editor
+                    self.focused_pane = PaneFocus::Editor;
+                    self.update_focus();
                 }
                 (PaneFocus::Editor, None, KeyModifiers::NONE) => {
-                    self.focused_pane = PaneFocus::Preview
+                    self.focused_pane = PaneFocus::Preview;
+                    self.update_focus();
                 }
                 (PaneFocus::Preview, None, KeyModifiers::NONE) => {
-                    self.focused_pane = PaneFocus::Sidebar
+                    self.focused_pane = PaneFocus::Sidebar;
+                    self.update_focus();
                 }
                 (PaneFocus::Editor, Some(_), KeyModifiers::NONE) => {
-                    self.editor.handle_key_event(key_event)?;
+                    self.request_editor.handle_key_event(key_event)?;
                 }
                 (PaneFocus::Preview, Some(_), _) => {
                     self.handle_preview_key_event(key_event)?;
