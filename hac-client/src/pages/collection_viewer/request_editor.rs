@@ -157,10 +157,6 @@ impl<'re> ReqEditor<'re> {
         self.layout = build_layout(new_size);
     }
 
-    pub fn mode(&self) -> &EditorMode {
-        &self.editor_mode
-    }
-
     fn draw_statusline(&self, buf: &mut Buffer, size: Rect) {
         let cursor_pos = self.cursor.readable_position();
 

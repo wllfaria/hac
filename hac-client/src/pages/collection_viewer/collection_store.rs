@@ -275,3 +275,160 @@ fn find_next_entry(
 
     found.then(|| path.pop()).flatten()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hac_core::collection::types::{Directory, Request, RequestMethod};
+    use std::collections::HashMap;
+
+    fn create_root_one() -> RequestKind {
+        RequestKind::Single(Arc::new(RwLock::new(Request {
+            id: "root".to_string(),
+            method: RequestMethod::Get,
+            name: "Root1".to_string(),
+            uri: "/root1".to_string(),
+            body_type: None,
+            body: None,
+        })))
+    }
+
+    fn create_child_one() -> RequestKind {
+        RequestKind::Single(Arc::new(RwLock::new(Request {
+            id: "child_one".to_string(),
+            method: RequestMethod::Post,
+            name: "Child1".to_string(),
+            uri: "/nested1/child1".to_string(),
+            body_type: None,
+            body: None,
+        })))
+    }
+
+    fn create_child_two() -> RequestKind {
+        RequestKind::Single(Arc::new(RwLock::new(Request {
+            id: "child_two".to_string(),
+            method: RequestMethod::Put,
+            name: "Child2".to_string(),
+            uri: "/nested1/child2".to_string(),
+            body_type: None,
+            body: None,
+        })))
+    }
+
+    fn create_not_used() -> RequestKind {
+        RequestKind::Single(Arc::new(RwLock::new(Request {
+            id: "not_used".to_string(),
+            method: RequestMethod::Put,
+            name: "NotUsed".to_string(),
+            uri: "/not/used".to_string(),
+            body_type: None,
+            body: None,
+        })))
+    }
+
+    fn create_dir() -> Directory {
+        Directory {
+            id: "dir".to_string(),
+            name: "Nested1".to_string(),
+            requests: Arc::new(RwLock::new(vec![create_child_one(), create_child_two()])),
+        }
+    }
+
+    fn create_nested() -> RequestKind {
+        RequestKind::Nested(create_dir())
+    }
+
+    fn create_root_two() -> RequestKind {
+        RequestKind::Single(Arc::new(RwLock::new(Request {
+            id: "root_two".to_string(),
+            method: RequestMethod::Delete,
+            name: "Root2".to_string(),
+            uri: "/root2".to_string(),
+            body_type: None,
+            body: None,
+        })))
+    }
+
+    fn create_test_tree() -> Vec<RequestKind> {
+        vec![create_root_one(), create_nested(), create_root_two()]
+    }
+
+    #[test]
+    fn test_visit_next_no_expanded() {
+        let tree = create_test_tree();
+        let mut dirs_expanded = HashMap::new();
+        dirs_expanded.insert(create_dir().id, false);
+        let needle = create_nested();
+        let expected = create_root_two();
+
+        let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle.get_id());
+
+        assert!(next.is_some());
+        assert_eq!(next.unwrap().get_id(), expected.get_id());
+    }
+
+    #[test]
+    fn test_visit_node_nested_next() {
+        let tree = create_test_tree();
+        let mut dirs_expanded = HashMap::new();
+        dirs_expanded.insert(create_dir().id, true);
+        let needle = create_nested();
+        let expected = create_child_one();
+
+        let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle.get_id());
+
+        assert!(next.is_some());
+        assert_eq!(next.unwrap().get_id(), expected.get_id());
+    }
+
+    #[test]
+    fn test_visit_node_no_match() {
+        let tree = create_test_tree();
+        let mut dirs_expanded = HashMap::new();
+        dirs_expanded.insert(create_dir().id, true);
+        let needle = create_not_used();
+
+        let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle.get_id());
+
+        assert!(next.is_none());
+    }
+
+    #[test]
+    fn test_visit_node_nested_prev() {
+        let tree = create_test_tree();
+        let mut dirs_expanded = HashMap::new();
+        dirs_expanded.insert(create_dir().id, true);
+        let needle = create_child_one();
+        let expected = create_nested();
+
+        let next = find_next_entry(&tree, VisitNode::Prev, &dirs_expanded, &needle.get_id());
+
+        assert!(next.is_some());
+        assert_eq!(next.unwrap().get_id(), expected.get_id());
+    }
+
+    #[test]
+    fn test_visit_prev_into_nested() {
+        let tree = create_test_tree();
+        let mut dirs_expanded = HashMap::new();
+        dirs_expanded.insert(create_dir().id, true);
+        let needle = create_root_two();
+        let expected = create_child_two();
+
+        let next = find_next_entry(&tree, VisitNode::Prev, &dirs_expanded, &needle.get_id());
+
+        assert!(next.is_some());
+        assert_eq!(next.unwrap().get_id(), expected.get_id());
+    }
+
+    #[test]
+    fn test_empty_tree() {
+        let tree = vec![];
+        let dirs_expanded = HashMap::new();
+        let needle = create_root_two();
+
+        let next = find_next_entry(&tree, VisitNode::Next, &dirs_expanded, &needle.get_id());
+
+        assert!(next.is_none());
+    }
+}
