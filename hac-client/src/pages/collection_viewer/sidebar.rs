@@ -1,14 +1,14 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_core::collection::types::{Request, RequestKind, RequestMethod};
 
 use crate::pages::collection_viewer::collection_store::{CollectionStore, CollectionStoreAction};
-use crate::pages::{Eventful, Page};
+use crate::pages::{Eventful, Renderable};
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Rect;
 use ratatui::style::{Style, Styled, Stylize};
 use ratatui::text::{Line, Span};
@@ -17,11 +17,23 @@ use ratatui::Frame;
 
 use super::collection_viewer::PaneFocus;
 
+/// set of events Sidebar can emit to the caller when handling events.
+#[derive(Debug)]
+pub enum SidebarEvent {
+    /// user pressed CreateRequest hotkey, which should notify the caller to open
+    /// the create_request_form and properly handle the creation of a new request
+    CreateRequest,
+    /// user pressed `Esc` so we notify the caller to remove the selection from
+    /// this pane, essentially bubbling the key handling scope to the caller
+    RemoveSelection,
+    /// user pressed a hotkey to quit the application, so we bubble up so the caller
+    /// can do a few things before bubbling the quit request further up
+    Quit,
+}
+
 #[derive(Debug)]
 pub struct Sidebar<'sbar> {
     colors: &'sbar hac_colors::Colors,
-    is_focused: bool,
-    is_selected: bool,
     lines: Vec<Paragraph<'static>>,
     collection_store: Rc<RefCell<CollectionStore>>,
 }
@@ -29,14 +41,10 @@ pub struct Sidebar<'sbar> {
 impl<'sbar> Sidebar<'sbar> {
     pub fn new(
         colors: &'sbar hac_colors::Colors,
-        is_focused: bool,
-        is_selected: bool,
         collection_store: Rc<RefCell<CollectionStore>>,
     ) -> Self {
         let mut sidebar = Self {
             colors,
-            is_focused,
-            is_selected,
             lines: vec![],
             collection_store,
         };
@@ -44,14 +52,6 @@ impl<'sbar> Sidebar<'sbar> {
         sidebar.rebuild_tree_view();
 
         sidebar
-    }
-
-    pub fn maybe_select(&mut self, selected_pane: Option<&PaneFocus>) {
-        self.is_selected = selected_pane.is_some_and(|pane| pane.eq(&PaneFocus::Sidebar));
-    }
-
-    pub fn maybe_focus(&mut self, focused_pane: &PaneFocus) {
-        self.is_focused = focused_pane.eq(&PaneFocus::Sidebar);
     }
 
     pub fn rebuild_tree_view(&mut self) {
@@ -67,11 +67,22 @@ impl<'sbar> Sidebar<'sbar> {
     }
 }
 
-impl<'sbar> Page for Sidebar<'sbar> {
+impl<'sbar> Renderable for Sidebar<'sbar> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
+        let is_focused = self
+            .collection_store
+            .borrow()
+            .get_focused_pane()
+            .eq(&PaneFocus::Sidebar);
+        let is_selected = self
+            .collection_store
+            .borrow()
+            .get_selected_pane()
+            .is_some_and(|pane| pane.eq(&PaneFocus::Sidebar));
+
         let mut requests_size = Rect::new(size.x + 1, size.y, size.width.saturating_sub(2), 1);
 
-        let block_border = match (self.is_focused, self.is_selected) {
+        let block_border = match (is_focused, is_selected) {
             (true, false) => Style::default().fg(self.colors.bright.blue),
             (true, true) => Style::default().fg(self.colors.normal.red),
             (false, _) => Style::default().fg(self.colors.bright.black),
@@ -98,18 +109,17 @@ impl<'sbar> Page for Sidebar<'sbar> {
     fn resize(&mut self, _new_size: Rect) {}
 }
 
-#[derive(Debug)]
-pub enum SidebarEvent {
-    CreateRequest,
-    Quit,
-}
-
 impl<'a> Eventful for Sidebar<'a> {
     type Result = SidebarEvent;
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
+        let is_selected = self
+            .collection_store
+            .borrow()
+            .get_selected_pane()
+            .is_some_and(|pane| pane.eq(&PaneFocus::Sidebar));
         assert!(
-            self.is_selected,
+            is_selected,
             "handled an event to the sidebar while it was not selected"
         );
 
@@ -126,35 +136,26 @@ impl<'a> Eventful for Sidebar<'a> {
                         RequestKind::Nested(_) => {
                             store
                                 .dispatch(CollectionStoreAction::ToggleDirectory(request.get_id()));
-                            drop(store);
-                            self.rebuild_tree_view();
                         }
                         RequestKind::Single(req) => {
                             store.dispatch(CollectionStoreAction::SetSelectedRequest(Some(req)));
-                            drop(store);
-                            self.rebuild_tree_view();
                         }
                     }
                 }
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                if store.get_hovered_request().is_some() && store.get_requests().is_some() {
-                    store.dispatch(CollectionStoreAction::HoverNext);
-                    drop(store);
-                    self.rebuild_tree_view();
-                }
+                store.dispatch(CollectionStoreAction::HoverNext);
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                if store.get_hovered_request().is_some() && store.get_requests().is_some() {
-                    store.dispatch(CollectionStoreAction::HoverPrev);
-                    drop(store);
-                    self.rebuild_tree_view();
-                }
+                store.dispatch(CollectionStoreAction::HoverPrev);
             }
-
             KeyCode::Char('n') => return Ok(Some(SidebarEvent::CreateRequest)),
+            KeyCode::Esc => return Ok(Some(SidebarEvent::RemoveSelection)),
             _ => {}
         }
+
+        drop(store);
+        self.rebuild_tree_view();
 
         Ok(None)
     }

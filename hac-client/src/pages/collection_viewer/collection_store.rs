@@ -1,14 +1,12 @@
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    rc::Rc,
-    sync::{Arc, RwLock},
-};
+use hac_core::collection::types::{Request, RequestKind};
+use hac_core::collection::Collection;
 
-use hac_core::collection::{
-    types::{Request, RequestKind},
-    Collection,
-};
+use crate::pages::collection_viewer::collection_viewer::PaneFocus;
+
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
+use std::sync::{Arc, RwLock};
 
 #[derive(Debug)]
 pub struct CollectionState {
@@ -16,6 +14,9 @@ pub struct CollectionState {
     hovered_request: Option<String>,
     selected_request: Option<Arc<RwLock<Request>>>,
     dirs_expanded: Rc<RefCell<HashMap<String, bool>>>,
+    selected_pane: Option<PaneFocus>,
+    focused_pane: PaneFocus,
+    has_pending_request: bool,
 }
 
 #[derive(Debug, Default)]
@@ -30,6 +31,9 @@ pub enum CollectionStoreAction {
     HoverPrev,
     HoverNext,
     ToggleDirectory(String),
+    SetFocusedPane(PaneFocus),
+    SetSelectedPane(Option<PaneFocus>),
+    SetPendingRequest(bool),
 }
 
 impl CollectionStore {
@@ -54,6 +58,9 @@ impl CollectionStore {
             hovered_request,
             dirs_expanded: Rc::new(RefCell::new(HashMap::default())),
             collection: Rc::new(RefCell::new(collection)),
+            focused_pane: PaneFocus::Sidebar,
+            selected_pane: None,
+            has_pending_request: false,
         };
 
         self.state = Some(Rc::new(RefCell::new(state)));
@@ -79,13 +86,22 @@ impl CollectionStore {
                         .unwrap()
                         .push(request_kind);
                 }
-                CollectionStoreAction::HoverPrev => self.hover_prev(),
-                CollectionStoreAction::HoverNext => self.hover_next(),
+                CollectionStoreAction::HoverPrev => self.maybe_hover_prev(),
+                CollectionStoreAction::HoverNext => self.maybe_hover_next(),
                 CollectionStoreAction::ToggleDirectory(dir_id) => {
                     let state = state.borrow_mut();
                     let mut dirs = state.dirs_expanded.borrow_mut();
                     let entry = dirs.entry(dir_id).or_insert(false);
                     *entry = !*entry;
+                }
+                CollectionStoreAction::SetFocusedPane(pane) => {
+                    state.borrow_mut().focused_pane = pane
+                }
+                CollectionStoreAction::SetSelectedPane(pane) => {
+                    state.borrow_mut().selected_pane = pane
+                }
+                CollectionStoreAction::SetPendingRequest(is_pending) => {
+                    state.borrow_mut().has_pending_request = is_pending;
                 }
             }
         }
@@ -95,6 +111,20 @@ impl CollectionStore {
         self.state
             .as_ref()
             .and_then(|state| state.borrow().selected_request.clone())
+    }
+
+    pub fn get_focused_pane(&self) -> PaneFocus {
+        self.state
+            .as_ref()
+            .map(|state| state.borrow().focused_pane)
+            .expect("tried to get the focused pane without a state")
+    }
+
+    pub fn get_selected_pane(&self) -> Option<PaneFocus> {
+        self.state
+            .as_ref()
+            .map(|state| state.borrow().selected_pane)
+            .expect("tried to get the selected pane without a state")
     }
 
     pub fn get_hovered_request(&self) -> Option<String> {
@@ -127,7 +157,13 @@ impl CollectionStore {
         })
     }
 
-    fn hover_prev(&mut self) {
+    pub fn has_pending_request(&self) -> bool {
+        self.state
+            .as_ref()
+            .is_some_and(|state| state.borrow().has_pending_request)
+    }
+
+    fn maybe_hover_prev(&mut self) {
         if self.get_hovered_request().is_some() && self.get_requests().is_some() {
             let id = self.get_hovered_request().unwrap();
             let requests = self.get_requests().unwrap();
@@ -145,7 +181,7 @@ impl CollectionStore {
         }
     }
 
-    fn hover_next(&mut self) {
+    fn maybe_hover_next(&mut self) {
         if self.get_hovered_request().is_some() && self.get_requests().is_some() {
             let id = self.get_hovered_request().unwrap();
             let requests = self.get_requests().unwrap();

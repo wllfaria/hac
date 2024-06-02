@@ -14,13 +14,13 @@ use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;
 
 /// A `Page` is anything that is a top level page and can be drawn to the screen
-pub trait Page {
+pub trait Renderable {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()>;
 
     /// pages need to adapt to change of sizes on the application, this function is called
     /// by the top level event loop whenever a resize event is produced
     #[allow(unused_variables)]
-    fn resize(&mut self, new_size: Rect);
+    fn resize(&mut self, new_size: Rect) {}
 
     /// register a page to be a command handler, which means this page will now receive
     /// commands from the channel to handle whatever the commands it is interested into
@@ -53,37 +53,6 @@ pub trait Eventful {
     /// when we get a key_event, this will be called for the eventful component to handle it
     #[allow(unused_variables)]
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
-        Ok(None)
-    }
-}
-
-/// An `EventfulWithContext` component is a component that can handle events but requires
-/// additional information which can be specified by its implementer. Such as defining a
-/// associate type required to re-render properly or information that it needs to decide
-/// on how to behave
-///
-/// besides the contextful behavior, this is exactly as `Eventful`
-pub trait EventfulWithContext {
-    type Result;
-    type Context;
-
-    fn handle_event(
-        &mut self,
-        event: Option<Event>,
-        context: Self::Context,
-    ) -> anyhow::Result<Option<Self::Result>> {
-        match event {
-            Some(Event::Key(key_event)) => self.handle_key_event(key_event, context),
-            _ => Ok(None),
-        }
-    }
-
-    #[allow(unused_variables)]
-    fn handle_key_event(
-        &mut self,
-        key_event: KeyEvent,
-        context: Self::Context,
-    ) -> anyhow::Result<Option<Self::Result>> {
         Ok(None)
     }
 }

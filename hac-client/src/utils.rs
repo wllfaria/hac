@@ -1,10 +1,9 @@
+use hac_core::syntax::highlighter::HIGHLIGHTER;
+
 use std::ops::Add;
 
-use hac_core::syntax::highlighter::HIGHLIGHTER;
-use ratatui::{
-    style::Stylize,
-    text::{Line, Span},
-};
+use ratatui::style::Stylize;
+use ratatui::text::{Line, Span};
 use tree_sitter::Tree;
 
 fn is_endline(c: char) -> bool {

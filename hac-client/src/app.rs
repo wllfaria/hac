@@ -1,11 +1,12 @@
-use crate::{
-    event_pool::{Event, EventPool},
-    pages::{Eventful, Page},
-    screen_manager::ScreenManager,
-};
 use hac_core::{collection::Collection, command::Command};
-use ratatui::{backend::CrosstermBackend, Terminal};
+
+use crate::event_pool::{Event, EventPool};
+use crate::pages::{Eventful, Renderable};
+use crate::screen_manager::ScreenManager;
+
 use std::io::Stdout;
+
+use ratatui::{backend::CrosstermBackend, Terminal};
 use tokio::sync::mpsc;
 
 pub struct App<'app> {

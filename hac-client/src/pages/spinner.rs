@@ -1,12 +1,12 @@
-use rand::Rng;
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-    style::Style,
-    text::{Line, Span},
-    widgets::Widget,
-};
 use std::ops::Add;
+
+use rand::Rng;
+
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::text::{Line, Span};
+use ratatui::widgets::Widget;
 
 #[derive(Debug, Clone)]
 pub struct Spinner {

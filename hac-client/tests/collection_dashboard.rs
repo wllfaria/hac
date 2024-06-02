@@ -1,11 +1,12 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use hac_client::pages::{collection_dashboard::CollectionDashboard, Eventful, Page};
 use hac_core::collection;
+
+use hac_client::pages::{collection_dashboard::CollectionDashboard, Eventful, Renderable};
+
+use std::fs::{create_dir, File};
+use std::io::Write;
+
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{backend::TestBackend, layout::Rect, Frame, Terminal};
-use std::{
-    fs::{create_dir, File},
-    io::Write,
-};
 use tempfile::{tempdir, TempDir};
 
 fn setup_temp_collections(amount: usize) -> (TempDir, String) {

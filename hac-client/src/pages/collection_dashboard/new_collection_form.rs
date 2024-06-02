@@ -1,12 +1,12 @@
-use ratatui::{
-    buffer::Buffer,
-    layout::{Constraint, Direction, Flex, Layout, Rect},
-    style::{Style, Stylize},
-    text::Line,
-    widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, StatefulWidget, Widget},
-};
-
 use crate::pages::input::Input;
+
+use ratatui::buffer::Buffer;
+use ratatui::layout::{Constraint, Direction, Flex, Layout, Rect};
+use ratatui::style::{Style, Stylize};
+use ratatui::text::Line;
+use ratatui::widgets::{
+    Block, BorderType, Borders, Clear, Padding, Paragraph, StatefulWidget, Widget,
+};
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub enum FormFocus {

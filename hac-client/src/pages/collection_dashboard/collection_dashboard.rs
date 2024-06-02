@@ -1,24 +1,22 @@
-use crate::pages::{
-    collection_dashboard::{
-        collection_list::{CollectionList, CollectionListState},
-        new_collection_form::{FormFocus, FormState, NewCollectionForm},
-    },
-    confirm_popup::ConfirmPopup,
-    error_popup::ErrorPopup,
-    overlay::draw_overlay,
-    Eventful, Page,
-};
 use hac_core::{collection::types::Collection, command::Command};
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::{
-    layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
-    style::{Style, Stylize},
-    text::Line,
-    widgets::{Block, Clear, Padding, Paragraph, StatefulWidget, Widget, Wrap},
-    Frame,
+use crate::pages::collection_dashboard::collection_list::{CollectionList, CollectionListState};
+use crate::pages::collection_dashboard::new_collection_form::{
+    FormFocus, FormState, NewCollectionForm,
 };
+use crate::pages::confirm_popup::ConfirmPopup;
+use crate::pages::error_popup::ErrorPopup;
+use crate::pages::overlay::draw_overlay;
+use crate::pages::{Eventful, Renderable};
+
 use std::ops::{Add, Div, Not, Sub};
+
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::layout::{Alignment, Constraint, Direction, Flex, Layout, Rect};
+use ratatui::style::{Style, Stylize};
+use ratatui::text::Line;
+use ratatui::widgets::{Block, Clear, Padding, Paragraph, StatefulWidget, Widget, Wrap};
+use ratatui::Frame;
 use tokio::sync::mpsc::UnboundedSender;
 use tui_big_text::{BigText, PixelSize};
 
@@ -520,7 +518,7 @@ impl<'a> CollectionDashboard<'a> {
     }
 }
 
-impl Page for CollectionDashboard<'_> {
+impl Renderable for CollectionDashboard<'_> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         self.draw_background(size, frame);
         self.draw_title(frame)?;

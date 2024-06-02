@@ -1,24 +1,16 @@
-use std::{
-    cell::RefCell,
-    rc::Rc,
-    sync::{Arc, RwLock},
-};
+use hac_core::collection::types::{BodyType, Info, Request, RequestKind, RequestMethod};
+use hac_core::collection::Collection;
+use hac_core::syntax::highlighter::Highlighter;
+
+use hac_client::pages::collection_viewer::{collection_store::CollectionStore, CollectionViewer};
+use hac_client::pages::{Eventful, Renderable};
+use hac_client::utils::build_syntax_highlighted_lines;
+
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::{Arc, RwLock};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
-use hac_client::{
-    pages::{
-        collection_viewer::{collection_store::CollectionStore, CollectionViewer},
-        Eventful, Page,
-    },
-    utils::build_syntax_highlighted_lines,
-};
-use hac_core::{
-    collection::{
-        types::{BodyType, Info, Request, RequestKind, RequestMethod},
-        Collection,
-    },
-    syntax::highlighter::Highlighter,
-};
 use lazy_static::lazy_static;
 use ratatui::{backend::TestBackend, layout::Rect, Terminal};
 use tree_sitter::Tree;

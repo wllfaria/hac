@@ -1,9 +1,7 @@
-use ratatui::{
-    buffer::Buffer,
-    layout::{Constraint, Direction, Flex, Layout, Rect},
-    style::{Style, Stylize},
-    widgets::{Block, Borders, Clear, Padding, Paragraph, Widget, Wrap},
-};
+use ratatui::buffer::Buffer;
+use ratatui::layout::{Constraint, Direction, Flex, Layout, Rect};
+use ratatui::style::{Style, Stylize};
+use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Widget, Wrap};
 
 #[derive(Debug, PartialEq)]
 pub struct ErrorPopupLayout {

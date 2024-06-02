@@ -1,17 +1,14 @@
-use std::{
-    collections::VecDeque,
-    ops::{Add, Div, Mul},
-};
-
 use hac_core::collection::Collection;
-use ratatui::{
-    buffer::Buffer,
-    layout::{Constraint, Direction, Flex, Layout, Rect},
-    style::{Style, Stylize},
-    widgets::{
-        Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
-        StatefulWidget, Widget,
-    },
+
+use std::collections::VecDeque;
+use std::ops::{Add, Div, Mul};
+
+use ratatui::buffer::Buffer;
+use ratatui::layout::{Constraint, Direction, Flex, Layout, Rect};
+use ratatui::style::{Style, Stylize};
+use ratatui::widgets::{
+    Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+    StatefulWidget, Widget,
 };
 
 #[derive(Debug)]

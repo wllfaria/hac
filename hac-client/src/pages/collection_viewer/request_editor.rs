@@ -1,11 +1,11 @@
-use crate::pages::collection_viewer::collection_store::CollectionStore;
-use crate::{pages::Eventful, utils::build_syntax_highlighted_lines};
-
 use hac_config::{Action, EditorMode, KeyAction};
 use hac_core::collection::types::{Request, RequestMethod};
-use hac_core::command::Command;
 use hac_core::syntax::highlighter::HIGHLIGHTER;
 use hac_core::text_object::{cursor::Cursor, TextObject, Write};
+
+use crate::pages::collection_viewer::collection_store::CollectionStore;
+use crate::pages::Renderable;
+use crate::{pages::Eventful, utils::build_syntax_highlighted_lines};
 
 use std::cell::RefCell;
 use std::fmt::Display;
@@ -14,13 +14,25 @@ use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph, Tabs, Widget};
+use ratatui::widgets::{Block, Borders, Paragraph, Tabs};
 use ratatui::Frame;
 use tree_sitter::Tree;
+
+use super::collection_viewer::PaneFocus;
+
+/// set of possible events the edtior can send to the parent
+#[derive(Debug)]
+pub enum RequestEditorEvent {
+    /// user pressed `C-c` hotkey which bubbles a quit event to the parent
+    /// that can handle it accordingly
+    Quit,
+    /// user pressed `Esc` so we bubble a remove selection event for the
+    /// parent to handle
+    RemoveSelection,
+}
 
 #[derive(Debug, Default, Clone)]
 pub enum ReqEditorTabs {
@@ -54,28 +66,15 @@ impl AsRef<ReqEditorTabs> for ReqEditorTabs {
     }
 }
 
-pub struct ReqEditorState {
-    is_focused: bool,
-    is_selected: bool,
-}
-
-impl ReqEditorState {
-    pub fn new(is_focused: bool, is_selected: bool) -> Self {
-        ReqEditorState {
-            is_focused,
-            is_selected,
-        }
-    }
-}
-
 #[derive(Debug)]
-pub struct ReqEditor<'re> {
+pub struct RequestEditor<'re> {
     colors: &'re hac_colors::Colors,
     body: TextObject<Write>,
     tree: Option<Tree>,
     cursor: Cursor,
     styled_display: Vec<Line<'static>>,
     editor_mode: EditorMode,
+    collection_store: Rc<RefCell<CollectionStore>>,
     row_scroll: usize,
     col_scroll: usize,
     layout: ReqEditorLayout,
@@ -91,7 +90,7 @@ pub struct ReqEditor<'re> {
     keymap_buffer: Option<KeyAction>,
 }
 
-impl<'re> ReqEditor<'re> {
+impl<'re> RequestEditor<'re> {
     pub fn new(
         colors: &'re hac_colors::Colors,
         config: &'re hac_config::Config,
@@ -113,6 +112,14 @@ impl<'re> ReqEditor<'re> {
 
         let content = body.to_string();
         let styled_display = build_syntax_highlighted_lines(&content, tree.as_ref(), colors);
+        let curr_tab = collection_store
+            .borrow()
+            .get_selected_request()
+            .as_ref()
+            .map(request_has_no_body)
+            .unwrap_or(false)
+            .then_some(ReqEditorTabs::Headers)
+            .unwrap_or_default();
 
         Self {
             colors,
@@ -125,15 +132,9 @@ impl<'re> ReqEditor<'re> {
             row_scroll: 0,
             col_scroll: 0,
             layout: build_layout(size),
-            curr_tab: collection_store
-                .borrow()
-                .get_selected_request()
-                .as_ref()
-                .map(request_has_no_body)
-                .unwrap_or(false)
-                .then_some(ReqEditorTabs::Headers)
-                .unwrap_or_default(),
+            curr_tab,
             keymap_buffer: None,
+            collection_store,
         }
     }
 
@@ -157,7 +158,7 @@ impl<'re> ReqEditor<'re> {
         self.layout = build_layout(new_size);
     }
 
-    fn draw_statusline(&self, buf: &mut Buffer, size: Rect) {
+    fn draw_statusline(&self, frame: &mut Frame, size: Rect) {
         let cursor_pos = self.cursor.readable_position();
 
         let mut mode = Span::from(format!(" {} ", self.editor_mode));
@@ -203,13 +204,16 @@ impl<'re> ReqEditor<'re> {
             }
         };
 
-        Paragraph::new(Line::from(vec![mode, padding, percentage, cursor])).render(size, buf);
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![mode, padding, percentage, cursor])),
+            size,
+        )
     }
 
-    fn draw_editor(&self, buf: &mut Buffer, size: Rect) {
+    fn draw_editor(&self, frame: &mut Frame, size: Rect) {
         let [request_pane, statusline_pane] = build_preview_layout(size);
 
-        self.draw_statusline(buf, statusline_pane);
+        self.draw_statusline(frame, statusline_pane);
 
         let lines_in_view = self
             .styled_display
@@ -223,12 +227,12 @@ impl<'re> ReqEditor<'re> {
             .map(|line| get_visible_spans(&line, self.col_scroll))
             .collect::<Vec<Line>>();
 
-        Paragraph::new(lines_in_view).render(request_pane, buf);
+        frame.render_widget(Paragraph::new(lines_in_view), request_pane)
     }
 
-    fn draw_current_tab(&self, buf: &mut Buffer, size: Rect) -> anyhow::Result<()> {
+    fn draw_current_tab(&self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         match self.curr_tab {
-            ReqEditorTabs::Body => self.draw_editor(buf, size),
+            ReqEditorTabs::Body => self.draw_editor(frame, size),
             ReqEditorTabs::Headers => {}
             ReqEditorTabs::_Query => {}
             ReqEditorTabs::_Auth => {}
@@ -237,7 +241,7 @@ impl<'re> ReqEditor<'re> {
         Ok(())
     }
 
-    fn draw_tabs(&self, buf: &mut Buffer, size: Rect) {
+    fn draw_tabs(&self, frame: &mut Frame, size: Rect) {
         let tabs = vec!["Body", "Headers", "Query", "Auth"];
         let active = match self.curr_tab {
             ReqEditorTabs::Body => 0,
@@ -246,19 +250,32 @@ impl<'re> ReqEditor<'re> {
             ReqEditorTabs::_Auth => 3,
         };
 
-        Tabs::new(tabs)
-            .style(Style::default().fg(self.colors.bright.black))
-            .select(active)
-            .highlight_style(
-                Style::default()
-                    .fg(self.colors.normal.white)
-                    .bg(self.colors.normal.blue),
-            )
-            .render(size, buf);
+        frame.render_widget(
+            Tabs::new(tabs)
+                .style(Style::default().fg(self.colors.bright.black))
+                .select(active)
+                .highlight_style(
+                    Style::default()
+                        .fg(self.colors.normal.white)
+                        .bg(self.colors.normal.blue),
+                ),
+            size,
+        );
     }
 
-    fn draw_container(&self, size: Rect, buf: &mut Buffer, state: &mut ReqEditorState) {
-        let block_border = match (state.is_focused, state.is_selected) {
+    fn draw_container(&self, size: Rect, frame: &mut Frame) {
+        let is_focused = self
+            .collection_store
+            .borrow()
+            .get_focused_pane()
+            .eq(&PaneFocus::Editor);
+        let is_selected = self
+            .collection_store
+            .borrow()
+            .get_selected_pane()
+            .is_some_and(|pane| pane.eq(&PaneFocus::Editor));
+
+        let block_border = match (is_focused, is_selected) {
             (true, false) => Style::default().fg(self.colors.bright.blue),
             (true, true) => Style::default().fg(self.colors.normal.red),
             (_, _) => Style::default().fg(self.colors.bright.black),
@@ -272,18 +289,11 @@ impl<'re> ReqEditor<'re> {
             ])
             .border_style(block_border);
 
-        block.render(size, buf);
+        frame.render_widget(block, size);
     }
 
     pub fn cursor(&self) -> &Cursor {
         &self.cursor
-    }
-
-    pub fn get_components(&self, size: Rect, frame: &mut Frame, state: &mut ReqEditorState) {
-        self.draw_container(size, frame.buffer_mut(), state);
-        self.draw_tabs(frame.buffer_mut(), self.layout.tabs_pane);
-        self.draw_current_tab(frame.buffer_mut(), self.layout.content_pane)
-            .ok();
     }
 
     fn handle_action(&mut self, action: &Action) {
@@ -644,13 +654,30 @@ impl<'re> ReqEditor<'re> {
     }
 }
 
-impl Eventful for ReqEditor<'_> {
-    type Result = Command;
+impl Renderable for RequestEditor<'_> {
+    fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
+        self.draw_container(size, frame);
+        self.draw_tabs(frame, self.layout.tabs_pane);
+        self.draw_current_tab(frame, self.layout.content_pane)?;
 
-    fn handle_key_event(
-        &mut self,
-        key_event: KeyEvent,
-    ) -> anyhow::Result<Option<hac_core::command::Command>> {
+        Ok(())
+    }
+}
+
+impl Eventful for RequestEditor<'_> {
+    type Result = RequestEditorEvent;
+
+    fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
+        let is_selected = self
+            .collection_store
+            .borrow()
+            .get_selected_pane()
+            .is_some_and(|pane| pane.eq(&PaneFocus::Editor));
+        assert!(
+            is_selected,
+            "sent a key_event to the editor while it was not selected"
+        );
+
         let key_str = keycode_as_string(key_event);
 
         if let Some(buffered_keymap) = self.keymap_buffer.to_owned() {
@@ -679,10 +706,14 @@ impl Eventful for ReqEditor<'_> {
             return Ok(None);
         }
 
+        if let (KeyCode::Esc, EditorMode::Normal) = (key_event.code, &self.editor_mode) {
+            return Ok(Some(RequestEditorEvent::RemoveSelection));
+        }
+
         if let (KeyCode::Char('c'), KeyModifiers::CONTROL, EditorMode::Normal) =
             (key_event.code, key_event.modifiers, &self.editor_mode)
         {
-            return Ok(Some(Command::Quit));
+            return Ok(Some(RequestEditorEvent::Quit));
         };
 
         match self.editor_mode {

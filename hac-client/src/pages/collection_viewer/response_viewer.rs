@@ -1,10 +1,9 @@
-use hac_core::command::Command;
 use hac_core::net::request_manager::Response;
 use hac_core::syntax::highlighter::HIGHLIGHTER;
 
 use crate::ascii::{BIG_ERROR_ARTS, LOGO_ART, SMALL_ERROR_ARTS};
 use crate::pages::collection_viewer::collection_viewer::PaneFocus;
-use crate::pages::{spinner::Spinner, Eventful, Page};
+use crate::pages::{spinner::Spinner, Eventful, Renderable};
 use crate::utils::build_syntax_highlighted_lines;
 
 use std::cell::RefCell;
@@ -12,7 +11,7 @@ use std::iter;
 use std::ops::{Add, Sub};
 use std::rc::Rc;
 
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use rand::Rng;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize};
@@ -23,6 +22,14 @@ use ratatui::widgets::{
 };
 use ratatui::Frame;
 use tree_sitter::Tree;
+
+use super::collection_store::CollectionStore;
+
+#[derive(Debug)]
+pub enum ResponseViewerEvent {
+    RemoveSelection,
+    Quit,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResViewerTabs {
@@ -68,7 +75,7 @@ struct PreviewLayout {
 }
 
 #[derive(Debug, Clone)]
-pub struct ResViewer<'a> {
+pub struct ResponseViewer<'a> {
     colors: &'a hac_colors::Colors,
     response: Option<Rc<RefCell<Response>>>,
     tree: Option<Tree>,
@@ -77,20 +84,20 @@ pub struct ResViewer<'a> {
     empty_lines: Vec<Line<'static>>,
     preview_layout: PreviewLayout,
     layout: ResViewerLayout,
+    collection_store: Rc<RefCell<CollectionStore>>,
 
     active_tab: ResViewerTabs,
     raw_scroll: usize,
     headers_scroll_y: usize,
     headers_scroll_x: usize,
     pretty_scroll: usize,
-    is_focused: bool,
-    is_selected: bool,
     pending_request: bool,
 }
 
-impl<'a> ResViewer<'a> {
+impl<'a> ResponseViewer<'a> {
     pub fn new(
         colors: &'a hac_colors::Colors,
+        collection_store: Rc<RefCell<CollectionStore>>,
         response: Option<Rc<RefCell<Response>>>,
         size: Rect,
     ) -> Self {
@@ -109,7 +116,7 @@ impl<'a> ResViewer<'a> {
 
         let empty_lines = make_empty_ascii_art(colors);
 
-        ResViewer {
+        ResponseViewer {
             colors,
             response,
             tree,
@@ -123,8 +130,7 @@ impl<'a> ResViewer<'a> {
             headers_scroll_y: 0,
             headers_scroll_x: 0,
             pretty_scroll: 0,
-            is_focused: false,
-            is_selected: false,
+            collection_store,
             pending_request: false,
         }
     }
@@ -188,7 +194,18 @@ impl<'a> ResViewer<'a> {
     }
 
     fn draw_container(&self, size: Rect, frame: &mut Frame) {
-        let block_border = match (self.is_focused, self.is_selected) {
+        let is_focused = self
+            .collection_store
+            .borrow()
+            .get_focused_pane()
+            .eq(&PaneFocus::Preview);
+        let is_selected = self
+            .collection_store
+            .borrow()
+            .get_selected_pane()
+            .is_some_and(|pane| pane.eq(&PaneFocus::Preview));
+
+        let block_border = match (is_focused, is_selected) {
             (true, false) => Style::default().fg(self.colors.bright.blue),
             (true, true) => Style::default().fg(self.colors.normal.red),
             (_, _) => Style::default().fg(self.colors.bright.black),
@@ -558,21 +575,9 @@ impl<'a> ResViewer<'a> {
             frame.render_widget(Line::from(pieces), size);
         }
     }
-
-    pub fn maybe_select(&mut self, selected_pane: Option<&PaneFocus>) {
-        self.is_selected = selected_pane.is_some_and(|pane| pane.eq(&PaneFocus::Preview));
-    }
-
-    pub fn maybe_focus(&mut self, focused_pane: &PaneFocus) {
-        self.is_focused = focused_pane.eq(&PaneFocus::Preview);
-    }
-
-    pub fn set_pending_request(&mut self, is_pending: bool) {
-        self.pending_request = is_pending;
-    }
 }
 
-impl<'a> Page for ResViewer<'a> {
+impl<'a> Renderable for ResponseViewer<'a> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         self.draw_tabs(frame, self.layout.tabs_pane);
         self.draw_current_tab(frame, self.layout.content_pane);
@@ -585,10 +590,18 @@ impl<'a> Page for ResViewer<'a> {
     fn resize(&mut self, _new_size: Rect) {}
 }
 
-impl<'a> Eventful for ResViewer<'a> {
-    type Result = Command;
+impl<'a> Eventful for ResponseViewer<'a> {
+    type Result = ResponseViewerEvent;
 
-    fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
+    fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
+        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            return Ok(Some(ResponseViewerEvent::Quit));
+        }
+
+        if let KeyCode::Esc = key_event.code {
+            return Ok(Some(ResponseViewerEvent::RemoveSelection));
+        }
+
         if let KeyCode::Tab = key_event.code {
             self.active_tab = ResViewerTabs::next(&self.active_tab);
         }

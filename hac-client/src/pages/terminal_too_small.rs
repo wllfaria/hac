@@ -1,11 +1,10 @@
-use crate::pages::Page;
-use ratatui::{
-    layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
-    style::Stylize,
-    text::Line,
-    widgets::{Paragraph, Wrap},
-    Frame,
-};
+use crate::pages::Renderable;
+
+use ratatui::layout::{Alignment, Constraint, Direction, Flex, Layout, Rect};
+use ratatui::style::Stylize;
+use ratatui::text::Line;
+use ratatui::widgets::{Paragraph, Wrap};
+use ratatui::Frame;
 
 /// `TerminalTooSmall` as the name suggests is a screen rendered by the
 /// `screen_manager` when the terminal gets smaller than a certain threshold,
@@ -21,7 +20,7 @@ impl<'a> TerminalTooSmall<'a> {
     }
 }
 
-impl Page for TerminalTooSmall<'_> {
+impl Renderable for TerminalTooSmall<'_> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         let layout = build_layout(size);
 

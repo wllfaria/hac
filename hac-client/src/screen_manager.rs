@@ -1,12 +1,13 @@
-use std::{cell::RefCell, rc::Rc};
+use hac_core::{collection::Collection, command::Command};
 
 use crate::event_pool::Event;
 use crate::pages::collection_dashboard::CollectionDashboard;
 use crate::pages::collection_viewer::collection_store::CollectionStore;
 use crate::pages::collection_viewer::CollectionViewer;
 use crate::pages::terminal_too_small::TerminalTooSmall;
-use crate::pages::{Eventful, Page};
-use hac_core::{collection::Collection, command::Command};
+use crate::pages::{Eventful, Renderable};
+
+use std::{cell::RefCell, rc::Rc};
 
 use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;
@@ -112,7 +113,7 @@ impl<'sm> ScreenManager<'sm> {
     }
 }
 
-impl Page for ScreenManager<'_> {
+impl Renderable for ScreenManager<'_> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         match (size.width < 80, size.height < 22) {
             (true, _) => self.switch_screen(Screens::TerminalTooSmall),

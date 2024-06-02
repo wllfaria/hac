@@ -1,9 +1,7 @@
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-    style::Style,
-    widgets::{Block, Borders, Paragraph, StatefulWidget, Widget},
-};
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::widgets::{Block, Borders, Paragraph, StatefulWidget, Widget};
 
 /// input component used in forms and everywhere else that the user can
 /// input text to a single, named field

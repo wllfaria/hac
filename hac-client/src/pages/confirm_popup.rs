@@ -1,10 +1,8 @@
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-    style::{Style, Stylize},
-    text::Line,
-    widgets::{Block, Borders, Clear, Padding, Paragraph, Widget, Wrap},
-};
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::style::{Style, Stylize};
+use ratatui::text::Line;
+use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Widget, Wrap};
 
 pub struct ConfirmPopup<'a> {
     message: String,
