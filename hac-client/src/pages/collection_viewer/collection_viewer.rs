@@ -536,6 +536,7 @@ impl<'cv> CollectionViewer<'cv> {
             CreateReqKind::Request => RequestKind::Single(Arc::new(RwLock::new(Request {
                 id: uuid::Uuid::new_v4().to_string(),
                 name: form_state.req_name.clone(),
+                headers: None,
                 method: form_state.method.clone(),
                 uri: String::default(),
                 body: None,

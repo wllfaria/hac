@@ -1,8 +1,6 @@
-use std::{
-    hash::Hash,
-    path::PathBuf,
-    sync::{Arc, RwLock},
-};
+use std::hash::Hash;
+use std::path::PathBuf;
+use std::sync::{Arc, RwLock};
 
 use serde::{Deserialize, Serialize};
 
@@ -89,15 +87,22 @@ impl RequestMethod {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Request {
     pub id: String,
     pub method: RequestMethod,
     pub name: String,
     pub uri: String,
+    pub headers: Option<Vec<HeaderMap>>,
     pub body: Option<String>,
     #[serde(rename = "bodyType")]
     pub body_type: Option<BodyType>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct HeaderMap {
+    pub pair: (String, String),
+    pub enabled: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]

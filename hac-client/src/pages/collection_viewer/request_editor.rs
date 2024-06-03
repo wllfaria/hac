@@ -1,10 +1,13 @@
-#[allow(clippy::module_inception)]
+mod auth_editor;
 mod body_editor;
+mod headers_editor;
 
+use auth_editor::AuthEditor;
 use body_editor::{BodyEditor, BodyEditorEvent};
 use hac_config::EditorMode;
 use hac_core::collection::types::{Request, RequestMethod};
 use hac_core::text_object::{TextObject, Write};
+use headers_editor::{HeadersEditor, HeadersEditorEvent};
 
 use crate::pages::collection_viewer::collection_store::CollectionStore;
 use crate::pages::under_construction::UnderConstruction;
@@ -93,6 +96,8 @@ pub struct RequestEditor<'re> {
     colors: &'re hac_colors::Colors,
     collection_store: Rc<RefCell<CollectionStore>>,
     body_editor: BodyEditor<'re>,
+    headers_editor: HeadersEditor<'re>,
+    auth_editor: AuthEditor<'re>,
 
     layout: ReqEditorLayout,
     curr_tab: ReqEditorTabs,
@@ -124,6 +129,8 @@ impl<'re> RequestEditor<'re> {
                 collection_store.clone(),
                 layout.content_pane,
             ),
+            headers_editor: HeadersEditor::new(colors, collection_store.clone()),
+            auth_editor: AuthEditor::new(colors),
             layout,
             curr_tab,
             collection_store,
@@ -148,9 +155,9 @@ impl<'re> RequestEditor<'re> {
     fn draw_current_tab(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         match self.curr_tab {
             ReqEditorTabs::Body => self.body_editor.draw(frame, size)?,
-            ReqEditorTabs::Headers => UnderConstruction::new(self.colors).draw(frame, size)?,
+            ReqEditorTabs::Headers => self.headers_editor.draw(frame, size)?,
             ReqEditorTabs::Query => UnderConstruction::new(self.colors).draw(frame, size)?,
-            ReqEditorTabs::Auth => UnderConstruction::new(self.colors).draw(frame, size)?,
+            ReqEditorTabs::Auth => self.auth_editor.draw(frame, size)?,
         }
 
         Ok(())
@@ -179,14 +186,9 @@ impl<'re> RequestEditor<'re> {
     }
 
     fn draw_container(&self, size: Rect, frame: &mut Frame) {
-        let is_focused = self
-            .collection_store
-            .borrow()
-            .get_focused_pane()
-            .eq(&PaneFocus::Editor);
-        let is_selected = self
-            .collection_store
-            .borrow()
+        let store = self.collection_store.borrow();
+        let is_focused = store.get_focused_pane().eq(&PaneFocus::Editor);
+        let is_selected = store
             .get_selected_pane()
             .is_some_and(|pane| pane.eq(&PaneFocus::Editor));
 
@@ -256,9 +258,15 @@ impl Eventful for RequestEditor<'_> {
                 Some(BodyEditorEvent::Quit) => return Ok(Some(RequestEditorEvent::Quit)),
                 None => {}
             },
-            ReqEditorTabs::Headers => {}
+            ReqEditorTabs::Headers => match self.headers_editor.handle_key_event(key_event)? {
+                Some(HeadersEditorEvent::Quit) => return Ok(Some(RequestEditorEvent::Quit)),
+                None => {}
+            },
             ReqEditorTabs::Query => {}
-            ReqEditorTabs::Auth => {}
+            ReqEditorTabs::Auth => match self.auth_editor.handle_key_event(key_event)? {
+                Some(_) => todo!(),
+                None => {}
+            },
         }
 
         Ok(None)
