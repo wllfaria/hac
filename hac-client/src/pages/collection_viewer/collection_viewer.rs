@@ -691,29 +691,7 @@ impl Renderable for CollectionViewer<'_> {
             .as_ref()
             .is_some_and(|pane| pane.eq(&PaneFocus::Editor))
         {
-            // the editor status bar occupies 1 row, so we have to subtract it to prevent the
-            // cursor from going out of the intended spacing, we also subtract the bottom border.
-            let mut editor_position = self.request_editor.layout().content_pane;
-            let statusbar_size = 1;
-            let border_size = 1;
-            editor_position.height = editor_position.height.sub(statusbar_size).sub(border_size);
-
-            let cursor = self.request_editor.cursor();
-            let row_with_offset = u16::min(
-                editor_position
-                    .y
-                    .add(cursor.row_with_offset() as u16)
-                    .saturating_sub(self.request_editor.row_scroll() as u16),
-                editor_position.y.add(editor_position.height),
-            );
-            let col_with_offset = u16::min(
-                editor_position
-                    .x
-                    .add(cursor.col_with_offset() as u16)
-                    .saturating_sub(self.request_editor.col_scroll() as u16),
-                editor_position.x.add(editor_position.width),
-            );
-            frame.set_cursor(col_with_offset, row_with_offset);
+            self.request_editor.maybe_draw_cursor(frame);
         }
 
         if self

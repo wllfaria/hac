@@ -3,6 +3,7 @@ use hac_core::syntax::highlighter::HIGHLIGHTER;
 
 use crate::ascii::{BIG_ERROR_ARTS, LOGO_ART, SMALL_ERROR_ARTS};
 use crate::pages::collection_viewer::collection_viewer::PaneFocus;
+use crate::pages::under_construction::UnderConstruction;
 use crate::pages::{spinner::Spinner, Eventful, Renderable};
 use crate::utils::build_syntax_highlighted_lines;
 
@@ -48,6 +49,15 @@ impl ResViewerTabs {
             Self::Cookies => ResViewerTabs::Preview,
         }
     }
+
+    pub fn prev(tab: &ResViewerTabs) -> Self {
+        match tab {
+            Self::Preview => ResViewerTabs::Cookies,
+            Self::Raw => ResViewerTabs::Preview,
+            Self::Headers => ResViewerTabs::Raw,
+            Self::Cookies => ResViewerTabs::Headers,
+        }
+    }
 }
 
 impl From<ResViewerTabs> for usize {
@@ -91,7 +101,6 @@ pub struct ResponseViewer<'a> {
     headers_scroll_y: usize,
     headers_scroll_x: usize,
     pretty_scroll: usize,
-    pending_request: bool,
 }
 
 impl<'a> ResponseViewer<'a> {
@@ -131,7 +140,6 @@ impl<'a> ResponseViewer<'a> {
             headers_scroll_x: 0,
             pretty_scroll: 0,
             collection_store,
-            pending_request: false,
         }
     }
 
@@ -308,7 +316,7 @@ impl<'a> ResponseViewer<'a> {
         )
     }
 
-    fn draw_current_tab(&mut self, frame: &mut Frame, size: Rect) {
+    fn draw_current_tab(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         if self
             .response
             .as_ref()
@@ -330,13 +338,15 @@ impl<'a> ResponseViewer<'a> {
                 ResViewerTabs::Preview => self.draw_pretty_response(frame, size),
                 ResViewerTabs::Raw => self.draw_raw_response(frame, size),
                 ResViewerTabs::Headers => self.draw_response_headers(frame),
-                ResViewerTabs::Cookies => {}
+                ResViewerTabs::Cookies => UnderConstruction::new(self.colors).draw(frame, size)?,
             }
         }
 
-        if self.pending_request {
+        if self.collection_store.borrow().has_pending_request() {
             self.draw_spinner(frame);
         }
+
+        Ok(())
     }
 
     fn draw_response_headers(&mut self, frame: &mut Frame) {
@@ -580,7 +590,7 @@ impl<'a> ResponseViewer<'a> {
 impl<'a> Renderable for ResponseViewer<'a> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         self.draw_tabs(frame, self.layout.tabs_pane);
-        self.draw_current_tab(frame, self.layout.content_pane);
+        self.draw_current_tab(frame, self.layout.content_pane)?;
         self.draw_summary(frame, self.layout.summary_pane);
         self.draw_container(size, frame);
 
@@ -604,6 +614,10 @@ impl<'a> Eventful for ResponseViewer<'a> {
 
         if let KeyCode::Tab = key_event.code {
             self.active_tab = ResViewerTabs::next(&self.active_tab);
+        }
+
+        if let KeyCode::BackTab = key_event.code {
+            self.active_tab = ResViewerTabs::prev(&self.active_tab);
         }
 
         match key_event.code {

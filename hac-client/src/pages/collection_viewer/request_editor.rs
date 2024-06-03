@@ -4,6 +4,7 @@ use hac_core::syntax::highlighter::HIGHLIGHTER;
 use hac_core::text_object::{cursor::Cursor, TextObject, Write};
 
 use crate::pages::collection_viewer::collection_store::CollectionStore;
+use crate::pages::under_construction::UnderConstruction;
 use crate::pages::Renderable;
 use crate::{pages::Eventful, utils::build_syntax_highlighted_lines};
 
@@ -34,13 +35,33 @@ pub enum RequestEditorEvent {
     RemoveSelection,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub enum ReqEditorTabs {
     #[default]
     Body,
     Headers,
-    _Query,
-    _Auth,
+    Query,
+    Auth,
+}
+
+impl ReqEditorTabs {
+    pub fn prev(&self) -> Self {
+        match self {
+            ReqEditorTabs::Body => ReqEditorTabs::Auth,
+            ReqEditorTabs::Headers => ReqEditorTabs::Body,
+            ReqEditorTabs::Query => ReqEditorTabs::Headers,
+            ReqEditorTabs::Auth => ReqEditorTabs::Query,
+        }
+    }
+
+    pub fn next(&self) -> Self {
+        match self {
+            ReqEditorTabs::Body => ReqEditorTabs::Headers,
+            ReqEditorTabs::Headers => ReqEditorTabs::Query,
+            ReqEditorTabs::Query => ReqEditorTabs::Auth,
+            ReqEditorTabs::Auth => ReqEditorTabs::Body,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -54,8 +75,8 @@ impl Display for ReqEditorTabs {
         match self {
             ReqEditorTabs::Body => f.write_str("Request"),
             ReqEditorTabs::Headers => f.write_str("Headers"),
-            ReqEditorTabs::_Query => f.write_str("Query"),
-            ReqEditorTabs::_Auth => f.write_str("Auth"),
+            ReqEditorTabs::Query => f.write_str("Query"),
+            ReqEditorTabs::Auth => f.write_str("Auth"),
         }
     }
 }
@@ -138,20 +159,37 @@ impl<'re> RequestEditor<'re> {
         }
     }
 
+    pub fn maybe_draw_cursor(&self, frame: &mut Frame) {
+        if self.curr_tab.ne(&ReqEditorTabs::Body) {
+            return;
+        }
+
+        // the editor status bar occupies 1 row, so we have to subtract it to prevent the
+        // cursor from going out of the intended spacing, we also subtract the bottom border.
+        let mut editor_position = self.layout.content_pane;
+        let statusbar_size = 1;
+        let border_size = 1;
+        editor_position.height = editor_position.height.sub(statusbar_size).sub(border_size);
+
+        let row_with_offset = u16::min(
+            editor_position
+                .y
+                .add(self.cursor.row_with_offset() as u16)
+                .saturating_sub(self.row_scroll as u16),
+            editor_position.y.add(editor_position.height),
+        );
+        let col_with_offset = u16::min(
+            editor_position
+                .x
+                .add(self.cursor.col_with_offset() as u16)
+                .saturating_sub(self.col_scroll as u16),
+            editor_position.x.add(editor_position.width),
+        );
+        frame.set_cursor(col_with_offset, row_with_offset);
+    }
+
     pub fn body(&self) -> &TextObject<Write> {
         &self.body
-    }
-
-    pub fn layout(&self) -> &ReqEditorLayout {
-        &self.layout
-    }
-
-    pub fn row_scroll(&self) -> usize {
-        self.row_scroll
-    }
-
-    pub fn col_scroll(&self) -> usize {
-        self.col_scroll
     }
 
     pub fn resize(&mut self, new_size: Rect) {
@@ -233,9 +271,9 @@ impl<'re> RequestEditor<'re> {
     fn draw_current_tab(&self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         match self.curr_tab {
             ReqEditorTabs::Body => self.draw_editor(frame, size),
-            ReqEditorTabs::Headers => {}
-            ReqEditorTabs::_Query => {}
-            ReqEditorTabs::_Auth => {}
+            ReqEditorTabs::Headers => UnderConstruction::new(self.colors).draw(frame, size)?,
+            ReqEditorTabs::Query => UnderConstruction::new(self.colors).draw(frame, size)?,
+            ReqEditorTabs::Auth => UnderConstruction::new(self.colors).draw(frame, size)?,
         }
 
         Ok(())
@@ -246,8 +284,8 @@ impl<'re> RequestEditor<'re> {
         let active = match self.curr_tab {
             ReqEditorTabs::Body => 0,
             ReqEditorTabs::Headers => 1,
-            ReqEditorTabs::_Query => 2,
-            ReqEditorTabs::_Auth => 3,
+            ReqEditorTabs::Query => 2,
+            ReqEditorTabs::Auth => 3,
         };
 
         frame.render_widget(
@@ -290,10 +328,6 @@ impl<'re> RequestEditor<'re> {
             .border_style(block_border);
 
         frame.render_widget(block, size);
-    }
-
-    pub fn cursor(&self) -> &Cursor {
-        &self.cursor
     }
 
     fn handle_action(&mut self, action: &Action) {
@@ -708,6 +742,14 @@ impl Eventful for RequestEditor<'_> {
 
         if let (KeyCode::Esc, EditorMode::Normal) = (key_event.code, &self.editor_mode) {
             return Ok(Some(RequestEditorEvent::RemoveSelection));
+        }
+
+        if let (KeyCode::Tab, EditorMode::Normal) = (key_event.code, &self.editor_mode) {
+            self.curr_tab = self.curr_tab.next();
+        }
+
+        if let (KeyCode::BackTab, EditorMode::Normal) = (key_event.code, &self.editor_mode) {
+            self.curr_tab = self.curr_tab.prev();
         }
 
         if let (KeyCode::Char('c'), KeyModifiers::CONTROL, EditorMode::Normal) =

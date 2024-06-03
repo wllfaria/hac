@@ -6,6 +6,7 @@ pub mod input;
 mod overlay;
 mod spinner;
 pub mod terminal_too_small;
+mod under_construction;
 
 use crate::event_pool::Event;
 use crossterm::event::KeyEvent;
