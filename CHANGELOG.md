@@ -1,12 +1,34 @@
 # Changelog
 
-## [0.1.0] - 2024-05-29
+## [0.1.1] - 2024-06-03
 
 ### Bug Fixes
 
-- Reimplementing horizontal scroll
-- Fixing broken tests
-- Correctly importing actions
+- Re-enabling tab switching on editor
+
+### Miscellaneous Tasks
+
+- Packaging hac as nix flake
+- Adding how to try with nix to readme
+
+### Refactor
+
+- Moving response viewer logic to its module
+- Creating a store to hold collection state
+- Centralizing state management
+
+### Testing
+
+- Testing collection store
+
+### Wip
+
+- Fixing bugs and migrating logic
+
+## [0.1.0] - 2024-05-30
+
+### Bug Fixes
+
 - Weird coloring of status bar
 - Fixing delete backwards
 - Fixing broken tests for tree traversal
@@ -15,12 +37,6 @@
 
 ### Features
 
-- Starting to implement form to create request
-- Initial creation of new requests on schema
-- Selection of methods of requests
-- Creating new requests
-- Scope aware newlines
-- Adding scope aware newline above
 - Synchronization of requests to file system
 - Properly syncing and allowing further edits
 - Adding better comments througout the app
@@ -48,6 +64,7 @@
 - Setting up publishing to crates.io
 - Setting packages metadata
 - Renaming tui to client for publishing
+- Release hac v0.1.0
 
 ### Refactor
 
