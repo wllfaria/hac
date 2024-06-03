@@ -17,10 +17,8 @@ use rand::Rng;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{
-    Block, Borders, Clear, Padding, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
-    Tabs,
-};
+use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Scrollbar};
+use ratatui::widgets::{ScrollbarOrientation, ScrollbarState, Tabs};
 use ratatui::Frame;
 use tree_sitter::Tree;
 
