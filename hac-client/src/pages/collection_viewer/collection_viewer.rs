@@ -39,11 +39,13 @@ pub struct ExplorerLayout {
     pub create_req_form: Rect,
 }
 
-#[derive(Debug, PartialEq)]
-pub enum Overlays {
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum CollectionViewerOverlay {
     None,
     CreateRequest,
     RequestMethod,
+    HeadersHelp,
+    HeadersDelete,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -145,7 +147,6 @@ pub struct CollectionViewer<'cv> {
     collection_sync_timer: std::time::Instant,
     collection_store: Rc<RefCell<CollectionStore>>,
 
-    curr_overlay: Overlays,
     create_req_form_state: CreateReqFormState,
 
     responses_map: HashMap<String, Rc<RefCell<Response>>>,
@@ -188,7 +189,6 @@ impl<'cv> CollectionViewer<'cv> {
             global_command_sender: None,
             collection_sync_timer: std::time::Instant::now(),
 
-            curr_overlay: Overlays::None,
             create_req_form_state: CreateReqFormState::default(),
 
             responses_map: HashMap::default(),
@@ -430,7 +430,7 @@ impl<'cv> CollectionViewer<'cv> {
             }
             (KeyCode::Enter, _, FormFocus::CancelButton) | (KeyCode::Esc, _, _) => {
                 self.create_req_form_state = CreateReqFormState::default();
-                self.curr_overlay = Overlays::None;
+                self.collection_store.borrow_mut().clear_overlay();
             }
             _ => {}
         }
@@ -451,7 +451,7 @@ impl<'cv> CollectionViewer<'cv> {
             }
             (KeyCode::Esc, _) => {
                 self.create_req_form_state = CreateReqFormState::default();
-                self.curr_overlay = Overlays::None;
+                self.collection_store.borrow_mut().clear_overlay();
             }
             _ => {}
         }
@@ -525,7 +525,9 @@ impl<'cv> CollectionViewer<'cv> {
     fn create_or_ask_for_request_method(&mut self) {
         let form_state = &self.create_req_form_state;
         if form_state.req_kind.eq(&CreateReqKind::Request) {
-            self.curr_overlay = Overlays::RequestMethod;
+            self.collection_store
+                .borrow_mut()
+                .push_overlay(CollectionViewerOverlay::RequestMethod);
             return;
         }
         self.create_and_sync_request();
@@ -564,7 +566,7 @@ impl<'cv> CollectionViewer<'cv> {
 
         self.sidebar.rebuild_tree_view();
         self.create_req_form_state = CreateReqFormState::default();
-        self.curr_overlay = Overlays::None;
+        self.collection_store.borrow_mut().clear_overlay();
 
         // TODO: maybe the collection store should be responsible for syncing to disk
         self.sync_collection_changes();
@@ -671,10 +673,13 @@ impl Renderable for CollectionViewer<'_> {
         self.request_editor.draw(frame, self.layout.req_editor)?;
         self.request_uri.draw(frame, self.layout.req_uri)?;
 
-        match self.curr_overlay {
-            Overlays::CreateRequest => self.draw_create_request_form(frame),
-            Overlays::RequestMethod => self.draw_request_method_form(frame),
-            Overlays::None => {}
+        let overlay = self.collection_store.borrow().peek_overlay();
+        match overlay {
+            CollectionViewerOverlay::CreateRequest => self.draw_create_request_form(frame),
+            CollectionViewerOverlay::RequestMethod => self.draw_request_method_form(frame),
+            CollectionViewerOverlay::HeadersHelp => self.request_editor.draw_overlay(frame)?,
+            CollectionViewerOverlay::HeadersDelete => self.request_editor.draw_overlay(frame)?,
+            CollectionViewerOverlay::None => {}
         }
 
         if self
@@ -738,16 +743,6 @@ impl Eventful for CollectionViewer<'_> {
     type Result = Command;
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
-        if self.curr_overlay.ne(&Overlays::None) {
-            match self.curr_overlay {
-                Overlays::CreateRequest => return self.handle_create_request_key_event(key_event),
-                Overlays::RequestMethod => return self.handle_request_method_key_event(key_event),
-                _ => {}
-            };
-
-            return Ok(None);
-        }
-
         if let (
             None,
             KeyEvent {
@@ -802,7 +797,9 @@ impl Eventful for CollectionViewer<'_> {
             match curr_pane {
                 PaneFocus::Sidebar => match self.sidebar.handle_key_event(key_event)? {
                     Some(SidebarEvent::CreateRequest) => {
-                        self.curr_overlay = Overlays::CreateRequest
+                        self.collection_store
+                            .borrow_mut()
+                            .push_overlay(CollectionViewerOverlay::CreateRequest);
                     }
                     Some(SidebarEvent::RemoveSelection) => self.update_selection(None),
                     Some(SidebarEvent::Quit) => return Ok(Some(Command::Quit)),

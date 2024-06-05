@@ -1,13 +1,11 @@
-use crate::{
-    collection::types::{BodyType, Request},
-    net::request_strategies::{http_strategy::HttpResponse, RequestStrategy},
-    text_object::{Readonly, TextObject},
-};
+use crate::collection::types::{BodyType, Request};
+use crate::net::request_strategies::{http_strategy::HttpResponse, RequestStrategy};
+use crate::text_object::{Readonly, TextObject};
+
+use std::sync::{Arc, RwLock};
+use std::time::Duration;
+
 use reqwest::header::{HeaderMap, HeaderValue};
-use std::{
-    sync::{Arc, RwLock},
-    time::Duration,
-};
 use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Debug, PartialEq)]

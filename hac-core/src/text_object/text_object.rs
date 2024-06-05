@@ -1,9 +1,8 @@
-use std::{
-    collections::HashMap,
-    ops::{Add, Sub},
-};
-
 use crate::{syntax::highlighter::Highlighter, text_object::cursor::Cursor};
+
+use std::collections::HashMap;
+use std::ops::{Add, Sub};
+
 use ropey::Rope;
 use tree_sitter::Tree;
 

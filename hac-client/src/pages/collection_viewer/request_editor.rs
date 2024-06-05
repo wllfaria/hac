@@ -1,6 +1,7 @@
 mod auth_editor;
 mod body_editor;
 mod headers_editor;
+mod headers_editor_delete_prompt;
 
 use auth_editor::AuthEditor;
 use body_editor::{BodyEditor, BodyEditorEvent};
@@ -216,6 +217,15 @@ impl<'re> RequestEditor<'re> {
 
         frame.render_widget(block, size);
     }
+
+    pub fn draw_overlay(&mut self, frame: &mut Frame) -> anyhow::Result<()> {
+        match self.curr_tab {
+            ReqEditorTabs::Body => todo!(),
+            ReqEditorTabs::Headers => self.headers_editor.draw_overlay(frame),
+            ReqEditorTabs::Query => todo!(),
+            ReqEditorTabs::Auth => todo!(),
+        }
+    }
 }
 
 impl Renderable for RequestEditor<'_> {
@@ -241,6 +251,11 @@ impl Eventful for RequestEditor<'_> {
         );
 
         if let KeyCode::Tab = key_event.code {
+            let mut store = self.collection_store.borrow_mut();
+            if store.has_overlay() {
+                store.pop_overlay();
+                return Ok(None);
+            }
             if self.curr_tab.eq(&ReqEditorTabs::Body)
                 && self.body_editor.mode().eq(&EditorMode::Insert)
             {
@@ -250,6 +265,11 @@ impl Eventful for RequestEditor<'_> {
         }
 
         if let KeyCode::BackTab = key_event.code {
+            let mut store = self.collection_store.borrow_mut();
+            if store.has_overlay() {
+                store.pop_overlay();
+                return Ok(None);
+            }
             if self.curr_tab.eq(&ReqEditorTabs::Body)
                 && self.body_editor.mode().eq(&EditorMode::Insert)
             {

@@ -1,7 +1,7 @@
 use hac_core::net::request_manager::Response;
 use hac_core::syntax::highlighter::HIGHLIGHTER;
 
-use crate::ascii::{BIG_ERROR_ARTS, LOGO_ART, SMALL_ERROR_ARTS};
+use crate::ascii::{BIG_ERROR_ARTS, LOGO_ASCII, SMALL_ERROR_ARTS};
 use crate::pages::collection_viewer::collection_viewer::PaneFocus;
 use crate::pages::under_construction::UnderConstruction;
 use crate::pages::{spinner::Spinner, Eventful, Renderable};
@@ -731,7 +731,7 @@ where
 }
 
 fn make_empty_ascii_art(colors: &hac_colors::Colors) -> Vec<Line<'static>> {
-    LOGO_ART
+    LOGO_ASCII[0]
         .iter()
         .map(|line| line.to_string().into())
         .chain(vec![

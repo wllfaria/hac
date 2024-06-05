@@ -1,8 +1,7 @@
 use crate::collection::types::{Collection, Info};
-use std::{
-    path::Path,
-    time::{self, UNIX_EPOCH},
-};
+
+use std::path::Path;
+use std::time::{self, UNIX_EPOCH};
 
 #[tracing::instrument(err)]
 pub fn get_collections_from_config() -> anyhow::Result<Vec<Collection>> {

@@ -1,7 +1,6 @@
-use crate::{
-    collection::{collection::create_from_form, Collection},
-    fs::error::FsError,
-};
+use crate::collection::{collection::create_from_form, Collection};
+use crate::fs::error::FsError;
+
 use std::path::PathBuf;
 
 #[tracing::instrument(err)]

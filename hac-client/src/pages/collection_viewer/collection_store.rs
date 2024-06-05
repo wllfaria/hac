@@ -1,6 +1,7 @@
 use hac_core::collection::types::{Request, RequestKind};
 use hac_core::collection::Collection;
 
+use crate::pages::collection_viewer::collection_viewer::CollectionViewerOverlay;
 use crate::pages::collection_viewer::collection_viewer::PaneFocus;
 
 use std::cell::RefCell;
@@ -17,6 +18,7 @@ pub struct CollectionState {
     selected_pane: Option<PaneFocus>,
     focused_pane: PaneFocus,
     has_pending_request: bool,
+    overlay_stack: Vec<CollectionViewerOverlay>,
 }
 
 #[derive(Debug, Default)]
@@ -61,6 +63,7 @@ impl CollectionStore {
             focused_pane: PaneFocus::Sidebar,
             selected_pane: None,
             has_pending_request: false,
+            overlay_stack: vec![],
         };
 
         self.state = Some(Rc::new(RefCell::new(state)));
@@ -143,6 +146,38 @@ impl CollectionStore {
         self.state
             .as_mut()
             .map(|state| state.borrow().dirs_expanded.clone())
+    }
+
+    pub fn push_overlay(&mut self, overlay: CollectionViewerOverlay) {
+        if let Some(state) = self.state.as_mut() {
+            state.borrow_mut().overlay_stack.push(overlay)
+        }
+    }
+
+    pub fn pop_overlay(&mut self) -> Option<CollectionViewerOverlay> {
+        self.state
+            .as_mut()
+            .and_then(|state| state.borrow_mut().overlay_stack.pop())
+    }
+
+    pub fn peek_overlay(&self) -> CollectionViewerOverlay {
+        self.state
+            .as_ref()
+            .and_then(|state| state.borrow().overlay_stack.last().cloned())
+            .unwrap_or(CollectionViewerOverlay::None)
+    }
+
+    pub fn has_overlay(&self) -> bool {
+        self.state
+            .as_ref()
+            .map(|state| !state.borrow().overlay_stack.is_empty())
+            .unwrap_or(false)
+    }
+
+    pub fn clear_overlay(&mut self) {
+        if let Some(state) = self.state.as_mut() {
+            state.borrow_mut().overlay_stack.clear()
+        }
     }
 
     pub fn get_requests(&self) -> Option<Arc<RwLock<Vec<RequestKind>>>> {

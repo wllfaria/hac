@@ -1,11 +1,7 @@
-use crate::{
-    collection::types::{Request, RequestMethod},
-    net::{
-        request_manager::Response,
-        request_strategies::RequestStrategy,
-        response_decoders::{decoder_from_headers, ResponseDecoder},
-    },
-};
+use crate::collection::types::{Request, RequestMethod};
+use crate::net::request_manager::Response;
+use crate::net::request_strategies::RequestStrategy;
+use crate::net::response_decoders::{decoder_from_headers, ResponseDecoder};
 
 pub struct HttpResponse;
 

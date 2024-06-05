@@ -1,12 +1,9 @@
+use std::collections::{HashMap, VecDeque};
+use std::fmt::Debug;
+use std::sync::RwLock;
+
 use lazy_static::lazy_static;
 use ratatui::style::Style;
-
-use std::{
-    collections::{HashMap, VecDeque},
-    fmt::Debug,
-    sync::RwLock,
-};
-
 use tree_sitter::{Parser, Query, QueryCursor, Tree};
 
 lazy_static! {

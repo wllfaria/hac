@@ -1,12 +1,10 @@
-use crate::{
-    default_config::DEFAULT_CONFIG, EditorMode, APP_NAME, CONFIG_ENV_VAR, CONFIG_FILE,
-    XDG_DEFAULTS, XDG_ENV_VARS,
-};
+use crate::default_config::DEFAULT_CONFIG;
+use crate::{EditorMode, APP_NAME, CONFIG_ENV_VAR, CONFIG_FILE, XDG_DEFAULTS, XDG_ENV_VARS};
+
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum Action {

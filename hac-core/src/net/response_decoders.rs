@@ -1,11 +1,11 @@
 mod json_decoder;
 
-use crate::net::{
-    request_manager::{ContentType, Response},
-    response_decoders::json_decoder::JsonDecoder,
-};
-use reqwest::header::HeaderMap;
+use crate::net::request_manager::{ContentType, Response};
+use crate::net::response_decoders::json_decoder::JsonDecoder;
+
 use std::time::Instant;
+
+use reqwest::header::HeaderMap;
 
 #[async_trait::async_trait]
 pub trait ResponseDecoder {

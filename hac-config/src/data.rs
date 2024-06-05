@@ -1,6 +1,6 @@
-use std::path::PathBuf;
-
 use crate::{APP_NAME, COLLECTIONS_DIR, XDG_DEFAULTS, XDG_ENV_VARS};
+
+use std::path::PathBuf;
 
 pub fn get_data_dir() -> PathBuf {
     let data_dir = std::env::var(XDG_ENV_VARS[1])

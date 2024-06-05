@@ -1,3 +1,6 @@
+use crate::ascii::LOGO_ASCII;
+use crate::pages::collection_viewer::collection_viewer::CollectionViewerOverlay;
+use crate::pages::overlay::make_overlay;
 use crate::pages::{collection_viewer::collection_store::CollectionStore, Eventful, Renderable};
 
 use std::ops::{Div, Sub};
@@ -5,10 +8,16 @@ use std::{cell::RefCell, ops::Add, rc::Rc};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_core::collection::types::HeaderMap;
+use rand::Rng;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize};
-use ratatui::widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
+use ratatui::text::Line;
+use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::Frame;
+
+use super::headers_editor_delete_prompt::{
+    HeadersEditorDeletePrompt, HeadersEditorDeletePromptEvent,
+};
 
 #[derive(Debug)]
 pub enum HeadersEditorEvent {
@@ -34,6 +43,8 @@ pub struct HeadersEditor<'he> {
     amount_on_view: usize,
     layout: HeadersEditorLayout,
     hint_size: Rect,
+    delete_prompt: HeadersEditorDeletePrompt<'he>,
+    logo_idx: usize,
 }
 
 impl<'he> HeadersEditor<'he> {
@@ -45,6 +56,7 @@ impl<'he> HeadersEditor<'he> {
     ) -> Self {
         let row_height = 2;
         let layout = build_layout(size, row_height);
+        let logo_idx = rand::thread_rng().gen_range(0..LOGO_ASCII.len());
         HeadersEditor {
             colors,
             collection_store,
@@ -54,6 +66,8 @@ impl<'he> HeadersEditor<'he> {
             amount_on_view: layout.content_size.height.div(row_height).into(),
             layout,
             hint_size,
+            delete_prompt: HeadersEditorDeletePrompt::new(colors),
+            logo_idx,
         }
     }
 
@@ -93,6 +107,106 @@ impl<'he> HeadersEditor<'he> {
             Paragraph::new(hint).fg(self.colors.bright.black).centered(),
             self.hint_size,
         );
+    }
+
+    fn draw_help_overlay(&self, frame: &mut Frame) {
+        make_overlay(self.colors, self.colors.normal.black, 0.1, frame);
+        let size = frame.size();
+        let logo = LOGO_ASCII[self.logo_idx];
+
+        let help_popup = Rect::new(
+            size.width.div(2).saturating_sub(20),
+            size.height.div(2).saturating_sub(3),
+            40,
+            6,
+        );
+
+        let logo_size = Rect::new(
+            size.width
+                .div(2)
+                .saturating_sub(logo[0].len().div(2) as u16),
+            size.y.add(4),
+            logo[0].len() as u16,
+            logo.len() as u16,
+        );
+
+        let logo = logo
+            .iter()
+            .map(|line| Line::from(line.fg(self.colors.normal.red)))
+            .collect::<Vec<_>>();
+
+        let hint_size = Rect::new(
+            help_popup.x,
+            help_popup.y.add(help_popup.height).add(2),
+            40,
+            1,
+        );
+
+        let hint = Line::from("press any key to close this dialog")
+            .fg(self.colors.bright.black)
+            .centered();
+
+        let lines = [
+            [
+                format!("j{}", " ".repeat(11)),
+                format!("- move down{}", " ".repeat(29)),
+            ],
+            [
+                format!("k{}", " ".repeat(11)),
+                format!("- move up{}", " ".repeat(31)),
+            ],
+            [
+                format!("d{}", " ".repeat(11)),
+                format!("- deletes header{}", " ".repeat(20)),
+            ],
+            [
+                format!("space{}", " ".repeat(7)),
+                format!("- enables or disabled header{}", " ".repeat(12)),
+            ],
+            [
+                format!("enter{}", " ".repeat(7)),
+                format!("- select header for editing{}", " ".repeat(13)),
+            ],
+            [
+                format!("?{}", " ".repeat(11)),
+                format!("- shows this help message{}", " ".repeat(15)),
+            ],
+        ];
+
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints((0..help_popup.height).map(|_| Constraint::Length(1)))
+            .split(help_popup)
+            .iter()
+            .zip(lines)
+            .for_each(|(size, line)| {
+                let sizes = Layout::default()
+                    .constraints([Constraint::Length(12), Constraint::Fill(1)])
+                    .direction(Direction::Horizontal)
+                    .split(*size);
+
+                let prefix = line[0].to_string().fg(self.colors.normal.red);
+                let description = line[1].to_string().fg(self.colors.normal.white);
+
+                frame.render_widget(prefix, sizes[0]);
+                frame.render_widget(description, sizes[1]);
+            });
+
+        frame.render_widget(Paragraph::new(logo), logo_size);
+        frame.render_widget(Paragraph::new(hint), hint_size);
+    }
+
+    pub fn draw_overlay(&mut self, frame: &mut Frame) -> anyhow::Result<()> {
+        let overlay = self.collection_store.borrow().peek_overlay();
+        match overlay {
+            CollectionViewerOverlay::HeadersHelp => self.draw_help_overlay(frame),
+            CollectionViewerOverlay::HeadersDelete => {
+                self.delete_prompt.draw(frame, frame.size())?
+            }
+            _ => {}
+        }
+
+        Ok(())
     }
 }
 
@@ -175,6 +289,42 @@ impl Eventful for HeadersEditor<'_> {
     type Result = HeadersEditorEvent;
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
+        let overlay = self.collection_store.borrow().peek_overlay();
+
+        if overlay.eq(&CollectionViewerOverlay::HeadersHelp) {
+            self.collection_store.borrow_mut().pop_overlay();
+            return Ok(None);
+        }
+
+        if overlay.eq(&CollectionViewerOverlay::HeadersDelete) {
+            match self.delete_prompt.handle_key_event(key_event)? {
+                Some(HeadersEditorDeletePromptEvent::Cancel) => {
+                    self.collection_store.borrow_mut().pop_overlay();
+                    return Ok(None);
+                }
+                Some(HeadersEditorDeletePromptEvent::Confirm) => {
+                    let mut store = self.collection_store.borrow_mut();
+                    let Some(request) = store.get_selected_request() else {
+                        tracing::error!("tried to delete an header on a non-existing request");
+                        anyhow::bail!("tried to dele an header on a non-existing request");
+                    };
+                    let mut request = request.write().unwrap();
+                    let Some(headers) = request.headers.as_mut() else {
+                        tracing::error!("tried to delete an header on a request without headers");
+                        anyhow::bail!("tried to delete an header on a request without headers");
+                    };
+                    headers.remove(self.selected_row);
+                    // in case we deleted the last element, we must move the selection so we are
+                    // not out of bounds
+                    self.selected_row = self.selected_row.min(headers.len().sub(1));
+                    store.pop_overlay();
+                }
+                None => {}
+            }
+
+            return Ok(None);
+        }
+
         if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
             return Ok(Some(HeadersEditorEvent::Quit));
         }
@@ -190,8 +340,6 @@ impl Eventful for HeadersEditor<'_> {
 
         let total_headers = headers.len();
 
-        tracing::debug!("handling key event on headers editor");
-
         match key_event.code {
             KeyCode::Char('j') => {
                 self.selected_row = usize::min(self.selected_row.add(1), total_headers.sub(1))
@@ -199,7 +347,16 @@ impl Eventful for HeadersEditor<'_> {
             KeyCode::Char('k') => {
                 self.selected_row = self.selected_row.saturating_sub(1);
             }
-            KeyCode::Char('?') => todo!(),
+            KeyCode::Char('?') => {
+                drop(request);
+                let mut store = self.collection_store.borrow_mut();
+                let overlay = store.peek_overlay();
+                if overlay.eq(&CollectionViewerOverlay::HeadersHelp) {
+                    store.clear_overlay();
+                } else {
+                    store.push_overlay(CollectionViewerOverlay::HeadersHelp);
+                };
+            }
             KeyCode::Char(' ') => {
                 if headers.is_empty() {
                     return Ok(None);
@@ -214,6 +371,21 @@ impl Eventful for HeadersEditor<'_> {
                 };
 
                 header.enabled = !header.enabled;
+            }
+            KeyCode::Char('d') => {
+                if headers.is_empty() {
+                    return Ok(None);
+                }
+
+                if headers.get(self.selected_row).is_none() {
+                    tracing::error!("tried to delete a non-existing header");
+                    anyhow::bail!("tried to delete a non-existing header");
+                }
+
+                drop(request);
+                self.collection_store
+                    .borrow_mut()
+                    .push_overlay(CollectionViewerOverlay::HeadersDelete);
             }
             _ => {}
         }
