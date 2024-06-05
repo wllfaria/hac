@@ -1,4 +1,4 @@
-Output extra/preview.gif
+Output extra/error-request.gif
 Hide
     Set Shell zsh
 
@@ -58,7 +58,28 @@ Sleep 1s
 # focus and send a request
 Enter
 Sleep 0.5s
-Type@100ms "-headers"
+Sleep 100ms
+Backspace
+Sleep 100ms
+Backspace
+Sleep 100ms
+Backspace
+Sleep 100ms
+Backspace
+Sleep 100ms
+Backspace
+Sleep 100ms
+Backspace
+Sleep 100ms
+Backspace
+Sleep 100ms
+Backspace
+Sleep 100ms
+Backspace
+Sleep 100ms
+Backspace
+Sleep 100ms
+Backspace
 Sleep 1s
 Enter
 Sleep 0.5s

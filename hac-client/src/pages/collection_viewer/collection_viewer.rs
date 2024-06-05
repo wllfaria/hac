@@ -551,19 +551,17 @@ impl<'cv> CollectionViewer<'cv> {
 
         let mut store_mut = self.collection_store.borrow_mut();
         if let RequestKind::Single(ref req) = new_request {
-            self.collection_store
-                .borrow_mut()
-                .dispatch(CollectionStoreAction::SetSelectedRequest(Some(req.clone())));
+            store_mut.dispatch(CollectionStoreAction::SetSelectedRequest(Some(req.clone())));
             store_mut.dispatch(CollectionStoreAction::SetHoveredRequest(Some(
                 new_request.get_id(),
             )));
-            self.sidebar.rebuild_tree_view();
         }
 
         store_mut.dispatch(CollectionStoreAction::InsertRequest(new_request));
         // dropping the borrow so we can sync the changes
         drop(store_mut);
 
+        self.sidebar.rebuild_tree_view();
         self.create_req_form_state = CreateReqFormState::default();
         self.curr_overlay = Overlays::None;
 

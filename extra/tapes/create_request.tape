@@ -1,4 +1,4 @@
-Output extra/preview.gif
+Output extra/new-request.gif
 Hide
     Set Shell zsh
 
@@ -14,6 +14,7 @@ Hide
     Set WindowBar Colorful
     Set WindowBarSize 50
 
+    # Set Theme "Rose Pine"
     Type "cargo run -q -- --dry-run"
     Enter
     # enter the editor
@@ -22,55 +23,25 @@ Hide
     Sleep 3s
 Show
 Sleep 2s
-# go to editor tab
-Tab
-Sleep 200ms
-Tab
-Sleep 1s
-# Enter the editor
+# select sidebar
 Enter
-# Edit the message to true
-Type@100ms "jj$i"
-Sleep 300ms
-Backspace
-Sleep 100ms
-Backspace
-Sleep 100ms
-Backspace
-Sleep 100ms
-Backspace
-Sleep 100ms
-Backspace
-Sleep 100ms
-Type@100ms "true"
-Escape
-Sleep 100ms
-Escape
-# go to the headers
+Sleep 200ms
+# enter form
+Type "n"
+Sleep 1s
+Type@100ms "My awesome request"
 Sleep 1s
 Tab
-Sleep 200ms
-# go to request uri
+Sleep 100ms
 Tab
-Sleep 200ms
+Sleep 100ms
 Tab
-Sleep 1s
-# focus and send a request
-Enter
-Sleep 0.5s
-Type@100ms "-headers"
-Sleep 1s
-Enter
-Sleep 0.5s
-Escape
-# go to the response
-Tab
-Sleep 200ms
-Tab
-Sleep 200ms
+Sleep 100ms
 Enter
 Sleep 1s
 Tab
-Sleep 1s
+Sleep 100ms
 Tab
+Sleep 100ms
+Enter
 Sleep 3s

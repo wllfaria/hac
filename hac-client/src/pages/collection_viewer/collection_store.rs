@@ -41,7 +41,7 @@ impl CollectionStore {
         let selected_request = collection.requests.as_ref().and_then(|requests| {
             requests.read().unwrap().first().and_then(|req| {
                 if let RequestKind::Single(req) = req {
-                    Some(Arc::clone(req))
+                    Some(req.clone())
                 } else {
                     None
                 }
@@ -323,6 +323,7 @@ mod tests {
             id: "root".to_string(),
             method: RequestMethod::Get,
             name: "Root1".to_string(),
+            headers: None,
             uri: "/root1".to_string(),
             body_type: None,
             body: None,
@@ -335,6 +336,7 @@ mod tests {
             method: RequestMethod::Post,
             name: "Child1".to_string(),
             uri: "/nested1/child1".to_string(),
+            headers: None,
             body_type: None,
             body: None,
         })))
@@ -345,6 +347,7 @@ mod tests {
             id: "child_two".to_string(),
             method: RequestMethod::Put,
             name: "Child2".to_string(),
+            headers: None,
             uri: "/nested1/child2".to_string(),
             body_type: None,
             body: None,
@@ -356,6 +359,7 @@ mod tests {
             id: "not_used".to_string(),
             method: RequestMethod::Put,
             name: "NotUsed".to_string(),
+            headers: None,
             uri: "/not/used".to_string(),
             body_type: None,
             body: None,
@@ -378,6 +382,7 @@ mod tests {
         RequestKind::Single(Arc::new(RwLock::new(Request {
             id: "root_two".to_string(),
             method: RequestMethod::Delete,
+            headers: None,
             name: "Root2".to_string(),
             uri: "/root2".to_string(),
             body_type: None,
