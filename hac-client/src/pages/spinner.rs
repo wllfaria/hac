@@ -1,7 +1,6 @@
 use std::ops::Add;
 
 use rand::Rng;
-
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Style;

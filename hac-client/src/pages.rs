@@ -3,7 +3,7 @@ pub mod collection_viewer;
 pub mod confirm_popup;
 pub mod error_popup;
 pub mod input;
-mod overlay;
+pub mod overlay;
 mod spinner;
 pub mod terminal_too_small;
 mod under_construction;

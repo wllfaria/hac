@@ -6,7 +6,7 @@ use crate::pages::collection_dashboard::new_collection_form::{
 };
 use crate::pages::confirm_popup::ConfirmPopup;
 use crate::pages::error_popup::ErrorPopup;
-use crate::pages::overlay::draw_overlay;
+use crate::pages::overlay::{draw_overlay, make_overlay};
 use crate::pages::{Eventful, Renderable};
 
 use std::ops::{Add, Div, Not, Sub};
@@ -342,9 +342,8 @@ impl<'a> CollectionDashboard<'a> {
         frame.render_widget(hint, self.layout.hint_pane);
     }
 
-    fn draw_help_popup(&self, size: Rect, frame: &mut Frame) {
-        frame.render_widget(Clear, size);
-        draw_overlay(self.colors, size, "助ける", frame);
+    fn draw_help_popup(&self, frame: &mut Frame) {
+        make_overlay(self.colors, self.colors.primary.background, 0.2, frame);
 
         let lines = vec![
             Line::from(vec![
@@ -391,13 +390,10 @@ impl<'a> CollectionDashboard<'a> {
             Line::from("press any key to go back".fg(self.colors.normal.magenta)).centered(),
         ];
 
-        frame.render_widget(Clear, self.layout.help_popup);
         frame.render_widget(
-            Paragraph::new(lines).wrap(Wrap { trim: true }).block(
-                Block::default()
-                    .padding(Padding::new(2, 2, 1, 1))
-                    .bg(self.colors.primary.background),
-            ),
+            Paragraph::new(lines)
+                .wrap(Wrap { trim: true })
+                .block(Block::default().padding(Padding::new(2, 2, 1, 1))),
             self.layout.help_popup,
         );
     }
@@ -537,7 +533,7 @@ impl Renderable for CollectionDashboard<'_> {
             PaneFocus::Error => self.draw_error_popup(frame),
             PaneFocus::Form => self.draw_form_popup(size, frame),
             PaneFocus::Filter => self.draw_filter_prompt(frame),
-            PaneFocus::Help => self.draw_help_popup(size, frame),
+            PaneFocus::Help => self.draw_help_popup(frame),
             PaneFocus::Prompt => self.draw_delete_prompt(frame),
             PaneFocus::List => self.draw_hint_text(frame),
         }

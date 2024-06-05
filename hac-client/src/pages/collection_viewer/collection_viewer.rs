@@ -172,6 +172,7 @@ impl<'cv> CollectionViewer<'cv> {
                 config,
                 collection_store.clone(),
                 layout.req_editor,
+                layout.hint_pane,
             ),
             response_viewer: ResponseViewer::new(
                 colors,
@@ -664,18 +665,11 @@ impl Renderable for CollectionViewer<'_> {
 
         self.drain_responses_channel();
 
+        self.sidebar.draw(frame, self.layout.sidebar)?;
         self.response_viewer
             .draw(frame, self.layout.response_preview)?;
         self.request_editor.draw(frame, self.layout.req_editor)?;
         self.request_uri.draw(frame, self.layout.req_uri)?;
-        self.sidebar.draw(frame, self.layout.sidebar)?;
-
-        match self.collection_store.borrow().get_focused_pane() {
-            PaneFocus::ReqUri => self.draw_req_uri_hint(frame),
-            PaneFocus::Sidebar => self.draw_sidebar_hint(frame),
-            PaneFocus::Preview => self.draw_preview_hint(frame),
-            PaneFocus::Editor => self.draw_editor_hint(frame),
-        }
 
         match self.curr_overlay {
             Overlays::CreateRequest => self.draw_create_request_form(frame),

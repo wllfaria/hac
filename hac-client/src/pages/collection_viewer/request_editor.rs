@@ -101,6 +101,7 @@ pub struct RequestEditor<'re> {
 
     layout: ReqEditorLayout,
     curr_tab: ReqEditorTabs,
+    hint_size: Rect,
 }
 
 impl<'re> RequestEditor<'re> {
@@ -109,6 +110,7 @@ impl<'re> RequestEditor<'re> {
         config: &'re hac_config::Config,
         collection_store: Rc<RefCell<CollectionStore>>,
         size: Rect,
+        hint_size: Rect,
     ) -> Self {
         let curr_tab = collection_store
             .borrow()
@@ -133,11 +135,13 @@ impl<'re> RequestEditor<'re> {
                 colors,
                 collection_store.clone(),
                 layout.content_pane,
+                hint_size,
             ),
             auth_editor: AuthEditor::new(colors),
             layout,
             curr_tab,
             collection_store,
+            hint_size,
         }
     }
 

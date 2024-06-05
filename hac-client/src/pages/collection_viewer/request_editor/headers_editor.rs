@@ -1,11 +1,10 @@
-use hac_core::collection::types::HeaderMap;
-
 use crate::pages::{collection_viewer::collection_store::CollectionStore, Eventful, Renderable};
 
 use std::ops::{Div, Sub};
 use std::{cell::RefCell, ops::Add, rc::Rc};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use hac_core::collection::types::HeaderMap;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
@@ -34,6 +33,7 @@ pub struct HeadersEditor<'he> {
     row_height: u16,
     amount_on_view: usize,
     layout: HeadersEditorLayout,
+    hint_size: Rect,
 }
 
 impl<'he> HeadersEditor<'he> {
@@ -41,6 +41,7 @@ impl<'he> HeadersEditor<'he> {
         colors: &'he hac_colors::colors::Colors,
         collection_store: Rc<RefCell<CollectionStore>>,
         size: Rect,
+        hint_size: Rect,
     ) -> Self {
         let row_height = 2;
         let layout = build_layout(size, row_height);
@@ -52,6 +53,7 @@ impl<'he> HeadersEditor<'he> {
             row_height,
             amount_on_view: layout.content_size.height.div(row_height).into(),
             layout,
+            hint_size,
         }
     }
 
@@ -80,6 +82,17 @@ impl<'he> HeadersEditor<'he> {
         frame.render_widget(name, row[1]);
         frame.render_widget(value, row[2]);
         frame.render_widget(Paragraph::new(checkbox).fg(decor_fg).centered(), row[3]);
+    }
+
+    fn draw_hint(&self, frame: &mut Frame) {
+        let hint = match self.hint_size.width {
+            w if w.le(&100) => "[j/k -> move down/up] [enter -> select] [space -> enable/disable] [? -> help]",
+            _ => "[j/k -> move down/up] [enter -> select] [space -> enable/disable] [d -> delete] [? -> help]",
+        };
+        frame.render_widget(
+            Paragraph::new(hint).fg(self.colors.bright.black).centered(),
+            self.hint_size,
+        );
     }
 }
 
@@ -110,6 +123,7 @@ impl Renderable for HeadersEditor<'_> {
                     .constraints([
                         Constraint::Length(2),
                         Constraint::Fill(1),
+                        Constraint::Length(1),
                         Constraint::Fill(1),
                         Constraint::Length(1),
                         Constraint::Length(7),
@@ -125,7 +139,7 @@ impl Renderable for HeadersEditor<'_> {
                     // > Header-Name    Header-Value       [x]
                     //   Header-Name    Header-Value       [x]
                     //
-                    .filter(|(idx, _)| idx.ne(&3))
+                    .filter(|(idx, _)| idx.ne(&2) && idx.ne(&4))
                     .map(|(_, rect)| *rect)
                     .collect::<Vec<_>>()
             })
@@ -147,6 +161,8 @@ impl Renderable for HeadersEditor<'_> {
         frame.render_widget(title_value, self.layout.value_header_size);
         frame.render_widget(title_enabled, self.layout.enabled_header_size);
 
+        self.draw_hint(frame);
+
         Ok(())
     }
 
@@ -163,15 +179,18 @@ impl Eventful for HeadersEditor<'_> {
             return Ok(Some(HeadersEditorEvent::Quit));
         }
 
-        let Some(req) = self.collection_store.borrow().get_selected_request() else {
+        let Some(request) = self.collection_store.borrow_mut().get_selected_request() else {
             return Ok(None);
         };
 
-        let Some(ref headers) = req.read().unwrap().headers else {
+        let mut request = request.write().unwrap();
+        let Some(headers) = request.headers.as_mut() else {
             return Ok(None);
         };
 
         let total_headers = headers.len();
+
+        tracing::debug!("handling key event on headers editor");
 
         match key_event.code {
             KeyCode::Char('j') => {
@@ -179,6 +198,22 @@ impl Eventful for HeadersEditor<'_> {
             }
             KeyCode::Char('k') => {
                 self.selected_row = self.selected_row.saturating_sub(1);
+            }
+            KeyCode::Char('?') => todo!(),
+            KeyCode::Char(' ') => {
+                if headers.is_empty() {
+                    return Ok(None);
+                }
+
+                let header = match headers.get_mut(self.selected_row) {
+                    Some(header) => header,
+                    None => {
+                        tracing::error!("tried to disable a non-existing header");
+                        anyhow::bail!("tried to disable a non-existing header");
+                    }
+                };
+
+                header.enabled = !header.enabled;
             }
             _ => {}
         }
