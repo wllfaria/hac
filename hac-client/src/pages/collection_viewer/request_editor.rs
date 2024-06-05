@@ -129,7 +129,11 @@ impl<'re> RequestEditor<'re> {
                 collection_store.clone(),
                 layout.content_pane,
             ),
-            headers_editor: HeadersEditor::new(colors, collection_store.clone()),
+            headers_editor: HeadersEditor::new(
+                colors,
+                collection_store.clone(),
+                layout.content_pane,
+            ),
             auth_editor: AuthEditor::new(colors),
             layout,
             curr_tab,
