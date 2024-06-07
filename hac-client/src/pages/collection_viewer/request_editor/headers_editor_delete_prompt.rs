@@ -4,7 +4,6 @@ use crate::ascii::LOGO_ASCII;
 use crate::pages::{overlay::make_overlay, Eventful, Renderable};
 
 use crossterm::event::{KeyCode, KeyEvent};
-use hac_core::collection::types::HeaderMap;
 use rand::Rng;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
@@ -39,16 +38,6 @@ impl Renderable for HeadersEditorDeletePrompt<'_> {
     fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
         make_overlay(self.colors, self.colors.normal.black, 0.1, frame);
 
-        let logo = LOGO_ASCII[self.logo_idx];
-        let size = frame.size();
-
-        let popup_size = Rect::new(
-            size.width.div(2).saturating_sub(25),
-            size.height.div(2).saturating_sub(1),
-            50,
-            3,
-        );
-
         let lines: Vec<Line> = vec![
             "are you sure you want to delete this header?"
                 .fg(self.colors.normal.yellow)
@@ -59,30 +48,33 @@ impl Renderable for HeadersEditorDeletePrompt<'_> {
                 "es        ".fg(self.colors.normal.white),
                 "[N]".fg(self.colors.normal.red),
                 "o".fg(self.colors.normal.white),
-            ]),
+            ])
+            .centered(),
         ];
 
-        let logo_size = Rect::new(
-            size.width
-                .div(2)
-                .saturating_sub(logo[0].len().div(2) as u16),
-            size.y.add(4),
-            logo[0].len() as u16,
-            logo.len() as u16,
+        let logo = LOGO_ASCII[self.logo_idx];
+        let size = frame.size();
+        let logo_size = logo.len();
+        // we are adding 2 spaces for the gap between the logo and the text
+        // 1 space for the gap between the help lines and the hint
+        // 1 space for the hint itself
+        let total_size = logo_size.add(lines.len()).add(4) as u16;
+
+        let popup_size = Rect::new(
+            size.width.div(2).saturating_sub(25),
+            size.height.div(2).saturating_sub(total_size.div(2)),
+            50,
+            total_size,
         );
 
-        let logo = logo
+        let components = logo
             .iter()
             .map(|line| Line::from(line.fg(self.colors.normal.red)))
+            .chain(std::iter::repeat(Line::from("")).take(2))
+            .chain(lines)
             .collect::<Vec<_>>();
 
-        frame.render_widget(Paragraph::new(logo), logo_size);
-        frame.render_widget(
-            Paragraph::new(lines)
-                .bg(self.colors.normal.black)
-                .centered(),
-            popup_size,
-        );
+        frame.render_widget(Paragraph::new(components).centered(), popup_size);
 
         Ok(())
     }

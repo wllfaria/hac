@@ -12,12 +12,13 @@ use rand::Rng;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::Line;
-use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
+use ratatui::widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::Frame;
 
 use super::headers_editor_delete_prompt::{
     HeadersEditorDeletePrompt, HeadersEditorDeletePromptEvent,
 };
+use super::headers_editor_form::HeadersEditorForm;
 
 #[derive(Debug)]
 pub enum HeadersEditorEvent {
@@ -42,9 +43,10 @@ pub struct HeadersEditor<'he> {
     row_height: u16,
     amount_on_view: usize,
     layout: HeadersEditorLayout,
-    hint_size: Rect,
-    delete_prompt: HeadersEditorDeletePrompt<'he>,
     logo_idx: usize,
+
+    delete_prompt: HeadersEditorDeletePrompt<'he>,
+    header_form: HeadersEditorForm<'he>,
 }
 
 impl<'he> HeadersEditor<'he> {
@@ -52,12 +54,15 @@ impl<'he> HeadersEditor<'he> {
         colors: &'he hac_colors::colors::Colors,
         collection_store: Rc<RefCell<CollectionStore>>,
         size: Rect,
-        hint_size: Rect,
     ) -> Self {
         let row_height = 2;
         let layout = build_layout(size, row_height);
         let logo_idx = rand::thread_rng().gen_range(0..LOGO_ASCII.len());
+
         HeadersEditor {
+            delete_prompt: HeadersEditorDeletePrompt::new(colors),
+            header_form: HeadersEditorForm::new(colors, collection_store.clone()),
+
             colors,
             collection_store,
             scroll: 0,
@@ -65,8 +70,6 @@ impl<'he> HeadersEditor<'he> {
             row_height,
             amount_on_view: layout.content_size.height.div(row_height).into(),
             layout,
-            hint_size,
-            delete_prompt: HeadersEditorDeletePrompt::new(colors),
             logo_idx,
         }
     }
@@ -98,46 +101,92 @@ impl<'he> HeadersEditor<'he> {
         frame.render_widget(Paragraph::new(checkbox).fg(decor_fg).centered(), row[3]);
     }
 
+    fn get_hint_size(&self, frame: &mut Frame) -> Rect {
+        let size = frame.size();
+        Rect::new(0, size.height.sub(1), size.width, 1)
+    }
+
     fn draw_hint(&self, frame: &mut Frame) {
-        let hint = match self.hint_size.width {
+        let hint_size = self.get_hint_size(frame);
+        let hint = match hint_size.width {
             w if w.le(&100) => "[j/k -> move down/up] [enter -> select] [space -> enable/disable] [? -> help]",
             _ => "[j/k -> move down/up] [enter -> select] [space -> enable/disable] [d -> delete] [? -> help]",
         };
         frame.render_widget(
             Paragraph::new(hint).fg(self.colors.bright.black).centered(),
-            self.hint_size,
+            hint_size,
         );
     }
 
     fn draw_help_overlay(&self, frame: &mut Frame) {
         make_overlay(self.colors, self.colors.normal.black, 0.1, frame);
+
+        let lines = [
+            [
+                format!("j{}", " ".repeat(11)).fg(self.colors.normal.red),
+                format!("- move down{}", " ".repeat(29)).fg(self.colors.normal.yellow),
+            ],
+            [
+                format!("k{}", " ".repeat(11)).fg(self.colors.normal.red),
+                format!("- move up{}", " ".repeat(31)).fg(self.colors.normal.yellow),
+            ],
+            [
+                format!("d{}", " ".repeat(11)).fg(self.colors.normal.red),
+                format!("- deletes header{}", " ".repeat(20)).fg(self.colors.normal.yellow),
+            ],
+            [
+                format!("space{}", " ".repeat(7)).fg(self.colors.normal.red),
+                format!("- enables or disabled header{}", " ".repeat(12))
+                    .fg(self.colors.normal.yellow),
+            ],
+            [
+                format!("enter{}", " ".repeat(7)).fg(self.colors.normal.red),
+                format!("- select header for editing{}", " ".repeat(13))
+                    .fg(self.colors.normal.yellow),
+            ],
+            [
+                format!("?{}", " ".repeat(11)).fg(self.colors.normal.red),
+                format!("- shows this help message{}", " ".repeat(15))
+                    .fg(self.colors.normal.yellow),
+            ],
+        ];
+
+        let lines: Vec<Line> = lines
+            .into_iter()
+            .map(|l| Line::from(l.into_iter().collect::<Vec<_>>()))
+            .collect();
+
+        let mut logo = LOGO_ASCII[1];
         let size = frame.size();
-        let logo = LOGO_ASCII[self.logo_idx];
+        let logo_size = logo.len();
+        // we are adding 2 spaces for the gap between the logo and the text
+        // 1 space for the gap between the help lines and the hint
+        // 1 space for the hint itself
+        // 1 space after the hint
+        let mut total_size = logo_size.add(lines.len()).add(5) as u16;
 
-        let help_popup = Rect::new(
-            size.width.div(2).saturating_sub(20),
-            size.height.div(2).saturating_sub(3),
-            40,
-            6,
+        if total_size.ge(&size.height) {
+            logo = &[];
+            total_size = lines.len().add(2) as u16;
+        }
+
+        let popup_size = Rect::new(
+            size.width.div(2).saturating_sub(25),
+            size.height.div(2).saturating_sub(total_size.div(2)),
+            50,
+            total_size,
         );
 
-        let logo_size = Rect::new(
-            size.width
-                .div(2)
-                .saturating_sub(logo[0].len().div(2) as u16),
-            size.y.add(4),
-            logo[0].len() as u16,
-            logo.len() as u16,
-        );
-
-        let logo = logo
+        let components = logo
             .iter()
             .map(|line| Line::from(line.fg(self.colors.normal.red)))
+            .chain(std::iter::repeat(Line::from("")).take(2))
+            .chain(lines)
             .collect::<Vec<_>>();
 
         let hint_size = Rect::new(
-            help_popup.x,
-            help_popup.y.add(help_popup.height).add(2),
+            popup_size.x,
+            popup_size.y.add(popup_size.height).add(1),
             40,
             1,
         );
@@ -146,62 +195,23 @@ impl<'he> HeadersEditor<'he> {
             .fg(self.colors.bright.black)
             .centered();
 
-        let lines = [
-            [
-                format!("j{}", " ".repeat(11)),
-                format!("- move down{}", " ".repeat(29)),
-            ],
-            [
-                format!("k{}", " ".repeat(11)),
-                format!("- move up{}", " ".repeat(31)),
-            ],
-            [
-                format!("d{}", " ".repeat(11)),
-                format!("- deletes header{}", " ".repeat(20)),
-            ],
-            [
-                format!("space{}", " ".repeat(7)),
-                format!("- enables or disabled header{}", " ".repeat(12)),
-            ],
-            [
-                format!("enter{}", " ".repeat(7)),
-                format!("- select header for editing{}", " ".repeat(13)),
-            ],
-            [
-                format!("?{}", " ".repeat(11)),
-                format!("- shows this help message{}", " ".repeat(15)),
-            ],
-        ];
-
-        Layout::default()
-            .direction(Direction::Vertical)
-            .constraints((0..help_popup.height).map(|_| Constraint::Length(1)))
-            .split(help_popup)
-            .iter()
-            .zip(lines)
-            .for_each(|(size, line)| {
-                let sizes = Layout::default()
-                    .constraints([Constraint::Length(12), Constraint::Fill(1)])
-                    .direction(Direction::Horizontal)
-                    .split(*size);
-
-                let prefix = line[0].to_string().fg(self.colors.normal.red);
-                let description = line[1].to_string().fg(self.colors.normal.white);
-
-                frame.render_widget(prefix, sizes[0]);
-                frame.render_widget(description, sizes[1]);
-            });
-
-        frame.render_widget(Paragraph::new(logo), logo_size);
+        frame.render_widget(Paragraph::new(components), popup_size);
         frame.render_widget(Paragraph::new(hint), hint_size);
     }
 
-    pub fn draw_overlay(&mut self, frame: &mut Frame) -> anyhow::Result<()> {
-        let overlay = self.collection_store.borrow().peek_overlay();
+    pub fn draw_overlay(
+        &mut self,
+        frame: &mut Frame,
+        overlay: CollectionViewerOverlay,
+    ) -> anyhow::Result<()> {
         match overlay {
             CollectionViewerOverlay::HeadersHelp => self.draw_help_overlay(frame),
             CollectionViewerOverlay::HeadersDelete => {
-                self.delete_prompt.draw(frame, frame.size())?
+                self.delete_prompt.draw(frame, frame.size())?;
+            }
+            CollectionViewerOverlay::HeadersForm(header_idx) => {
+                self.header_form.update(header_idx);
+                self.header_form.draw(frame, frame.size())?;
             }
             _ => {}
         }
@@ -386,6 +396,21 @@ impl Eventful for HeadersEditor<'_> {
                 self.collection_store
                     .borrow_mut()
                     .push_overlay(CollectionViewerOverlay::HeadersDelete);
+            }
+            KeyCode::Enter => {
+                if headers.is_empty() {
+                    return Ok(None);
+                }
+
+                if headers.get(self.selected_row).is_none() {
+                    tracing::error!("tried to edit a non-existing header");
+                    anyhow::bail!("tried to edit a non-existing header");
+                };
+
+                drop(request);
+                self.collection_store
+                    .borrow_mut()
+                    .push_overlay(CollectionViewerOverlay::HeadersForm(self.selected_row));
             }
             _ => {}
         }

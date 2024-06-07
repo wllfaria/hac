@@ -2,6 +2,7 @@ mod auth_editor;
 mod body_editor;
 mod headers_editor;
 mod headers_editor_delete_prompt;
+mod headers_editor_form;
 
 use auth_editor::AuthEditor;
 use body_editor::{BodyEditor, BodyEditorEvent};
@@ -27,7 +28,7 @@ use ratatui::style::{Style, Stylize};
 use ratatui::widgets::{Block, Borders, Tabs};
 use ratatui::Frame;
 
-use super::collection_viewer::PaneFocus;
+use super::collection_viewer::{CollectionViewerOverlay, PaneFocus};
 
 /// set of possible events the edtior can send to the parent
 #[derive(Debug)]
@@ -102,7 +103,6 @@ pub struct RequestEditor<'re> {
 
     layout: ReqEditorLayout,
     curr_tab: ReqEditorTabs,
-    hint_size: Rect,
 }
 
 impl<'re> RequestEditor<'re> {
@@ -111,7 +111,6 @@ impl<'re> RequestEditor<'re> {
         config: &'re hac_config::Config,
         collection_store: Rc<RefCell<CollectionStore>>,
         size: Rect,
-        hint_size: Rect,
     ) -> Self {
         let curr_tab = collection_store
             .borrow()
@@ -136,13 +135,11 @@ impl<'re> RequestEditor<'re> {
                 colors,
                 collection_store.clone(),
                 layout.content_pane,
-                hint_size,
             ),
             auth_editor: AuthEditor::new(colors),
             layout,
             curr_tab,
             collection_store,
-            hint_size,
         }
     }
 
@@ -158,6 +155,7 @@ impl<'re> RequestEditor<'re> {
 
     pub fn resize(&mut self, new_size: Rect) {
         self.layout = build_layout(new_size);
+        self.headers_editor.resize(self.layout.content_pane);
         self.body_editor.resize(self.layout.content_pane);
     }
 
@@ -218,10 +216,14 @@ impl<'re> RequestEditor<'re> {
         frame.render_widget(block, size);
     }
 
-    pub fn draw_overlay(&mut self, frame: &mut Frame) -> anyhow::Result<()> {
+    pub fn draw_overlay(
+        &mut self,
+        frame: &mut Frame,
+        overlay: CollectionViewerOverlay,
+    ) -> anyhow::Result<()> {
         match self.curr_tab {
             ReqEditorTabs::Body => todo!(),
-            ReqEditorTabs::Headers => self.headers_editor.draw_overlay(frame),
+            ReqEditorTabs::Headers => self.headers_editor.draw_overlay(frame, overlay),
             ReqEditorTabs::Query => todo!(),
             ReqEditorTabs::Auth => todo!(),
         }

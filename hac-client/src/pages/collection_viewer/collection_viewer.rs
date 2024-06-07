@@ -46,6 +46,7 @@ pub enum CollectionViewerOverlay {
     RequestMethod,
     HeadersHelp,
     HeadersDelete,
+    HeadersForm(usize),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -173,7 +174,6 @@ impl<'cv> CollectionViewer<'cv> {
                 config,
                 collection_store.clone(),
                 layout.req_editor,
-                layout.hint_pane,
             ),
             response_viewer: ResponseViewer::new(
                 colors,
@@ -677,8 +677,15 @@ impl Renderable for CollectionViewer<'_> {
         match overlay {
             CollectionViewerOverlay::CreateRequest => self.draw_create_request_form(frame),
             CollectionViewerOverlay::RequestMethod => self.draw_request_method_form(frame),
-            CollectionViewerOverlay::HeadersHelp => self.request_editor.draw_overlay(frame)?,
-            CollectionViewerOverlay::HeadersDelete => self.request_editor.draw_overlay(frame)?,
+            CollectionViewerOverlay::HeadersHelp => {
+                self.request_editor.draw_overlay(frame, overlay)?
+            }
+            CollectionViewerOverlay::HeadersDelete => {
+                self.request_editor.draw_overlay(frame, overlay)?
+            }
+            CollectionViewerOverlay::HeadersForm(_) => {
+                self.request_editor.draw_overlay(frame, overlay)?
+            }
             CollectionViewerOverlay::None => {}
         }
 
