@@ -1,4 +1,4 @@
-use std::ops::{Add, Div, Sub};
+use std::ops::{Add, Div};
 
 use crate::ascii::LOGO_ASCII;
 use crate::pages::{overlay::make_overlay, Eventful, Renderable};

@@ -1,6 +1,6 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
+use ratatui::style::{Style, Styled};
 use ratatui::widgets::{Block, Borders, Paragraph, StatefulWidget, Widget};
 
 /// input component used in forms and everywhere else that the user can
@@ -35,14 +35,14 @@ impl<'a> Input<'a> {
         self.focused = true;
     }
 
-    fn build_input(&self, value: String) -> Paragraph<'_> {
+    fn build_input(&self, value: String, size: Rect) -> Paragraph<'_> {
         let border_color = if self.focused {
             Style::default().fg(self.colors.bright.magenta)
         } else {
             Style::default().fg(self.colors.primary.hover)
         };
 
-        let (value, color) = if value.is_empty() {
+        let (value, style) = if value.is_empty() {
             let color = Style::default().fg(self.colors.normal.magenta);
             (self.placeholder.clone().unwrap_or_default(), color)
         } else {
@@ -50,7 +50,11 @@ impl<'a> Input<'a> {
             (value, color)
         };
 
-        Paragraph::new(value)
+        let without_space = format!(
+            "{value}{}",
+            " ".repeat(size.width.saturating_sub(value.len() as u16) as usize)
+        );
+        Paragraph::new(without_space)
             .block(
                 Block::default()
                     .title(self.name.clone())
@@ -58,7 +62,7 @@ impl<'a> Input<'a> {
                     .borders(Borders::ALL)
                     .border_style(border_color),
             )
-            .style(color)
+            .set_style(style)
     }
 }
 
@@ -66,7 +70,7 @@ impl StatefulWidget for Input<'_> {
     type State = String;
 
     fn render(self, size: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let input = self.build_input(state.to_string());
+        let input = self.build_input(state.to_string(), size);
         input.render(size, buf);
     }
 }
@@ -89,7 +93,8 @@ mod tests {
             )
             .style(Style::default().fg(colors.normal.magenta));
 
-        let result = input.build_input("".into());
+        let size = Rect::new(0, 0, 10, 10);
+        let result = input.build_input("".into(), size);
 
         assert_eq!(expected, result);
     }
@@ -109,7 +114,8 @@ mod tests {
             .style(Style::default().fg(colors.normal.magenta));
 
         input.focus();
-        let result = input.build_input("".into());
+        let size = Rect::new(0, 0, 10, 10);
+        let result = input.build_input("".into(), size);
 
         assert_eq!(expected, result);
     }
@@ -128,7 +134,8 @@ mod tests {
             )
             .style(Style::default().fg(colors.normal.white));
 
-        let result = input.build_input("my value".into());
+        let size = Rect::new(0, 0, 10, 10);
+        let result = input.build_input("my value".into(), size);
 
         assert_eq!(expected, result);
     }
@@ -148,7 +155,8 @@ mod tests {
             .style(Style::default().fg(colors.normal.white));
 
         input.focus();
-        let result = input.build_input("my value".into());
+        let size = Rect::new(0, 0, 10, 10);
+        let result = input.build_input("my value".into(), size);
 
         assert_eq!(expected, result);
     }

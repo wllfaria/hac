@@ -5,7 +5,6 @@ use crate::net::response_decoders::{decoder_from_headers, ResponseDecoder};
 
 pub struct HttpResponse;
 
-#[async_trait::async_trait]
 impl RequestStrategy for HttpResponse {
     async fn handle(&self, request: Request) -> Response {
         let client = reqwest::Client::new();

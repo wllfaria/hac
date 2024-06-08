@@ -4,6 +4,8 @@ use std::sync::{Arc, RwLock};
 
 use serde::{Deserialize, Serialize};
 
+use crate::collection::header_map::HeaderMap;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Collection {
     pub info: Info,
@@ -97,12 +99,6 @@ pub struct Request {
     pub body: Option<String>,
     #[serde(rename = "bodyType")]
     pub body_type: Option<BodyType>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct HeaderMap {
-    pub pair: (String, String),
-    pub enabled: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]

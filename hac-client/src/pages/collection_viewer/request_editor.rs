@@ -253,31 +253,28 @@ impl Eventful for RequestEditor<'_> {
         );
 
         if let KeyCode::Tab = key_event.code {
-            let mut store = self.collection_store.borrow_mut();
-            if store.has_overlay() {
-                store.pop_overlay();
-                return Ok(None);
-            }
+            let store = self.collection_store.borrow_mut();
             if self.curr_tab.eq(&ReqEditorTabs::Body)
                 && self.body_editor.mode().eq(&EditorMode::Insert)
             {
                 return Ok(None);
             }
-            self.curr_tab = self.curr_tab.next();
+            if !store.has_overlay() {
+                self.curr_tab = self.curr_tab.next();
+            }
+            drop(store);
         }
 
         if let KeyCode::BackTab = key_event.code {
-            let mut store = self.collection_store.borrow_mut();
-            if store.has_overlay() {
-                store.pop_overlay();
-                return Ok(None);
-            }
+            let store = self.collection_store.borrow_mut();
             if self.curr_tab.eq(&ReqEditorTabs::Body)
                 && self.body_editor.mode().eq(&EditorMode::Insert)
             {
                 return Ok(None);
             }
-            self.curr_tab = self.curr_tab.prev();
+            if !store.has_overlay() {
+                self.curr_tab = self.curr_tab.prev();
+            }
         }
 
         match self.curr_tab {

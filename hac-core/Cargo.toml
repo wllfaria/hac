@@ -29,4 +29,3 @@ lazy_static.workspace = true
 
 ropey = "1.6.1"
 jsonxf = "1.1.1"
-async-trait = "0.1.80"

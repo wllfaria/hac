@@ -5,7 +5,6 @@ use std::{ops::Add, time::Instant};
 
 pub struct JsonDecoder;
 
-#[async_trait::async_trait]
 impl ResponseDecoder for JsonDecoder {
     async fn decode(&self, response: reqwest::Response, start: Instant) -> Response {
         let duration = start.elapsed();

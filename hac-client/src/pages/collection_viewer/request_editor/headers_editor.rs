@@ -7,7 +7,7 @@ use std::ops::{Div, Sub};
 use std::{cell::RefCell, ops::Add, rc::Rc};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use hac_core::collection::types::HeaderMap;
+use hac_core::collection::header_map::HeaderMap;
 use rand::Rng;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize};
@@ -18,7 +18,7 @@ use ratatui::Frame;
 use super::headers_editor_delete_prompt::{
     HeadersEditorDeletePrompt, HeadersEditorDeletePromptEvent,
 };
-use super::headers_editor_form::HeadersEditorForm;
+use super::headers_editor_form::{HeadersEditorForm, HeadersEditorFormEvent};
 
 #[derive(Debug)]
 pub enum HeadersEditorEvent {
@@ -156,7 +156,7 @@ impl<'he> HeadersEditor<'he> {
             .map(|l| Line::from(l.into_iter().collect::<Vec<_>>()))
             .collect();
 
-        let mut logo = LOGO_ASCII[1];
+        let mut logo = LOGO_ASCII[self.logo_idx];
         let size = frame.size();
         let logo_size = logo.len();
         // we are adding 2 spaces for the gap between the logo and the text
@@ -210,7 +210,7 @@ impl<'he> HeadersEditor<'he> {
                 self.delete_prompt.draw(frame, frame.size())?;
             }
             CollectionViewerOverlay::HeadersForm(header_idx) => {
-                self.header_form.update(header_idx);
+                self.header_form.update(header_idx)?;
                 self.header_form.draw(frame, frame.size())?;
             }
             _ => {}
@@ -332,6 +332,14 @@ impl Eventful for HeadersEditor<'_> {
                 None => {}
             }
 
+            return Ok(None);
+        }
+
+        if let CollectionViewerOverlay::HeadersForm(_) = overlay {
+            match self.header_form.handle_key_event(key_event)? {
+                Some(HeadersEditorFormEvent::FinishEdit) => {}
+                None => {}
+            }
             return Ok(None);
         }
 
