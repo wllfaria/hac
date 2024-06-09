@@ -1,3 +1,4 @@
+pub mod request_client;
 pub mod request_manager;
 pub mod request_strategies;
 pub mod response_decoders;

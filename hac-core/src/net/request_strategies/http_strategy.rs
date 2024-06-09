@@ -1,4 +1,5 @@
 use crate::collection::types::{Request, RequestMethod};
+use crate::net::request_client::RequestClient;
 use crate::net::request_manager::Response;
 use crate::net::request_strategies::RequestStrategy;
 use crate::net::response_decoders::{decoder_from_headers, ResponseDecoder};
@@ -7,7 +8,7 @@ pub struct HttpResponse;
 
 impl RequestStrategy for HttpResponse {
     async fn handle(&self, request: Request) -> Response {
-        let client = reqwest::Client::new();
+        let client = RequestClient::default();
 
         match request.method {
             RequestMethod::Get => self.handle_get_request(client, request).await,
@@ -20,9 +21,9 @@ impl RequestStrategy for HttpResponse {
 }
 
 impl HttpResponse {
-    async fn handle_get_request(&self, client: reqwest::Client, request: Request) -> Response {
+    async fn handle_get_request(&self, client: RequestClient, request: Request) -> Response {
         let now = std::time::Instant::now();
-        match client.get(request.uri).send().await {
+        match client.get(&request).send().await {
             Ok(response) => {
                 let decoder = decoder_from_headers(response.headers());
                 decoder.decode(response, now).await
@@ -42,10 +43,10 @@ impl HttpResponse {
         }
     }
 
-    async fn handle_post_request(&self, client: reqwest::Client, request: Request) -> Response {
+    async fn handle_post_request(&self, client: RequestClient, request: Request) -> Response {
         let now = std::time::Instant::now();
         match client
-            .post(request.uri)
+            .post(&request)
             .json(&request.body.unwrap_or_default())
             .send()
             .await
@@ -69,10 +70,10 @@ impl HttpResponse {
         }
     }
 
-    async fn handle_put_request(&self, client: reqwest::Client, request: Request) -> Response {
+    async fn handle_put_request(&self, client: RequestClient, request: Request) -> Response {
         let now = std::time::Instant::now();
         match client
-            .put(request.uri)
+            .put(&request)
             .json(&request.body.unwrap_or_default())
             .send()
             .await
@@ -96,10 +97,10 @@ impl HttpResponse {
         }
     }
 
-    async fn handle_patch_request(&self, client: reqwest::Client, request: Request) -> Response {
+    async fn handle_patch_request(&self, client: RequestClient, request: Request) -> Response {
         let now = std::time::Instant::now();
         match client
-            .patch(request.uri)
+            .patch(&request)
             .json(&request.body.unwrap_or_default())
             .send()
             .await
@@ -123,10 +124,10 @@ impl HttpResponse {
         }
     }
 
-    async fn handle_delete_request(&self, client: reqwest::Client, request: Request) -> Response {
+    async fn handle_delete_request(&self, client: RequestClient, request: Request) -> Response {
         let now = std::time::Instant::now();
         match client
-            .delete(request.uri)
+            .delete(&request)
             .json(&request.body.unwrap_or_default())
             .send()
             .await

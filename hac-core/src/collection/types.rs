@@ -4,8 +4,6 @@ use std::sync::{Arc, RwLock};
 
 use serde::{Deserialize, Serialize};
 
-use crate::collection::header_map::HeaderMap;
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Collection {
     pub info: Info,
@@ -41,6 +39,12 @@ impl RequestKind {
             RequestKind::Nested(dir) => dir.id.to_string(),
         }
     }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct HeaderMap {
+    pub pair: (String, String),
+    pub enabled: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]

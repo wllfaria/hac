@@ -7,7 +7,7 @@ use std::ops::{Div, Sub};
 use std::{cell::RefCell, ops::Add, rc::Rc};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use hac_core::collection::header_map::HeaderMap;
+use hac_core::collection::types::HeaderMap;
 use rand::Rng;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize};
@@ -18,7 +18,7 @@ use ratatui::Frame;
 use super::headers_editor_delete_prompt::{
     HeadersEditorDeletePrompt, HeadersEditorDeletePromptEvent,
 };
-use super::headers_editor_form::{HeadersEditorForm, HeadersEditorFormEvent};
+use super::headers_editor_edit_form::{HeadersEditorForm, HeadersEditorFormEvent};
 
 #[derive(Debug)]
 pub enum HeadersEditorEvent {
@@ -337,7 +337,17 @@ impl Eventful for HeadersEditor<'_> {
 
         if let CollectionViewerOverlay::HeadersForm(_) = overlay {
             match self.header_form.handle_key_event(key_event)? {
-                Some(HeadersEditorFormEvent::FinishEdit) => {}
+                Some(HeadersEditorFormEvent::Quit) => {
+                    return Ok(Some(HeadersEditorEvent::Quit));
+                }
+                Some(HeadersEditorFormEvent::FinishEdit) => {
+                    let mut store = self.collection_store.borrow_mut();
+                    store.pop_overlay();
+                }
+                Some(HeadersEditorFormEvent::CancelEdit) => {
+                    let mut store = self.collection_store.borrow_mut();
+                    store.pop_overlay();
+                }
                 None => {}
             }
             return Ok(None);
@@ -419,6 +429,20 @@ impl Eventful for HeadersEditor<'_> {
                 self.collection_store
                     .borrow_mut()
                     .push_overlay(CollectionViewerOverlay::HeadersForm(self.selected_row));
+            }
+            KeyCode::Char('n') => {
+                let idx = headers.len();
+                headers.push(HeaderMap {
+                    pair: Default::default(),
+                    enabled: true,
+                });
+
+                self.selected_row = idx;
+
+                drop(request);
+                self.collection_store
+                    .borrow_mut()
+                    .push_overlay(CollectionViewerOverlay::HeadersForm(idx));
             }
             _ => {}
         }

@@ -1,5 +1,3 @@
-use hac_core::collection::header_map::HeaderMap;
-
 use crate::ascii::LOGO_ASCII;
 use crate::pages::collection_viewer::collection_store::CollectionStore;
 use crate::pages::collection_viewer::collection_viewer::CollectionViewerOverlay;
@@ -11,7 +9,7 @@ use std::cell::RefCell;
 use std::ops::{Add, Div};
 use std::rc::Rc;
 
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use rand::Rng;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
@@ -22,6 +20,8 @@ use ratatui::Frame;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HeadersEditorFormEvent {
     FinishEdit,
+    CancelEdit,
+    Quit,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,6 +46,8 @@ pub struct HeadersEditorForm<'hef> {
     header_idx: usize,
     logo_idx: usize,
     focused_input: HeadersEditorFormInput,
+    original_name: String,
+    original_value: String,
 }
 
 impl<'hef> HeadersEditorForm<'hef> {
@@ -61,13 +63,45 @@ impl<'hef> HeadersEditorForm<'hef> {
             collection_store,
             logo_idx,
             focused_input: HeadersEditorFormInput::Name,
+            original_name: String::default(),
+            original_value: String::default(),
         }
     }
 
     pub fn update(&mut self, header_idx: usize) -> anyhow::Result<()> {
         self.header_idx = header_idx;
 
+        if !self.original_name.is_empty() || !self.original_value.is_empty() {
+            return Ok(());
+        }
+
+        let store = self.collection_store.borrow_mut();
+        let Some(request) = store.get_selected_request() else {
+            anyhow::bail!("trying to edit a header without a selected request");
+        };
+
+        let request = request.read().unwrap();
+        let Some(ref headers) = request.headers else {
+            anyhow::bail!("trying to edit a header that don't exist");
+        };
+
+        let CollectionViewerOverlay::HeadersForm(idx) = store.peek_overlay() else {
+            anyhow::bail!("tried to display the header form without the proper overlay set");
+        };
+
+        let header = headers
+            .get(idx)
+            .expect("selected a non-existing header to edit");
+
+        self.original_name = header.pair.0.to_string();
+        self.original_value = header.pair.1.to_string();
+
         Ok(())
+    }
+
+    fn reset(&mut self) {
+        self.original_name.clear();
+        self.original_value.clear();
     }
 }
 
@@ -187,6 +221,10 @@ impl Eventful for HeadersEditorForm<'_> {
             anyhow::bail!("selected header being edited doesnt exist on request");
         };
 
+        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            return Ok(Some(HeadersEditorFormEvent::Quit));
+        }
+
         match key_event.code {
             KeyCode::Tab => self.focused_input = self.focused_input.next(),
             KeyCode::BackTab => self.focused_input = self.focused_input.next(),
@@ -198,10 +236,20 @@ impl Eventful for HeadersEditorForm<'_> {
                 HeadersEditorFormInput::Name => header.pair.0.push(c),
                 HeadersEditorFormInput::Value => header.pair.1.push(c),
             },
-            KeyCode::Esc => {}
+            KeyCode::Esc => {
+                header.pair = (self.original_name.clone(), self.original_value.clone());
+                drop(store);
+                self.reset();
+                return Ok(Some(HeadersEditorFormEvent::CancelEdit));
+            }
+            KeyCode::Enter => {
+                drop(store);
+                self.reset();
+                return Ok(Some(HeadersEditorFormEvent::FinishEdit));
+            }
             _ => {}
         };
 
-        Ok(Some(HeadersEditorFormEvent::FinishEdit))
+        Ok(None)
     }
 }

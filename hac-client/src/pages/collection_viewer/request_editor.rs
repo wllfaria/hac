@@ -2,7 +2,7 @@ mod auth_editor;
 mod body_editor;
 mod headers_editor;
 mod headers_editor_delete_prompt;
-mod headers_editor_form;
+mod headers_editor_edit_form;
 
 use auth_editor::AuthEditor;
 use body_editor::{BodyEditor, BodyEditorEvent};
