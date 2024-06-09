@@ -1,3 +1,5 @@
+use hac_core::collection::header_map::HeaderMap;
+
 use crate::ascii::LOGO_ASCII;
 use crate::pages::collection_viewer::collection_store::CollectionStore;
 use crate::pages::collection_viewer::collection_viewer::CollectionViewerOverlay;
@@ -14,7 +16,7 @@ use rand::Rng;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
-use ratatui::widgets::{Block, Paragraph};
+use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,8 +44,6 @@ pub struct HeadersEditorForm<'hef> {
     colors: &'hef hac_colors::Colors,
     collection_store: Rc<RefCell<CollectionStore>>,
     header_idx: usize,
-    name: String,
-    value: String,
     logo_idx: usize,
     focused_input: HeadersEditorFormInput,
 }
@@ -59,8 +59,6 @@ impl<'hef> HeadersEditorForm<'hef> {
             colors,
             header_idx: 0,
             collection_store,
-            name: Default::default(),
-            value: Default::default(),
             logo_idx,
             focused_input: HeadersEditorFormInput::Name,
         }
@@ -68,6 +66,15 @@ impl<'hef> HeadersEditorForm<'hef> {
 
     pub fn update(&mut self, header_idx: usize) -> anyhow::Result<()> {
         self.header_idx = header_idx;
+
+        Ok(())
+    }
+}
+
+impl Renderable for HeadersEditorForm<'_> {
+    #[tracing::instrument(skip_all, err)]
+    fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
+        make_overlay(self.colors, self.colors.normal.black, 0.1, frame);
 
         let store = self.collection_store.borrow_mut();
         let Some(request) = store.get_selected_request() else {
@@ -86,18 +93,6 @@ impl<'hef> HeadersEditorForm<'hef> {
         let header = headers
             .get(idx)
             .expect("selected a non-existing header to edit");
-
-        self.name = header.pair.0.to_string();
-        self.value = header.pair.1.to_string();
-
-        Ok(())
-    }
-}
-
-impl Renderable for HeadersEditorForm<'_> {
-    #[tracing::instrument(skip_all, err)]
-    fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
-        make_overlay(self.colors, self.colors.normal.black, 0.1, frame);
 
         let size = frame.size();
 
@@ -143,20 +138,20 @@ impl Renderable for HeadersEditorForm<'_> {
         let value_size = Rect::new(size.x, name_size.y.add(4), size.width, 3);
         let hint_size = Rect::new(size.x, value_size.y.add(4), size.width, 1);
 
-        frame.render_stateful_widget(name_input, name_size, &mut self.name);
-        frame.render_stateful_widget(value_input, value_size, &mut self.value);
+        frame.render_stateful_widget(name_input, name_size, &mut header.pair.0.clone());
+        frame.render_stateful_widget(value_input, value_size, &mut header.pair.1.clone());
         frame.render_widget(hint, hint_size);
 
         match self.focused_input {
             HeadersEditorFormInput::Name => {
                 frame.set_cursor(
-                    name_size.x.add(self.name.len().add(1) as u16),
+                    name_size.x.add(header.pair.0.len().add(1) as u16),
                     name_size.y.add(1),
                 );
             }
             HeadersEditorFormInput::Value => {
                 frame.set_cursor(
-                    value_size.x.add(self.value.len().add(1) as u16),
+                    value_size.x.add(header.pair.1.len().add(1) as u16),
                     value_size.y.add(1),
                 );
             }
@@ -169,19 +164,41 @@ impl Renderable for HeadersEditorForm<'_> {
 impl Eventful for HeadersEditorForm<'_> {
     type Result = HeadersEditorFormEvent;
 
+    #[tracing::instrument(skip_all, err)]
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
-        tracing::debug!("{}", self.name);
+        let store = self.collection_store.borrow_mut();
+        let Some(request) = store.get_selected_request() else {
+            anyhow::bail!("tried to edit header on non-existing request");
+        };
+
+        let CollectionViewerOverlay::HeadersForm(idx) = store.peek_overlay() else {
+            anyhow::bail!("sent event to headers form without an overlay");
+        };
+
+        let Ok(mut request) = request.write() else {
+            anyhow::bail!("failed to read the selected request");
+        };
+
+        let Some(headers) = request.headers.as_mut() else {
+            anyhow::bail!("selected header being edited doesnt exist on request");
+        };
+
+        let Some(header) = headers.get_mut(idx) else {
+            anyhow::bail!("selected header being edited doesnt exist on request");
+        };
+
         match key_event.code {
             KeyCode::Tab => self.focused_input = self.focused_input.next(),
             KeyCode::BackTab => self.focused_input = self.focused_input.next(),
             KeyCode::Backspace => match self.focused_input {
-                HeadersEditorFormInput::Name => _ = self.name.pop(),
-                HeadersEditorFormInput::Value => _ = self.value.pop(),
+                HeadersEditorFormInput::Name => _ = header.pair.0.pop(),
+                HeadersEditorFormInput::Value => _ = header.pair.1.pop(),
             },
             KeyCode::Char(c) => match self.focused_input {
-                HeadersEditorFormInput::Name => self.name.push(c),
-                HeadersEditorFormInput::Value => self.value.push(c),
+                HeadersEditorFormInput::Name => header.pair.0.push(c),
+                HeadersEditorFormInput::Value => header.pair.1.push(c),
             },
+            KeyCode::Esc => {}
             _ => {}
         };
 

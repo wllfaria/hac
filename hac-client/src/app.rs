@@ -23,6 +23,7 @@ impl<'app> App<'app> {
         config: &'app hac_config::Config,
         dry_run: bool,
     ) -> anyhow::Result<Self> {
+
         let terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
         Ok(Self {
             screen_manager: ScreenManager::new(
