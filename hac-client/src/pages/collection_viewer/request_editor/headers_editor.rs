@@ -301,12 +301,12 @@ impl Eventful for HeadersEditor<'_> {
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
         let overlay = self.collection_store.borrow().peek_overlay();
 
-        if overlay.eq(&CollectionViewerOverlay::HeadersHelp) {
+        if let CollectionViewerOverlay::HeadersHelp = overlay {
             self.collection_store.borrow_mut().pop_overlay();
             return Ok(None);
         }
 
-        if overlay.eq(&CollectionViewerOverlay::HeadersDelete) {
+        if let CollectionViewerOverlay::HeadersDelete = overlay {
             match self.delete_prompt.handle_key_event(key_event)? {
                 Some(HeadersEditorDeletePromptEvent::Cancel) => {
                     self.collection_store.borrow_mut().pop_overlay();
@@ -379,7 +379,7 @@ impl Eventful for HeadersEditor<'_> {
                 drop(request);
                 let mut store = self.collection_store.borrow_mut();
                 let overlay = store.peek_overlay();
-                if overlay.eq(&CollectionViewerOverlay::HeadersHelp) {
+                if let CollectionViewerOverlay::HeadersHelp = overlay {
                     store.clear_overlay();
                 } else {
                     store.push_overlay(CollectionViewerOverlay::HeadersHelp);

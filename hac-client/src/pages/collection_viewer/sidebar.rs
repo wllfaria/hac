@@ -1,11 +1,15 @@
 mod create_request_form;
+mod edit_request_form;
+mod request_form;
 
 use hac_core::collection::types::{Request, RequestKind, RequestMethod};
 
 use crate::pages::collection_viewer::collection_store::{CollectionStore, CollectionStoreAction};
 use crate::pages::collection_viewer::collection_viewer::{CollectionViewerOverlay, PaneFocus};
-use crate::pages::collection_viewer::sidebar::create_request_form::CreateRequestForm;
-use crate::pages::collection_viewer::sidebar::create_request_form::CreateRequestFormEvent;
+use crate::pages::collection_viewer::sidebar::request_form::RequestForm;
+use crate::pages::collection_viewer::sidebar::request_form::RequestFormCreate;
+use crate::pages::collection_viewer::sidebar::request_form::RequestFormEdit;
+use crate::pages::collection_viewer::sidebar::request_form::RequestFormEvent;
 use crate::pages::{Eventful, Renderable};
 
 use std::cell::RefCell;
@@ -26,15 +30,43 @@ pub enum SidebarEvent {
     /// user pressed `CreateRequest (n)` hotkey, which should notify the caller to open
     /// the create_request_form and properly handle the creation of a new request
     CreateRequest,
+    /// user pressed `EditRequest (e)` hotkey, which should notify the caller to open
+    /// the create_request_form and propery handle the editing of the existing request
+    EditRequest,
     /// user pressed `CreateDirectory (d)` hotkey, which should notify the caller to open
     /// the `create_directory_form` overlay to create a new directory on the collection
     CreateDirectory,
     /// user pressed `Esc` so we notify the caller to remove the selection from
     /// this pane, essentially bubbling the key handling scope to the caller
     RemoveSelection,
+    /// this event is used when a request or directory is created, this notify the parent
+    /// to sync changes with the file system.
+    SyncCollection,
     /// user pressed a hotkey to quit the application, so we bubble up so the caller
     /// can do a few things before bubbling the quit request further up
     Quit,
+}
+
+#[derive(Debug)]
+enum FormVariant<'sbar> {
+    Create(RequestForm<'sbar, RequestFormCreate>),
+    Edit(RequestForm<'sbar, RequestFormEdit>),
+}
+
+/// this is just a helper trait to be able to return the inner reference of the form
+/// from the enum as we cannot return it like:
+/// ```rust
+/// &mut dyn Renderable + Eventful<Result = RequestFormEvent>;
+/// ```
+pub trait RequestFormTrait: Renderable + Eventful<Result = RequestFormEvent> {}
+
+impl FormVariant<'_> {
+    pub fn inner(&mut self) -> &mut dyn RequestFormTrait {
+        match self {
+            FormVariant::Create(form) => form,
+            FormVariant::Edit(form) => form,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -42,7 +74,7 @@ pub struct Sidebar<'sbar> {
     colors: &'sbar hac_colors::Colors,
     lines: Vec<Paragraph<'static>>,
     collection_store: Rc<RefCell<CollectionStore>>,
-    create_request_form: CreateRequestForm<'sbar>,
+    request_form: FormVariant<'sbar>,
 }
 
 impl<'sbar> Sidebar<'sbar> {
@@ -52,7 +84,10 @@ impl<'sbar> Sidebar<'sbar> {
     ) -> Self {
         let mut sidebar = Self {
             colors,
-            create_request_form: CreateRequestForm::new(colors, collection_store.clone()),
+            request_form: FormVariant::Create(RequestForm::<RequestFormCreate>::new(
+                colors,
+                collection_store.clone(),
+            )),
             lines: vec![],
             collection_store,
         };
@@ -81,7 +116,10 @@ impl<'sbar> Sidebar<'sbar> {
     ) -> anyhow::Result<()> {
         match overlay {
             CollectionViewerOverlay::CreateRequest => {
-                self.create_request_form.draw(frame, frame.size())?;
+                self.request_form.inner().draw(frame, frame.size())?;
+            }
+            CollectionViewerOverlay::EditRequest => {
+                self.request_form.inner().draw(frame, frame.size())?;
             }
             CollectionViewerOverlay::CreateDirectory => {}
             _ => {}
@@ -147,23 +185,57 @@ impl<'a> Eventful for Sidebar<'a> {
             "handled an event to the sidebar while it was not selected"
         );
 
-        let mut store = self.collection_store.borrow_mut();
+        let overlay = self.collection_store.borrow_mut().peek_overlay();
 
-        match store.peek_overlay() {
+        match overlay {
             CollectionViewerOverlay::CreateRequest => {
-                match self.create_request_form.handle_key_event(key_event)? {
-                    Some(CreateRequestFormEvent::Confirm) => return Ok(None),
-                    Some(CreateRequestFormEvent::Cancel) => _ = store.pop_overlay(),
+                match self.request_form.inner().handle_key_event(key_event)? {
+                    Some(RequestFormEvent::Confirm) => {
+                        let mut store = self.collection_store.borrow_mut();
+                        store.pop_overlay();
+                        drop(store);
+                        self.rebuild_tree_view();
+                        return Ok(Some(SidebarEvent::SyncCollection));
+                    }
+                    Some(RequestFormEvent::Cancel) => {
+                        let mut store = self.collection_store.borrow_mut();
+                        store.pop_overlay();
+                        drop(store);
+                        self.rebuild_tree_view();
+                        return Ok(None);
+                    }
                     None => return Ok(None),
                 }
             }
             CollectionViewerOverlay::CreateDirectory => todo!(),
+            CollectionViewerOverlay::EditRequest => {
+                // when editing, we setup the form to display the current header information.
+                match self.request_form.inner().handle_key_event(key_event)? {
+                    Some(RequestFormEvent::Confirm) => {
+                        let mut store = self.collection_store.borrow_mut();
+                        store.pop_overlay();
+                        drop(store);
+                        self.rebuild_tree_view();
+                        return Ok(Some(SidebarEvent::SyncCollection));
+                    }
+                    Some(RequestFormEvent::Cancel) => {
+                        let mut store = self.collection_store.borrow_mut();
+                        store.pop_overlay();
+                        drop(store);
+                        self.rebuild_tree_view();
+                        return Ok(None);
+                    }
+                    None => return Ok(None),
+                }
+            }
             _ => {}
         };
 
         if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
             return Ok(Some(SidebarEvent::Quit));
         }
+
+        let mut store = self.collection_store.borrow_mut();
 
         match key_event.code {
             KeyCode::Enter => {
@@ -183,7 +255,24 @@ impl<'a> Eventful for Sidebar<'a> {
             }
             KeyCode::Char('j') | KeyCode::Down => store.dispatch(CollectionStoreAction::HoverNext),
             KeyCode::Char('k') | KeyCode::Up => store.dispatch(CollectionStoreAction::HoverPrev),
-            KeyCode::Char('n') => return Ok(Some(SidebarEvent::CreateRequest)),
+            KeyCode::Char('n') => {
+                self.request_form = FormVariant::Create(RequestForm::<RequestFormCreate>::new(
+                    self.colors,
+                    self.collection_store.clone(),
+                ));
+                return Ok(Some(SidebarEvent::CreateRequest));
+            }
+            KeyCode::Char('e') => {
+                let RequestKind::Single(request) = store.find_hovered_request() else {
+                    return Ok(None);
+                };
+                self.request_form = FormVariant::Edit(RequestForm::<RequestFormEdit>::new(
+                    self.colors,
+                    self.collection_store.clone(),
+                    request.clone(),
+                ));
+                return Ok(Some(SidebarEvent::EditRequest));
+            }
             KeyCode::Char('d') => return Ok(Some(SidebarEvent::CreateDirectory)),
             KeyCode::Esc => return Ok(Some(SidebarEvent::RemoveSelection)),
             _ => {}

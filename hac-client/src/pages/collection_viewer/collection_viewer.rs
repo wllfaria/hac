@@ -7,20 +7,17 @@ use crate::pages::collection_viewer::request_editor::{RequestEditor, RequestEdit
 use crate::pages::collection_viewer::request_uri::{RequestUri, RequestUriEvent};
 use crate::pages::collection_viewer::response_viewer::{ResponseViewer, ResponseViewerEvent};
 use crate::pages::collection_viewer::sidebar::{self, Sidebar, SidebarEvent};
-use crate::pages::input::Input;
-use crate::pages::overlay::draw_overlay;
 use crate::pages::{Eventful, Renderable};
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ops::{Add, Div, Sub};
+use std::ops::{Add, Div};
 use std::rc::Rc;
-use std::sync::{Arc, RwLock};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::style::{Style, Stylize};
-use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph};
+use ratatui::style::Stylize;
+use ratatui::widgets::{Block, Clear};
 use ratatui::Frame;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
@@ -34,12 +31,12 @@ pub struct ExplorerLayout {
     pub create_req_form: Rect,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum CollectionViewerOverlay {
     None,
     CreateRequest,
+    EditRequest,
     CreateDirectory,
-    RequestMethod,
     HeadersHelp,
     HeadersDelete,
     HeadersForm(usize),
@@ -73,64 +70,6 @@ impl PaneFocus {
     }
 }
 
-#[derive(Debug, Default, PartialEq)]
-pub enum FormFocus {
-    #[default]
-    NameInput,
-    ReqButton,
-    DirButton,
-    ConfirmButton,
-    CancelButton,
-}
-
-impl FormFocus {
-    fn prev(&self) -> FormFocus {
-        match self {
-            Self::NameInput => FormFocus::CancelButton,
-            Self::ReqButton => FormFocus::NameInput,
-            Self::DirButton => FormFocus::ReqButton,
-            Self::ConfirmButton => FormFocus::DirButton,
-            Self::CancelButton => FormFocus::ConfirmButton,
-        }
-    }
-
-    fn next(&self) -> FormFocus {
-        match self {
-            Self::NameInput => FormFocus::ReqButton,
-            Self::ReqButton => FormFocus::DirButton,
-            Self::DirButton => FormFocus::ConfirmButton,
-            Self::ConfirmButton => FormFocus::CancelButton,
-            Self::CancelButton => FormFocus::NameInput,
-        }
-    }
-}
-
-#[derive(Debug)]
-struct CreateReqFormState {
-    pub req_kind: CreateReqKind,
-    pub req_name: String,
-    pub focus: FormFocus,
-    pub method: RequestMethod,
-}
-
-impl Default for CreateReqFormState {
-    fn default() -> Self {
-        CreateReqFormState {
-            req_kind: CreateReqKind::default(),
-            req_name: String::new(),
-            focus: FormFocus::default(),
-            method: RequestMethod::Get,
-        }
-    }
-}
-
-#[derive(Debug, Default, PartialEq)]
-pub enum CreateReqKind {
-    #[default]
-    Request,
-    Directory,
-}
-
 #[derive(Debug)]
 pub struct CollectionViewer<'cv> {
     response_viewer: ResponseViewer<'cv>,
@@ -143,8 +82,6 @@ pub struct CollectionViewer<'cv> {
     global_command_sender: Option<UnboundedSender<Command>>,
     collection_sync_timer: std::time::Instant,
     collection_store: Rc<RefCell<CollectionStore>>,
-
-    create_req_form_state: CreateReqFormState,
 
     responses_map: HashMap<String, Rc<RefCell<Response>>>,
     response_rx: UnboundedReceiver<Response>,
@@ -187,7 +124,6 @@ impl<'cv> CollectionViewer<'cv> {
             layout,
             global_command_sender: None,
             collection_sync_timer: std::time::Instant::now(),
-            create_req_form_state: CreateReqFormState::default(),
             responses_map: HashMap::default(),
             response_rx,
             request_tx,
@@ -217,299 +153,6 @@ impl<'cv> CollectionViewer<'cv> {
                     .dispatch(CollectionStoreAction::SetPendingRequest(false));
             });
         }
-    }
-
-    fn draw_create_request_form(&mut self, frame: &mut Frame) {
-        let size = self.layout.create_req_form;
-        let item_height = 3;
-        let name_input_size =
-            Rect::new(size.x.add(1), size.y.add(1), size.width.sub(1), item_height);
-
-        let req_button_size = Rect::new(
-            size.x.add(1),
-            size.y.add(item_height).add(1),
-            size.width.sub(2).div(2),
-            item_height,
-        );
-
-        let dir_button_size = Rect::new(
-            size.x.add(size.width.div(2)),
-            size.y.add(item_height).add(1),
-            size.width.div_ceil(2),
-            item_height,
-        );
-
-        let confirm_button_size = Rect::new(
-            size.x.add(1),
-            size.y.add(size.height.sub(4)),
-            size.width.sub(2).div(2),
-            item_height,
-        );
-
-        let cancel_button_size = Rect::new(
-            size.x.add(size.width.div(2)),
-            size.y.add(size.height.sub(4)),
-            size.width.div_ceil(2),
-            item_height,
-        );
-
-        let mut input = Input::new(self.colors, "Name".into());
-        if self.create_req_form_state.focus.eq(&FormFocus::NameInput) {
-            input.focus();
-        }
-
-        let req_button_border_style = match (
-            &self.create_req_form_state.focus,
-            &self.create_req_form_state.req_kind,
-        ) {
-            (FormFocus::ReqButton, _) => Style::default().fg(self.colors.bright.magenta),
-            (_, CreateReqKind::Request) => Style::default().fg(self.colors.normal.red),
-            (_, _) => Style::default().fg(self.colors.bright.black),
-        };
-
-        let dir_button_border_style = match (
-            &self.create_req_form_state.focus,
-            &self.create_req_form_state.req_kind,
-        ) {
-            (FormFocus::DirButton, _) => Style::default().fg(self.colors.bright.magenta),
-            (_, CreateReqKind::Directory) => Style::default().fg(self.colors.normal.red),
-            (_, _) => Style::default().fg(self.colors.bright.black),
-        };
-
-        let confirm_button_border_style = match self.create_req_form_state.focus {
-            FormFocus::ConfirmButton => Style::default().fg(self.colors.bright.magenta),
-            _ => Style::default().fg(self.colors.bright.black),
-        };
-        let cancel_button_border_style = match self.create_req_form_state.focus {
-            FormFocus::CancelButton => Style::default().fg(self.colors.bright.magenta),
-            _ => Style::default().fg(self.colors.bright.black),
-        };
-
-        let req_button =
-            Paragraph::new("Request".fg(self.colors.normal.white).into_centered_line()).block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(req_button_border_style),
-            );
-
-        let dir_button = Paragraph::new(
-            "Directory"
-                .fg(self.colors.normal.white)
-                .into_centered_line(),
-        )
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(dir_button_border_style),
-        );
-
-        let confirm_button =
-            Paragraph::new("Confirm".fg(self.colors.normal.green).into_centered_line()).block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(confirm_button_border_style),
-            );
-
-        let cancel_button =
-            Paragraph::new("Cancel".fg(self.colors.normal.red).into_centered_line()).block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(cancel_button_border_style),
-            );
-
-        let full_block = Block::default()
-            .padding(Padding::uniform(1))
-            .style(Style::default().bg(self.colors.primary.background));
-
-        draw_overlay(self.colors, frame.size(), "新", frame);
-        frame.render_widget(Clear, size);
-        frame.render_widget(full_block, size);
-        frame.render_widget(req_button, req_button_size);
-        frame.render_widget(dir_button, dir_button_size);
-        frame.render_widget(confirm_button, confirm_button_size);
-        frame.render_widget(cancel_button, cancel_button_size);
-
-        frame.render_stateful_widget(
-            input,
-            name_input_size,
-            &mut self.create_req_form_state.req_name,
-        );
-    }
-
-    fn handle_create_request_key_event(
-        &mut self,
-        key_event: KeyEvent,
-    ) -> anyhow::Result<Option<Command>> {
-        match (
-            key_event.code,
-            key_event.modifiers,
-            &self.create_req_form_state.focus,
-        ) {
-            (KeyCode::Tab, KeyModifiers::NONE, _) => {
-                self.create_req_form_state.focus =
-                    FormFocus::next(&self.create_req_form_state.focus);
-            }
-            (KeyCode::BackTab, KeyModifiers::SHIFT, _) => {
-                self.create_req_form_state.focus =
-                    FormFocus::prev(&self.create_req_form_state.focus);
-            }
-            (KeyCode::Char(c), _, FormFocus::NameInput) => {
-                self.create_req_form_state.req_name.push(c);
-            }
-            (KeyCode::Backspace, _, FormFocus::NameInput) => {
-                self.create_req_form_state.req_name.pop();
-            }
-            (KeyCode::Enter, _, FormFocus::ReqButton) => {
-                self.create_req_form_state.req_kind = CreateReqKind::Request;
-            }
-            (KeyCode::Enter, _, FormFocus::DirButton) => {
-                self.create_req_form_state.req_kind = CreateReqKind::Directory;
-            }
-            (KeyCode::Enter, _, FormFocus::ConfirmButton) => {
-                self.create_or_ask_for_request_method()
-            }
-            (KeyCode::Enter, _, FormFocus::CancelButton) | (KeyCode::Esc, _, _) => {
-                self.create_req_form_state = CreateReqFormState::default();
-                self.collection_store.borrow_mut().clear_overlay();
-            }
-            _ => {}
-        }
-
-        Ok(None)
-    }
-
-    fn handle_request_method_key_event(
-        &mut self,
-        key_event: KeyEvent,
-    ) -> anyhow::Result<Option<Command>> {
-        match (key_event.code, &self.create_req_form_state.method) {
-            (KeyCode::Tab, _) => {
-                self.create_req_form_state.method = self.create_req_form_state.method.next();
-            }
-            (KeyCode::Enter, _) => {
-                self.create_and_sync_request();
-            }
-            (KeyCode::Esc, _) => {
-                self.create_req_form_state = CreateReqFormState::default();
-                self.collection_store.borrow_mut().clear_overlay();
-            }
-            _ => {}
-        }
-
-        Ok(None)
-    }
-
-    fn draw_request_method_form(&mut self, frame: &mut Frame) {
-        let size = self.layout.create_req_form;
-
-        let item_height = 3;
-        let mut buttons = vec![];
-        let reqs = vec![
-            RequestMethod::Get,
-            RequestMethod::Post,
-            RequestMethod::Put,
-            RequestMethod::Patch,
-            RequestMethod::Delete,
-        ];
-
-        for item in reqs {
-            let border_style = if self.create_req_form_state.method == item {
-                Style::default().fg(self.colors.bright.magenta)
-            } else {
-                Style::default().fg(self.colors.bright.black)
-            };
-
-            buttons.push(
-                Paragraph::new(
-                    item.to_string()
-                        .fg(self.colors.normal.white)
-                        .into_centered_line(),
-                )
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_style(border_style),
-                ),
-            );
-        }
-
-        let full_block = Block::default()
-            .padding(Padding::uniform(1))
-            .style(Style::default().bg(self.colors.primary.background));
-
-        draw_overlay(self.colors, frame.size(), "新", frame);
-        frame.render_widget(Clear, size);
-        frame.render_widget(full_block, size);
-
-        let expand_last = buttons.len() % 2 != 0;
-        let right_half = size.width.div(2);
-        let buttons_len = buttons.len();
-        for (i, button) in buttons.into_iter().enumerate() {
-            let padding = if i % 2 != 0 { right_half } else { 0 };
-            let width = if i.eq(&buttons_len.sub(1)) && expand_last {
-                size.width.sub(1)
-            } else {
-                size.width.div(2)
-            };
-            let button_size = Rect::new(
-                size.x.add(padding).add(1),
-                size.y.add(1).add(item_height * (i / 2) as u16),
-                width,
-                item_height,
-            );
-
-            frame.render_widget(button, button_size);
-        }
-    }
-
-    fn create_or_ask_for_request_method(&mut self) {
-        let form_state = &self.create_req_form_state;
-        if form_state.req_kind.eq(&CreateReqKind::Request) {
-            self.collection_store
-                .borrow_mut()
-                .push_overlay(CollectionViewerOverlay::RequestMethod);
-            return;
-        }
-        self.create_and_sync_request();
-    }
-
-    fn create_and_sync_request(&mut self) {
-        let form_state = &self.create_req_form_state;
-        let new_request = match form_state.req_kind {
-            CreateReqKind::Request => RequestKind::Single(Arc::new(RwLock::new(Request {
-                id: uuid::Uuid::new_v4().to_string(),
-                name: form_state.req_name.clone(),
-                headers: None,
-                method: form_state.method.clone(),
-                uri: String::default(),
-                body: None,
-                body_type: None,
-            }))),
-            CreateReqKind::Directory => RequestKind::Nested(Directory {
-                id: uuid::Uuid::new_v4().to_string(),
-                name: form_state.req_name.clone(),
-                requests: Arc::new(RwLock::new(vec![])),
-            }),
-        };
-
-        let mut store_mut = self.collection_store.borrow_mut();
-        if let RequestKind::Single(ref req) = new_request {
-            store_mut.dispatch(CollectionStoreAction::SetSelectedRequest(Some(req.clone())));
-            store_mut.dispatch(CollectionStoreAction::SetHoveredRequest(Some(
-                new_request.get_id(),
-            )));
-        }
-
-        store_mut.dispatch(CollectionStoreAction::InsertRequest(new_request));
-        // dropping the borrow so we can sync the changes
-        drop(store_mut);
-
-        self.sidebar.rebuild_tree_view();
-        self.create_req_form_state = CreateReqFormState::default();
-        self.collection_store.borrow_mut().clear_overlay();
-
-        // TODO: maybe the collection store should be responsible for syncing to disk
-        self.sync_collection_changes();
     }
 
     fn sync_collection_changes(&mut self) {
@@ -621,7 +264,9 @@ impl Renderable for CollectionViewer<'_> {
             CollectionViewerOverlay::CreateDirectory => {
                 self.sidebar.draw_overlay(frame, overlay)?;
             }
-            CollectionViewerOverlay::RequestMethod => self.draw_request_method_form(frame),
+            CollectionViewerOverlay::EditRequest => {
+                self.sidebar.draw_overlay(frame, overlay)?;
+            }
             CollectionViewerOverlay::HeadersHelp => {
                 self.request_editor.draw_overlay(frame, overlay)?
             }
@@ -752,11 +397,16 @@ impl Eventful for CollectionViewer<'_> {
                         .collection_store
                         .borrow_mut()
                         .push_overlay(CollectionViewerOverlay::CreateRequest),
+                    Some(SidebarEvent::EditRequest) => self
+                        .collection_store
+                        .borrow_mut()
+                        .push_overlay(CollectionViewerOverlay::EditRequest),
                     Some(SidebarEvent::CreateDirectory) => self
                         .collection_store
                         .borrow_mut()
                         .push_overlay(CollectionViewerOverlay::CreateDirectory),
                     Some(SidebarEvent::RemoveSelection) => self.update_selection(None),
+                    Some(SidebarEvent::SyncCollection) => self.sync_collection_changes(),
                     Some(SidebarEvent::Quit) => return Ok(Some(Command::Quit)),
                     // when theres no event we do nothing
                     None => {}

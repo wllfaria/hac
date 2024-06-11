@@ -4,7 +4,7 @@ use crate::ascii::LOGO_ASCII;
 use crate::pages::collection_viewer::collection_store::CollectionStore;
 use crate::pages::collection_viewer::sidebar::request_form::FormField;
 use crate::pages::collection_viewer::sidebar::request_form::RequestForm;
-use crate::pages::collection_viewer::sidebar::request_form::RequestFormCreate;
+use crate::pages::collection_viewer::sidebar::request_form::RequestFormEdit;
 use crate::pages::collection_viewer::sidebar::request_form::RequestFormEvent;
 use crate::pages::collection_viewer::sidebar::RequestFormTrait;
 use crate::pages::Eventful;
@@ -17,30 +17,33 @@ use std::sync::{Arc, RwLock};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use rand::Rng;
 
-impl<'rf> RequestFormTrait for RequestForm<'rf, RequestFormCreate> {}
+impl<'rf> RequestFormTrait for RequestForm<'rf, RequestFormEdit> {}
 
-impl<'rf> RequestForm<'rf, RequestFormCreate> {
+impl<'rf> RequestForm<'rf, RequestFormEdit> {
     pub fn new(
         colors: &'rf hac_colors::Colors,
         collection_store: Rc<RefCell<CollectionStore>>,
+        request: Arc<RwLock<Request>>,
     ) -> Self {
         let logo_idx = rand::thread_rng().gen_range(0..LOGO_ASCII.len());
+        let request_method = request.read().unwrap().method.clone();
+        let request_name = request.read().unwrap().name.clone();
 
         RequestForm {
             colors,
             collection_store,
             logo_idx,
-            request_name: String::default(),
-            request_method: RequestMethod::Get,
+            request_name,
+            request_method,
             parent_dir: None,
             focused_field: FormField::Name,
             marker: std::marker::PhantomData,
-            request: None,
+            request: Some(request),
         }
     }
 }
 
-impl Eventful for RequestForm<'_, RequestFormCreate> {
+impl Eventful for RequestForm<'_, RequestFormEdit> {
     type Result = RequestFormEvent;
 
     #[tracing::instrument(skip_all, err)]
@@ -56,28 +59,13 @@ impl Eventful for RequestForm<'_, RequestFormCreate> {
         }
 
         if let KeyCode::Enter = key_event.code {
-            let store = self.collection_store.borrow_mut();
-            let collection = store
-                .get_collection()
-                .expect("tried to create a request without a collection");
+            let request = self.request.as_mut().unwrap();
+            let mut request = request.write().unwrap();
 
-            let mut collection = collection.borrow_mut();
-            let requests = collection
-                .requests
-                .get_or_insert(Arc::new(RwLock::new(vec![])));
-            let mut requests = requests.write().unwrap();
+            request.name.clone_from(&self.request_name);
+            request.method.clone_from(&self.request_method);
 
-            requests.push(RequestKind::Single(Arc::new(RwLock::new(Request {
-                id: uuid::Uuid::new_v4().to_string(),
-                body: None,
-                body_type: None,
-                headers: None,
-                method: self.request_method.clone(),
-                name: self.request_name.clone(),
-                uri: String::default(),
-            }))));
-
-            drop(store);
+            drop(request);
             self.reset();
             return Ok(Some(RequestFormEvent::Confirm));
         }
