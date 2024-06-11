@@ -57,6 +57,21 @@ pub enum RequestMethod {
     Delete,
 }
 
+impl TryFrom<usize> for RequestMethod {
+    type Error = anyhow::Error;
+
+    fn try_from(value: usize) -> anyhow::Result<RequestMethod, Self::Error> {
+        match value {
+            0 => Ok(RequestMethod::Get),
+            1 => Ok(RequestMethod::Post),
+            2 => Ok(RequestMethod::Put),
+            3 => Ok(RequestMethod::Patch),
+            4 => Ok(RequestMethod::Delete),
+            _ => anyhow::bail!("invalid request method index"),
+        }
+    }
+}
+
 impl RequestMethod {
     pub fn next(&self) -> Self {
         match self {
@@ -67,13 +82,23 @@ impl RequestMethod {
             RequestMethod::Delete => RequestMethod::Get,
         }
     }
+
+    pub fn prev(&self) -> Self {
+        match self {
+            RequestMethod::Get => RequestMethod::Delete,
+            RequestMethod::Post => RequestMethod::Get,
+            RequestMethod::Put => RequestMethod::Post,
+            RequestMethod::Patch => RequestMethod::Put,
+            RequestMethod::Delete => RequestMethod::Patch,
+        }
+    }
 }
 
 impl std::fmt::Display for RequestMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Post => f.write_str("POST"),
             Self::Get => f.write_str("GET"),
+            Self::Post => f.write_str("POST"),
             Self::Put => f.write_str("PUT"),
             Self::Patch => f.write_str("PATCH"),
             Self::Delete => f.write_str("DELETE"),
@@ -82,14 +107,15 @@ impl std::fmt::Display for RequestMethod {
 }
 
 impl RequestMethod {
-    pub fn len(&self) -> Option<RequestMethod> {
-        match self {
-            RequestMethod::Get => Some(RequestMethod::Post),
-            RequestMethod::Post => Some(RequestMethod::Put),
-            RequestMethod::Put => Some(RequestMethod::Patch),
-            RequestMethod::Patch => Some(RequestMethod::Delete),
-            RequestMethod::Delete => None,
-        }
+    pub fn iter() -> std::slice::Iter<'static, RequestMethod> {
+        [
+            RequestMethod::Get,
+            RequestMethod::Post,
+            RequestMethod::Put,
+            RequestMethod::Patch,
+            RequestMethod::Delete,
+        ]
+        .iter()
     }
 }
 

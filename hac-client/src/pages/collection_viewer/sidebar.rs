@@ -1,6 +1,11 @@
+mod create_request_form;
+
 use hac_core::collection::types::{Request, RequestKind, RequestMethod};
 
 use crate::pages::collection_viewer::collection_store::{CollectionStore, CollectionStoreAction};
+use crate::pages::collection_viewer::collection_viewer::{CollectionViewerOverlay, PaneFocus};
+use crate::pages::collection_viewer::sidebar::create_request_form::CreateRequestForm;
+use crate::pages::collection_viewer::sidebar::create_request_form::CreateRequestFormEvent;
 use crate::pages::{Eventful, Renderable};
 
 use std::cell::RefCell;
@@ -15,14 +20,15 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
-use super::collection_viewer::PaneFocus;
-
 /// set of events Sidebar can emit to the caller when handling events.
 #[derive(Debug)]
 pub enum SidebarEvent {
-    /// user pressed CreateRequest hotkey, which should notify the caller to open
+    /// user pressed `CreateRequest (n)` hotkey, which should notify the caller to open
     /// the create_request_form and properly handle the creation of a new request
     CreateRequest,
+    /// user pressed `CreateDirectory (d)` hotkey, which should notify the caller to open
+    /// the `create_directory_form` overlay to create a new directory on the collection
+    CreateDirectory,
     /// user pressed `Esc` so we notify the caller to remove the selection from
     /// this pane, essentially bubbling the key handling scope to the caller
     RemoveSelection,
@@ -36,6 +42,7 @@ pub struct Sidebar<'sbar> {
     colors: &'sbar hac_colors::Colors,
     lines: Vec<Paragraph<'static>>,
     collection_store: Rc<RefCell<CollectionStore>>,
+    create_request_form: CreateRequestForm<'sbar>,
 }
 
 impl<'sbar> Sidebar<'sbar> {
@@ -45,6 +52,7 @@ impl<'sbar> Sidebar<'sbar> {
     ) -> Self {
         let mut sidebar = Self {
             colors,
+            create_request_form: CreateRequestForm::new(colors, collection_store.clone()),
             lines: vec![],
             collection_store,
         };
@@ -64,6 +72,22 @@ impl<'sbar> Sidebar<'sbar> {
             collection_store.get_dirs_expanded().unwrap().clone(),
             self.colors,
         );
+    }
+
+    pub fn draw_overlay(
+        &mut self,
+        frame: &mut Frame,
+        overlay: CollectionViewerOverlay,
+    ) -> anyhow::Result<()> {
+        match overlay {
+            CollectionViewerOverlay::CreateRequest => {
+                self.create_request_form.draw(frame, frame.size())?;
+            }
+            CollectionViewerOverlay::CreateDirectory => {}
+            _ => {}
+        };
+
+        Ok(())
     }
 }
 
@@ -123,33 +147,44 @@ impl<'a> Eventful for Sidebar<'a> {
             "handled an event to the sidebar while it was not selected"
         );
 
+        let mut store = self.collection_store.borrow_mut();
+
+        match store.peek_overlay() {
+            CollectionViewerOverlay::CreateRequest => {
+                match self.create_request_form.handle_key_event(key_event)? {
+                    Some(CreateRequestFormEvent::Confirm) => return Ok(None),
+                    Some(CreateRequestFormEvent::Cancel) => _ = store.pop_overlay(),
+                    None => return Ok(None),
+                }
+            }
+            CollectionViewerOverlay::CreateDirectory => todo!(),
+            _ => {}
+        };
+
         if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
             return Ok(Some(SidebarEvent::Quit));
         }
 
-        let mut store = self.collection_store.borrow_mut();
         match key_event.code {
             KeyCode::Enter => {
-                if store.get_hovered_request().is_some() && store.get_requests().is_some() {
-                    let request = store.find_hovered_request();
-                    match request {
-                        RequestKind::Nested(_) => {
-                            store
-                                .dispatch(CollectionStoreAction::ToggleDirectory(request.get_id()));
-                        }
-                        RequestKind::Single(req) => {
-                            store.dispatch(CollectionStoreAction::SetSelectedRequest(Some(req)));
-                        }
+                if store.get_requests().is_none() || store.get_hovered_request().is_none() {
+                    return Ok(None);
+                }
+
+                let request = store.find_hovered_request();
+                match request {
+                    RequestKind::Nested(_) => {
+                        store.dispatch(CollectionStoreAction::ToggleDirectory(request.get_id()));
+                    }
+                    RequestKind::Single(req) => {
+                        store.dispatch(CollectionStoreAction::SetSelectedRequest(Some(req)));
                     }
                 }
             }
-            KeyCode::Char('j') | KeyCode::Down => {
-                store.dispatch(CollectionStoreAction::HoverNext);
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                store.dispatch(CollectionStoreAction::HoverPrev);
-            }
+            KeyCode::Char('j') | KeyCode::Down => store.dispatch(CollectionStoreAction::HoverNext),
+            KeyCode::Char('k') | KeyCode::Up => store.dispatch(CollectionStoreAction::HoverPrev),
             KeyCode::Char('n') => return Ok(Some(SidebarEvent::CreateRequest)),
+            KeyCode::Char('d') => return Ok(Some(SidebarEvent::CreateDirectory)),
             KeyCode::Esc => return Ok(Some(SidebarEvent::RemoveSelection)),
             _ => {}
         }

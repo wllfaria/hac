@@ -12,6 +12,7 @@ use hac_core::text_object::{TextObject, Write};
 use headers_editor::{HeadersEditor, HeadersEditorEvent};
 
 use crate::pages::collection_viewer::collection_store::CollectionStore;
+use crate::pages::collection_viewer::collection_viewer::{CollectionViewerOverlay, PaneFocus};
 use crate::pages::under_construction::UnderConstruction;
 use crate::pages::Eventful;
 use crate::pages::Renderable;
@@ -27,8 +28,6 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::widgets::{Block, Borders, Tabs};
 use ratatui::Frame;
-
-use super::collection_viewer::{CollectionViewerOverlay, PaneFocus};
 
 /// set of possible events the edtior can send to the parent
 #[derive(Debug)]

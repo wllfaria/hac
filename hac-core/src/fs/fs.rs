@@ -1,10 +1,14 @@
 use crate::collection::{collection::create_from_form, Collection};
 use crate::fs::error::FsError;
 
-use std::path::PathBuf;
+use std::path::Path;
 
-#[tracing::instrument(err)]
-pub async fn delete_collection(path: &PathBuf) -> anyhow::Result<(), FsError> {
+#[tracing::instrument(err, skip_all)]
+pub async fn delete_collection<P>(path: P) -> anyhow::Result<(), FsError>
+where
+    P: AsRef<Path>,
+{
+    let path = path.as_ref();
     tokio::fs::remove_file(path)
         .await
         .map_err(|_| FsError::IOError(format!("failed to delete collection: {:?}", path)))?;

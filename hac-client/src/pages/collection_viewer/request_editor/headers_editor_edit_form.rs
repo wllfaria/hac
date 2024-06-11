@@ -6,7 +6,7 @@ use crate::pages::overlay::make_overlay;
 use crate::pages::{Eventful, Renderable};
 
 use std::cell::RefCell;
-use std::ops::{Add, Div};
+use std::ops::{Add, Div, Sub};
 use std::rc::Rc;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -135,7 +135,7 @@ impl Renderable for HeadersEditorForm<'_> {
 
         let total_size = logo_size.add(11).add(2);
         let mut size = Rect::new(
-            size.width.div(2).saturating_sub(25),
+            size.width.div(2).sub(25),
             size.height
                 .div(2)
                 .saturating_sub(logo_size.div(2))
@@ -151,12 +151,17 @@ impl Renderable for HeadersEditorForm<'_> {
             size.y = size.height.div(2).saturating_sub(5);
         }
 
-        let name_input = Input::new(self.colors, "Name".into());
-        let value_input = Input::new(self.colors, "Value".into());
+        let mut name_input = Input::new(self.colors, "Name".into());
+        let mut value_input = Input::new(self.colors, "Value".into());
         let hint = Paragraph::new(
             "Press enter to confirm, press esc to cancel".fg(self.colors.bright.black),
         )
         .centered();
+
+        match self.focused_input {
+            HeadersEditorFormInput::Name => name_input.focus(),
+            HeadersEditorFormInput::Value => value_input.focus(),
+        }
 
         if !logo.is_empty() {
             let logo = logo

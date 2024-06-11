@@ -3,10 +3,10 @@ use hac_core::command::Command;
 use hac_core::net::request_manager::Response;
 
 use crate::pages::collection_viewer::collection_store::{CollectionStore, CollectionStoreAction};
-use crate::pages::collection_viewer::request_editor::RequestEditor;
-use crate::pages::collection_viewer::request_uri::RequestUri;
-use crate::pages::collection_viewer::response_viewer::ResponseViewer;
-use crate::pages::collection_viewer::sidebar::Sidebar;
+use crate::pages::collection_viewer::request_editor::{RequestEditor, RequestEditorEvent};
+use crate::pages::collection_viewer::request_uri::{RequestUri, RequestUriEvent};
+use crate::pages::collection_viewer::response_viewer::{ResponseViewer, ResponseViewerEvent};
+use crate::pages::collection_viewer::sidebar::{self, Sidebar, SidebarEvent};
 use crate::pages::input::Input;
 use crate::pages::overlay::draw_overlay;
 use crate::pages::{Eventful, Renderable};
@@ -24,11 +24,6 @@ use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph};
 use ratatui::Frame;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use super::request_editor::RequestEditorEvent;
-use super::request_uri::RequestUriEvent;
-use super::response_viewer::ResponseViewerEvent;
-use super::sidebar::{self, SidebarEvent};
-
 #[derive(Debug, PartialEq)]
 pub struct ExplorerLayout {
     pub hint_pane: Rect,
@@ -43,6 +38,7 @@ pub struct ExplorerLayout {
 pub enum CollectionViewerOverlay {
     None,
     CreateRequest,
+    CreateDirectory,
     RequestMethod,
     HeadersHelp,
     HeadersDelete,
@@ -168,33 +164,33 @@ impl<'cv> CollectionViewer<'cv> {
         let layout = build_layout(size);
         let (request_tx, response_rx) = unbounded_channel::<Response>();
 
-        CollectionViewer {
-            request_editor: RequestEditor::new(
-                colors,
-                config,
-                collection_store.clone(),
-                layout.req_editor,
-            ),
-            response_viewer: ResponseViewer::new(
-                colors,
-                collection_store.clone(),
-                None,
-                layout.response_preview,
-            ),
-            sidebar: sidebar::Sidebar::new(colors, collection_store.clone()),
-            request_uri: RequestUri::new(colors, collection_store.clone(), layout.req_uri),
+        let sidebar = sidebar::Sidebar::new(colors, collection_store.clone());
 
+        let request_editor =
+            RequestEditor::new(colors, config, collection_store.clone(), layout.req_editor);
+
+        let response_viewer = ResponseViewer::new(
+            colors,
+            collection_store.clone(),
+            None,
+            layout.response_preview,
+        );
+
+        let request_uri = RequestUri::new(colors, collection_store.clone(), layout.req_uri);
+
+        CollectionViewer {
+            request_editor,
+            response_viewer,
+            sidebar,
+            request_uri,
             colors,
             layout,
             global_command_sender: None,
             collection_sync_timer: std::time::Instant::now(),
-
             create_req_form_state: CreateReqFormState::default(),
-
             responses_map: HashMap::default(),
             response_rx,
             request_tx,
-
             dry_run,
             collection_store,
         }
@@ -221,62 +217,6 @@ impl<'cv> CollectionViewer<'cv> {
                     .dispatch(CollectionStoreAction::SetPendingRequest(false));
             });
         }
-    }
-
-    fn draw_req_uri_hint(&self, frame: &mut Frame) {
-        let hint = "[type anything -> edit] [enter -> execute request] [<C-c> -> quit] [tab -> switch pane]"
-            .fg(self.colors.normal.magenta)
-            .into_centered_line();
-
-        frame.render_widget(hint, self.layout.hint_pane);
-    }
-
-    fn draw_sidebar_hint(&self, frame: &mut Frame) {
-        let hint =
-        "[j/k -> navigate] [enter -> select item] [n -> create request] [? -> help] [<C-c> -> quit] [tab -> switch pane]"
-            .fg(self.colors.normal.magenta)
-            .into_centered_line();
-
-        frame.render_widget(hint, self.layout.hint_pane);
-    }
-
-    fn draw_preview_hint(&self, frame: &mut Frame) {
-        let hint = match self
-            .collection_store.borrow()
-            .get_selected_pane()
-            .as_ref()
-            .is_some_and(|selected| selected.eq(&PaneFocus::Preview))
-        {
-            false => "[j/k -> scroll] [enter -> interact] [? -> help] [<C-c> -> quit] [tab -> switch pane]"
-                .fg(self.colors.normal.magenta)
-                .into_centered_line(),
-            true => {
-                "[j/k -> scroll] [esc -> deselect] [tab -> switch tab] [? -> help] [<C-c> -> quit] [tab -> switch tab]"
-                    .fg(self.colors.normal.magenta)
-                    .into_centered_line()
-            }
-        };
-
-        frame.render_widget(hint, self.layout.hint_pane);
-    }
-
-    fn draw_editor_hint(&self, frame: &mut Frame) {
-        let hint = match self
-            .collection_store
-            .borrow()
-            .get_selected_pane()
-            .as_ref()
-            .is_some_and(|selected| selected.eq(&PaneFocus::Editor))
-        {
-            false => "[enter -> interact] [? -> help] [<C-c> -> quit] [tab -> switch pane]"
-                .fg(self.colors.normal.magenta)
-                .into_centered_line(),
-            true => "[esc -> deselect] [tab -> switch tab] [? -> help] [<C-c> -> quit] [tab -> switch tab]"
-                .fg(self.colors.normal.magenta)
-                .into_centered_line(),
-        };
-
-        frame.render_widget(hint, self.layout.hint_pane);
     }
 
     fn draw_create_request_form(&mut self, frame: &mut Frame) {
@@ -675,7 +615,12 @@ impl Renderable for CollectionViewer<'_> {
 
         let overlay = self.collection_store.borrow().peek_overlay();
         match overlay {
-            CollectionViewerOverlay::CreateRequest => self.draw_create_request_form(frame),
+            CollectionViewerOverlay::CreateRequest => {
+                self.sidebar.draw_overlay(frame, overlay)?;
+            }
+            CollectionViewerOverlay::CreateDirectory => {
+                self.sidebar.draw_overlay(frame, overlay)?;
+            }
             CollectionViewerOverlay::RequestMethod => self.draw_request_method_form(frame),
             CollectionViewerOverlay::HeadersHelp => {
                 self.request_editor.draw_overlay(frame, overlay)?
@@ -803,11 +748,14 @@ impl Eventful for CollectionViewer<'_> {
         if let Some(curr_pane) = selected_pane {
             match curr_pane {
                 PaneFocus::Sidebar => match self.sidebar.handle_key_event(key_event)? {
-                    Some(SidebarEvent::CreateRequest) => {
-                        self.collection_store
-                            .borrow_mut()
-                            .push_overlay(CollectionViewerOverlay::CreateRequest);
-                    }
+                    Some(SidebarEvent::CreateRequest) => self
+                        .collection_store
+                        .borrow_mut()
+                        .push_overlay(CollectionViewerOverlay::CreateRequest),
+                    Some(SidebarEvent::CreateDirectory) => self
+                        .collection_store
+                        .borrow_mut()
+                        .push_overlay(CollectionViewerOverlay::CreateDirectory),
                     Some(SidebarEvent::RemoveSelection) => self.update_selection(None),
                     Some(SidebarEvent::Quit) => return Ok(Some(Command::Quit)),
                     // when theres no event we do nothing

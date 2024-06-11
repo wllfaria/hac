@@ -3,7 +3,6 @@ use ratatui::layout::Rect;
 use ratatui::style::{Style, Styled};
 use ratatui::widgets::{Block, Borders, Paragraph, StatefulWidget, Widget};
 
-
 /// input component used in forms and everywhere else that the user can
 /// input text to a single, named field
 pub struct Input<'a> {
@@ -38,7 +37,7 @@ impl<'a> Input<'a> {
 
     fn build_input(&self, value: String, size: Rect) -> Paragraph<'_> {
         let border_color = if self.focused {
-            Style::default().fg(self.colors.bright.magenta)
+            Style::default().fg(self.colors.normal.red)
         } else {
             Style::default().fg(self.colors.primary.hover)
         };
