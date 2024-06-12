@@ -4,20 +4,27 @@ use std::sync::{Arc, RwLock};
 
 use serde::{Deserialize, Serialize};
 
+/// a collection is represented as a file on the file system and holds every
+/// request and metadata
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Collection {
+    /// basic information about the collection such as name and description
     pub info: Info,
+    /// maybe a vector of `RequestKind` that are part of the collection
     pub requests: Option<Arc<RwLock<Vec<RequestKind>>>>,
+    /// path is a virtual field used only during runtime to know where to
+    /// sync the file, this will be the absolute path to the file on the
+    /// users computer
     #[serde(skip)]
     pub path: PathBuf,
 }
 
-impl AsRef<Collection> for Collection {
-    fn as_ref(&self) -> &Collection {
-        self
-    }
-}
-
+/// we store requests on a collection and on directories as a enum that could
+/// be either an request or a directory. This enables us to have nested
+/// directories, although we don't support that now and might not ever support.
+///
+/// Single means its a request
+/// Nested means its a directory
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum RequestKind {
@@ -26,6 +33,8 @@ pub enum RequestKind {
 }
 
 impl RequestKind {
+    /// helper method to get the name of either a request or a directory without
+    /// needing to narrow the type
     pub fn get_name(&self) -> String {
         match self {
             RequestKind::Single(req) => req.read().unwrap().name.to_string(),
@@ -33,6 +42,8 @@ impl RequestKind {
         }
     }
 
+    /// helper method to get the id of either a request or a directory without
+    /// needing to narrow the type
     pub fn get_id(&self) -> String {
         match self {
             RequestKind::Single(req) => req.read().unwrap().id.to_string(),
@@ -41,12 +52,17 @@ impl RequestKind {
     }
 }
 
+/// we store headers as a simple struct which is composed by a pair which
+/// represents name/value of a header, and wether it is enabled or not.
+///
+/// disabled headers should not be sent on requests
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct HeaderMap {
     pub pair: (String, String),
     pub enabled: bool,
 }
 
+/// set of methods we currently support on HTTP requests
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum RequestMethod {
@@ -72,6 +88,8 @@ impl TryFrom<usize> for RequestMethod {
     }
 }
 
+/// this is a cyclic implementation of `next` and `prev` that are used
+/// by the UI to cycle through elements, usually by using tab
 impl RequestMethod {
     pub fn next(&self) -> Self {
         match self {
@@ -106,6 +124,11 @@ impl std::fmt::Display for RequestMethod {
     }
 }
 
+// custom iterator implementation for RequestMethod to be able to map over
+// its variants without writing a lot of boilerplate everytime
+//
+// NOTE: if this kind of behavior repeats a lot we might want to introduce
+// a helper crate like strum
 impl RequestMethod {
     pub fn iter() -> std::slice::Iter<'static, RequestMethod> {
         [
@@ -119,39 +142,64 @@ impl RequestMethod {
     }
 }
 
+/// This is how we store a request on the system, basically this stores all
+/// needed information about a request to be able to perform any actions we
+/// allow.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Request {
+    /// we store an uuid on each request to be able to easily identify them
+    /// as identifying by name is
     pub id: String,
+    /// each request has to have a method, this is the HTTP method that will
+    /// be used when realizing requests
     pub method: RequestMethod,
+    /// name of the request that will be displayed on the sidebar
     pub name: String,
+    /// uri that the request will be sent against
     pub uri: String,
+    /// all headers used on given request, sometimes, we may include additional
+    /// headers if required to make a request
     pub headers: Option<Vec<HeaderMap>>,
+    /// if this request lives as a children of a directory, the uuid of given
+    /// directory will be stored here, this is mainly used to know where to
+    /// insert or move the request
+    pub parent: Option<String>,
+    /// body of the request, this will only be sent in methods that accept a
+    /// body, like POST or PUT, for example
     pub body: Option<String>,
     #[serde(rename = "bodyType")]
+    /// the type of the body to be used, like `application/json` or any other
+    /// accepted body type
     pub body_type: Option<BodyType>,
 }
 
+/// a collection of all available body types we support.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum BodyType {
     #[serde(rename = "json")]
     Json,
 }
 
-impl Hash for Request {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        state.write(format!("{}{}{}", self.method, self.name, self.uri).as_bytes());
-    }
-}
-
+/// a directory can hold a vector of requests, which will be
+/// displayed as a tree-like view in the sidebar
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct Directory {
+    /// as it is the same with requests, directories have an id to make
+    /// easier to know relations without having to rely on references
+    /// and lifetimes
     pub id: String,
+    /// name of the directory that will be used in the display on the
+    /// sidebar
     pub name: String,
+    /// vector of requests that are children of this directory
     pub requests: Arc<RwLock<Vec<RequestKind>>>,
 }
 
+/// basic information about a colleciton
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Info {
+    /// name of the collection that will be displayed onscreen
     pub name: String,
+    /// a optional description in case it is useful
     pub description: Option<String>,
 }

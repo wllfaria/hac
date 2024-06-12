@@ -1,15 +1,17 @@
+mod create_directory_form;
 mod create_request_form;
 mod edit_request_form;
 mod request_form;
 
 use hac_core::collection::types::{Request, RequestKind, RequestMethod};
 
+use super::sidebar::create_directory_form::{CreateDirectoryForm, CreateDirectoryFormEvent};
+use super::sidebar::request_form::RequestForm;
+use super::sidebar::request_form::RequestFormCreate;
+use super::sidebar::request_form::RequestFormEdit;
+use super::sidebar::request_form::RequestFormEvent;
 use crate::pages::collection_viewer::collection_store::{CollectionStore, CollectionStoreAction};
 use crate::pages::collection_viewer::collection_viewer::{CollectionViewerOverlay, PaneFocus};
-use crate::pages::collection_viewer::sidebar::request_form::RequestForm;
-use crate::pages::collection_viewer::sidebar::request_form::RequestFormCreate;
-use crate::pages::collection_viewer::sidebar::request_form::RequestFormEdit;
-use crate::pages::collection_viewer::sidebar::request_form::RequestFormEvent;
 use crate::pages::{Eventful, Renderable};
 
 use std::cell::RefCell;
@@ -75,6 +77,7 @@ pub struct Sidebar<'sbar> {
     lines: Vec<Paragraph<'static>>,
     collection_store: Rc<RefCell<CollectionStore>>,
     request_form: FormVariant<'sbar>,
+    directory_form: CreateDirectoryForm<'sbar>,
 }
 
 impl<'sbar> Sidebar<'sbar> {
@@ -88,6 +91,7 @@ impl<'sbar> Sidebar<'sbar> {
                 colors,
                 collection_store.clone(),
             )),
+            directory_form: CreateDirectoryForm::new(colors, collection_store.clone()),
             lines: vec![],
             collection_store,
         };
@@ -121,7 +125,9 @@ impl<'sbar> Sidebar<'sbar> {
             CollectionViewerOverlay::EditRequest => {
                 self.request_form.inner().draw(frame, frame.size())?;
             }
-            CollectionViewerOverlay::CreateDirectory => {}
+            CollectionViewerOverlay::CreateDirectory => {
+                self.directory_form.draw(frame, frame.size())?;
+            }
             _ => {}
         };
 
@@ -207,7 +213,25 @@ impl<'a> Eventful for Sidebar<'a> {
                     None => return Ok(None),
                 }
             }
-            CollectionViewerOverlay::CreateDirectory => todo!(),
+            CollectionViewerOverlay::CreateDirectory => {
+                match self.directory_form.handle_key_event(key_event)? {
+                    Some(CreateDirectoryFormEvent::Confirm) => {
+                        let mut store = self.collection_store.borrow_mut();
+                        store.pop_overlay();
+                        drop(store);
+                        self.rebuild_tree_view();
+                        return Ok(Some(SidebarEvent::SyncCollection));
+                    }
+                    Some(CreateDirectoryFormEvent::Cancel) => {
+                        let mut store = self.collection_store.borrow_mut();
+                        store.pop_overlay();
+                        drop(store);
+                        self.rebuild_tree_view();
+                        return Ok(None);
+                    }
+                    None => return Ok(None),
+                }
+            }
             CollectionViewerOverlay::EditRequest => {
                 // when editing, we setup the form to display the current header information.
                 match self.request_form.inner().handle_key_event(key_event)? {

@@ -71,6 +71,7 @@ impl Eventful for RequestForm<'_, RequestFormCreate> {
                 id: uuid::Uuid::new_v4().to_string(),
                 body: None,
                 body_type: None,
+                parent: None,
                 headers: None,
                 method: self.request_method.clone(),
                 name: self.request_name.clone(),
