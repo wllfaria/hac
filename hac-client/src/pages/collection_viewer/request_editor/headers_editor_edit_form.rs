@@ -184,13 +184,15 @@ impl Renderable for HeadersEditorForm<'_> {
         match self.focused_input {
             HeadersEditorFormInput::Name => {
                 frame.set_cursor(
-                    name_size.x.add(header.pair.0.len().add(1) as u16),
+                    name_size.x.add(header.pair.0.chars().count().add(1) as u16),
                     name_size.y.add(1),
                 );
             }
             HeadersEditorFormInput::Value => {
                 frame.set_cursor(
-                    value_size.x.add(header.pair.1.len().add(1) as u16),
+                    value_size
+                        .x
+                        .add(header.pair.1.chars().count().add(1) as u16),
                     value_size.y.add(1),
                 );
             }

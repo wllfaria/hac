@@ -184,7 +184,10 @@ impl<'rf, State> Renderable for RequestForm<'rf, State> {
 
         if self.focused_field.eq(&FormField::Name) {
             frame.set_cursor(
-                name_size.x.add(self.request_name.len() as u16).add(1),
+                name_size
+                    .x
+                    .add(self.request_name.chars().count() as u16)
+                    .add(1),
                 name_size.y.add(1),
             );
         }

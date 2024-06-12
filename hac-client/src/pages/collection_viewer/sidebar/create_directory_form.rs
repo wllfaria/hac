@@ -106,7 +106,10 @@ impl Renderable for CreateDirectoryForm<'_> {
         frame.render_widget(hint, hint_size);
 
         frame.set_cursor(
-            input_size.x.add(self.dir_name.len() as u16).add(1),
+            input_size
+                .x
+                .add(self.dir_name.chars().count() as u16)
+                .add(1),
             input_size.y.add(1),
         );
 

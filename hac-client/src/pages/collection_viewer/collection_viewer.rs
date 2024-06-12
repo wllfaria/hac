@@ -306,7 +306,7 @@ impl Renderable for CollectionViewer<'_> {
                     self.layout
                         .req_uri
                         .x
-                        .add(request.read().unwrap().uri.len() as u16)
+                        .add(request.read().unwrap().uri.chars().count() as u16)
                         .add(1),
                     self.layout.req_uri.y.add(1),
                 )
