@@ -155,12 +155,16 @@ pub fn build_syntax_highlighted_lines(
 /// eg:
 ///
 /// ```rust
+/// use ratatui::prelude::Color;
+/// use hac_client::utils::blend_colors_multiply;
+///
 /// blend_colors_multiply(Color::Rgb(255, 255, 25), Color::Rgb(0, 0, 0), 0.5);
 /// ```
 ///
 /// will give you
 ///
 /// ```rust
+/// use ratatui::prelude::Color;
 /// Color::Rgb(128, 128, 128);
 /// ```
 pub fn blend_colors_multiply(original: Color, overlay: Color, alpha: f32) -> Color {

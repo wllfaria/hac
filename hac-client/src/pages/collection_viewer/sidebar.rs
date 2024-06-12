@@ -57,9 +57,7 @@ enum FormVariant<'sbar> {
 
 /// this is just a helper trait to be able to return the inner reference of the form
 /// from the enum as we cannot return it like:
-/// ```rust
-/// &mut dyn Renderable + Eventful<Result = RequestFormEvent>;
-/// ```
+/// `&mut dyn Renderable + Eventful<Result = RequestFormEvent>;`
 pub trait RequestFormTrait: Renderable + Eventful<Result = RequestFormEvent> {}
 
 impl FormVariant<'_> {

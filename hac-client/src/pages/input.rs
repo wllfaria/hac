@@ -109,7 +109,7 @@ mod tests {
                     .title("my input".to_string())
                     .title_style(Style::default().fg(colors.normal.white))
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(colors.bright.magenta)),
+                    .border_style(Style::default().fg(colors.normal.red)),
             )
             .style(Style::default().fg(colors.normal.magenta));
 
@@ -134,7 +134,7 @@ mod tests {
             )
             .style(Style::default().fg(colors.normal.white));
 
-        let size = Rect::new(0, 0, 10, 10);
+        let size = Rect::new(0, 0, 8, 3);
         let result = input.build_input("my value".into(), size);
 
         assert_eq!(expected, result);
@@ -150,12 +150,12 @@ mod tests {
                     .title("my input".to_string())
                     .title_style(Style::default().fg(colors.normal.white))
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(colors.bright.magenta)),
+                    .border_style(Style::default().fg(colors.normal.red)),
             )
             .style(Style::default().fg(colors.normal.white));
 
         input.focus();
-        let size = Rect::new(0, 0, 10, 10);
+        let size = Rect::new(0, 0, 8, 3);
         let result = input.build_input("my value".into(), size);
 
         assert_eq!(expected, result);
