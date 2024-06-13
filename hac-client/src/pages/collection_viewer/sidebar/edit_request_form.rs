@@ -1,13 +1,15 @@
 use hac_core::collection::types::*;
 
+use super::request_form::FormField;
+use super::request_form::RequestForm;
+use super::request_form::RequestFormEdit;
+use super::request_form::RequestFormEvent;
+use super::select_request_parent::{SelectRequestParent, SelectRequestParentEvent};
+use super::RequestFormTrait;
 use crate::ascii::LOGO_ASCII;
 use crate::pages::collection_viewer::collection_store::CollectionStore;
-use crate::pages::collection_viewer::sidebar::request_form::FormField;
-use crate::pages::collection_viewer::sidebar::request_form::RequestForm;
-use crate::pages::collection_viewer::sidebar::request_form::RequestFormEdit;
-use crate::pages::collection_viewer::sidebar::request_form::RequestFormEvent;
-use crate::pages::collection_viewer::sidebar::RequestFormTrait;
-use crate::pages::Eventful;
+use crate::pages::collection_viewer::collection_viewer::CollectionViewerOverlay;
+use crate::pages::{Eventful, Renderable};
 
 use std::cell::RefCell;
 use std::ops::Sub;
@@ -16,8 +18,21 @@ use std::sync::{Arc, RwLock};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use rand::Rng;
+use ratatui::Frame;
 
-impl<'rf> RequestFormTrait for RequestForm<'rf, RequestFormEdit> {}
+impl<'rf> RequestFormTrait for RequestForm<'rf, RequestFormEdit> {
+    fn draw_overlay(
+        &mut self,
+        frame: &mut Frame,
+        overlay: CollectionViewerOverlay,
+    ) -> anyhow::Result<()> {
+        if let CollectionViewerOverlay::SelectParentDir = overlay {
+            self.parent_selector.draw(frame, frame.size())?;
+        }
+
+        Ok(())
+    }
+}
 
 impl<'rf> RequestForm<'rf, RequestFormEdit> {
     pub fn new(
@@ -31,6 +46,7 @@ impl<'rf> RequestForm<'rf, RequestFormEdit> {
 
         RequestForm {
             colors,
+            parent_selector: SelectRequestParent::new(colors, collection_store.clone()),
             collection_store,
             logo_idx,
             request_name,
@@ -39,6 +55,7 @@ impl<'rf> RequestForm<'rf, RequestFormEdit> {
             focused_field: FormField::Name,
             marker: std::marker::PhantomData,
             request: Some(request),
+            no_available_parent_timer: None,
         }
     }
 }
@@ -48,6 +65,19 @@ impl Eventful for RequestForm<'_, RequestFormEdit> {
 
     #[tracing::instrument(skip_all, err)]
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
+        let overlay = self.collection_store.borrow().peek_overlay();
+        if let CollectionViewerOverlay::SelectParentDir = overlay {
+            match self.parent_selector.handle_key_event(key_event)? {
+                Some(SelectRequestParentEvent::Confirm(dir)) => {}
+                Some(SelectRequestParentEvent::Cancel) => {
+                    self.collection_store.borrow_mut().pop_overlay();
+                }
+                None => {}
+            }
+
+            return Ok(None);
+        }
+
         if let KeyCode::Tab = key_event.code {
             self.focused_field = self.focused_field.next();
             return Ok(None);
@@ -104,7 +134,41 @@ impl Eventful for RequestForm<'_, RequestFormEdit> {
                 KeyCode::Char('l') => self.request_method = self.request_method.next(),
                 _ => {}
             },
-            FormField::Parent => {}
+            FormField::Parent => {
+                if let KeyCode::Char(' ') = key_event.code {
+                    let mut store = self.collection_store.borrow_mut();
+                    let collection = store
+                        .get_collection()
+                        .expect("tried to select a parent without a collection");
+                    let collection = collection.borrow();
+
+                    let Some(requests) = collection.requests.as_ref() else {
+                        drop(store);
+                        self.set_no_parent_timer();
+                        return Ok(None);
+                    };
+
+                    let requests = requests.read().unwrap();
+                    if requests.is_empty() {
+                        drop(store);
+                        self.set_no_parent_timer();
+                        return Ok(None);
+                    }
+
+                    if requests
+                        .iter()
+                        .filter(|req| req.is_dir())
+                        .collect::<Vec<_>>()
+                        .is_empty()
+                    {
+                        drop(store);
+                        self.set_no_parent_timer();
+                        return Ok(None);
+                    }
+
+                    store.push_overlay(CollectionViewerOverlay::SelectParentDir);
+                }
+            }
         }
 
         Ok(None)

@@ -42,6 +42,14 @@ impl RequestKind {
         }
     }
 
+    /// helper method to know wether a request kind is a directory or not
+    pub fn is_dir(&self) -> bool {
+        match self {
+            RequestKind::Single(_) => false,
+            RequestKind::Nested(_) => true,
+        }
+    }
+
     /// helper method to get the id of either a request or a directory without
     /// needing to narrow the type
     pub fn get_id(&self) -> String {

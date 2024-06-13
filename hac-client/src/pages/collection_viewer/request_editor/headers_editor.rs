@@ -3,7 +3,7 @@ use crate::pages::collection_viewer::collection_viewer::CollectionViewerOverlay;
 use crate::pages::overlay::make_overlay;
 use crate::pages::{collection_viewer::collection_store::CollectionStore, Eventful, Renderable};
 
-use std::ops::{Div, Sub};
+use std::ops::{Div, Mul, Sub};
 use std::{cell::RefCell, ops::Add, rc::Rc};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -68,7 +68,7 @@ impl<'he> HeadersEditor<'he> {
             scroll: 0,
             selected_row: 5,
             row_height,
-            amount_on_view: layout.content_size.height.div(row_height).into(),
+            amount_on_view: layout.content_size.height.div_ceil(row_height).into(),
             layout,
             logo_idx,
         }
@@ -237,39 +237,41 @@ impl Renderable for HeadersEditor<'_> {
             .fg(self.colors.normal.yellow)
             .bold();
 
-        Layout::default()
-            .constraints((0..self.amount_on_view).map(|_| Constraint::Length(self.row_height)))
-            .direction(Direction::Vertical)
-            .split(self.layout.content_size)
+        for (idx, header) in headers
             .iter()
-            .map(|row| {
-                Layout::default()
-                    .constraints([
-                        Constraint::Length(2),
-                        Constraint::Fill(1),
-                        Constraint::Length(1),
-                        Constraint::Fill(1),
-                        Constraint::Length(1),
-                        Constraint::Length(7),
-                    ])
-                    .direction(Direction::Horizontal)
-                    .split(*row)
-                    .iter()
-                    .enumerate()
-                    // we are removing the empty space we just created between vallue and
-                    // the enabled checkbox the idea is to have something like this:
-                    //
-                    //   Name           Value            Enabled
-                    // > Header-Name    Header-Value       [x]
-                    //   Header-Name    Header-Value       [x]
-                    //
-                    .filter(|(idx, _)| idx.ne(&2) && idx.ne(&4))
-                    .map(|(_, rect)| *rect)
-                    .collect::<Vec<_>>()
-            })
-            .zip(headers.iter().skip(self.scroll).take(self.amount_on_view))
+            .skip(self.scroll)
+            .take(self.amount_on_view)
             .enumerate()
-            .for_each(|(idx, pair)| self.draw_row(pair, frame, idx));
+        {
+            let size = self.layout.content_size;
+            let offset = self.row_height.mul(idx as u16);
+            let size = Rect::new(size.x, size.y.add(offset), size.width, self.row_height);
+            let layout = Layout::default()
+                .constraints([
+                    Constraint::Length(2),
+                    Constraint::Fill(1),
+                    Constraint::Length(1),
+                    Constraint::Fill(1),
+                    Constraint::Length(1),
+                    Constraint::Length(7),
+                ])
+                .direction(Direction::Horizontal)
+                .split(size)
+                .iter()
+                .enumerate()
+                // the enabled checkbox the idea is to have something like this:
+                //
+                //   Name           Value            Enabled
+                // > Header-Name    Header-Value       [x]
+                //   Header-Name    Header-Value       [x]
+                //
+                .filter(|(idx, _)| idx.ne(&2) && idx.ne(&4))
+                .map(|(_, rect)| *rect)
+                .collect::<Vec<_>>();
+
+            let pair = (layout, header);
+            self.draw_row(pair, frame, idx);
+        }
 
         let mut scrollbar_state = ScrollbarState::new(headers.len())
             .content_length(self.row_height.into())
@@ -292,6 +294,12 @@ impl Renderable for HeadersEditor<'_> {
 
     fn resize(&mut self, new_size: Rect) {
         self.layout = build_layout(new_size, self.row_height);
+        self.amount_on_view = self
+            .layout
+            .content_size
+            .height
+            .div_ceil(self.row_height)
+            .into();
     }
 }
 
@@ -369,10 +377,10 @@ impl Eventful for HeadersEditor<'_> {
         let total_headers = headers.len();
 
         match key_event.code {
-            KeyCode::Char('j') => {
+            KeyCode::Char('j') | KeyCode::Down => {
                 self.selected_row = usize::min(self.selected_row.add(1), total_headers.sub(1))
             }
-            KeyCode::Char('k') => {
+            KeyCode::Char('k') | KeyCode::Up => {
                 self.selected_row = self.selected_row.saturating_sub(1);
             }
             KeyCode::Char('?') => {

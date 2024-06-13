@@ -2,6 +2,7 @@ mod create_directory_form;
 mod create_request_form;
 mod edit_request_form;
 mod request_form;
+mod select_request_parent;
 
 use hac_core::collection::types::{Request, RequestKind, RequestMethod};
 
@@ -58,7 +59,13 @@ enum FormVariant<'sbar> {
 /// this is just a helper trait to be able to return the inner reference of the form
 /// from the enum as we cannot return it like:
 /// `&mut dyn Renderable + Eventful<Result = RequestFormEvent>;`
-pub trait RequestFormTrait: Renderable + Eventful<Result = RequestFormEvent> {}
+pub trait RequestFormTrait: Renderable + Eventful<Result = RequestFormEvent> {
+    fn draw_overlay(
+        &mut self,
+        frame: &mut Frame,
+        overlay: CollectionViewerOverlay,
+    ) -> anyhow::Result<()>;
+}
 
 impl FormVariant<'_> {
     pub fn inner(&mut self) -> &mut dyn RequestFormTrait {
@@ -122,6 +129,9 @@ impl<'sbar> Sidebar<'sbar> {
             }
             CollectionViewerOverlay::EditRequest => {
                 self.request_form.inner().draw(frame, frame.size())?;
+            }
+            CollectionViewerOverlay::SelectParentDir => {
+                self.request_form.inner().draw_overlay(frame, overlay)?;
             }
             CollectionViewerOverlay::CreateDirectory => {
                 self.directory_form.draw(frame, frame.size())?;
@@ -210,6 +220,14 @@ impl<'a> Eventful for Sidebar<'a> {
                     }
                     None => return Ok(None),
                 }
+            }
+            CollectionViewerOverlay::SelectParentDir => {
+                let result = self.request_form.inner().handle_key_event(key_event)?;
+                assert!(
+                    result.is_none(),
+                    "should never return an event when selecting parent dir"
+                );
+                return Ok(None);
             }
             CollectionViewerOverlay::CreateDirectory => {
                 match self.directory_form.handle_key_event(key_event)? {

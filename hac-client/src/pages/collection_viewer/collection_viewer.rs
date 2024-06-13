@@ -35,6 +35,7 @@ pub struct ExplorerLayout {
 pub enum CollectionViewerOverlay {
     None,
     CreateRequest,
+    SelectParentDir,
     EditRequest,
     CreateDirectory,
     HeadersHelp,
@@ -264,17 +265,20 @@ impl Renderable for CollectionViewer<'_> {
             CollectionViewerOverlay::CreateDirectory => {
                 self.sidebar.draw_overlay(frame, overlay)?;
             }
+            CollectionViewerOverlay::SelectParentDir => {
+                self.sidebar.draw_overlay(frame, overlay)?;
+            }
             CollectionViewerOverlay::EditRequest => {
                 self.sidebar.draw_overlay(frame, overlay)?;
             }
             CollectionViewerOverlay::HeadersHelp => {
-                self.request_editor.draw_overlay(frame, overlay)?
+                self.request_editor.draw_overlay(frame, overlay)?;
             }
             CollectionViewerOverlay::HeadersDelete => {
-                self.request_editor.draw_overlay(frame, overlay)?
+                self.request_editor.draw_overlay(frame, overlay)?;
             }
             CollectionViewerOverlay::HeadersForm(_) => {
-                self.request_editor.draw_overlay(frame, overlay)?
+                self.request_editor.draw_overlay(frame, overlay)?;
             }
             CollectionViewerOverlay::None => {}
         }

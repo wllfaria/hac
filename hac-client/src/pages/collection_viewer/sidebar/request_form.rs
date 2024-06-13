@@ -2,6 +2,7 @@ use hac_core::collection::types::{Request, RequestMethod};
 
 use crate::ascii::LOGO_ASCII;
 use crate::pages::collection_viewer::collection_store::CollectionStore;
+use crate::pages::collection_viewer::sidebar::select_request_parent::SelectRequestParent;
 use crate::pages::input::Input;
 use crate::pages::overlay::make_overlay;
 use crate::pages::Renderable;
@@ -68,6 +69,11 @@ pub struct RequestForm<'rf, State = RequestFormCreate> {
     pub marker: std::marker::PhantomData<State>,
     /// `request` is only used when editing a request so we can update it directly
     pub request: Option<Arc<RwLock<Request>>>,
+    pub parent_selector: SelectRequestParent<'rf>,
+    /// when the user tries to select a parent for a given request but there are
+    /// no directories on the collection, we use this timer to show a message for
+    /// a short duration, alerting the user
+    pub no_available_parent_timer: Option<std::time::Instant>,
 }
 
 impl<'rf, State> RequestForm<'rf, State> {
@@ -76,6 +82,10 @@ impl<'rf, State> RequestForm<'rf, State> {
         self.request_method = RequestMethod::Get;
         self.focused_field = FormField::Name;
         self.parent_dir = None;
+    }
+
+    pub fn set_no_parent_timer(&mut self) {
+        self.no_available_parent_timer = Some(std::time::Instant::now());
     }
 }
 
@@ -180,7 +190,26 @@ impl<'rf, State> Renderable for RequestForm<'rf, State> {
         frame.render_stateful_widget(name_input, name_size, &mut self.request_name);
         frame.render_widget(method_title, method_title_size);
         frame.render_widget(parent, parent_size);
-        frame.render_widget(hint, hint_size);
+
+        if self
+            .no_available_parent_timer
+            .is_some_and(|timer| timer.elapsed().as_secs().le(&3))
+        {
+            let warning = Paragraph::new(
+                "No available directory to select as a parent".fg(self.colors.normal.red),
+            )
+            .centered();
+            frame.render_widget(warning, hint_size);
+        } else {
+            frame.render_widget(hint, hint_size);
+        }
+
+        if self
+            .no_available_parent_timer
+            .is_some_and(|timer| timer.elapsed().as_secs().gt(&3))
+        {
+            self.no_available_parent_timer = None;
+        }
 
         if self.focused_field.eq(&FormField::Name) {
             frame.set_cursor(
