@@ -99,7 +99,6 @@ pub struct RequestEditor<'re> {
     body_editor: BodyEditor<'re>,
     headers_editor: HeadersEditor<'re>,
     auth_editor: AuthEditor<'re>,
-
     layout: ReqEditorLayout,
     curr_tab: ReqEditorTabs,
 }

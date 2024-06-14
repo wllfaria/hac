@@ -59,21 +59,35 @@ pub struct RequestFormEdit;
 pub struct RequestForm<'rf, State = RequestFormCreate> {
     pub colors: &'rf hac_colors::Colors,
     pub collection_store: Rc<RefCell<CollectionStore>>,
+
+    /// when we construct this component, we randomly chose one of our available
+    /// logo arts to display, for a little fun touch
     pub logo_idx: usize,
+    /// the name of the current request being edited or created
     pub request_name: String,
+    /// which method the request should have when finishing edition or creation
     pub request_method: RequestMethod,
     /// we store the parent dir uuid so its easier to find it and we dont need
-    /// lifetimes or to Rc our way to hell
-    pub parent_dir: Option<String>,
+    /// lifetimes or to Rc our way to hell, along with it we also store the name
+    /// for displaying purposes
+    pub parent_dir: Option<(String, String)>,
+    /// the previous parent of the request, used when editing to remove the request
+    /// from the previous directory when changing parents
+    pub previous_parent: Option<String>,
+    /// which form field is currently focused, so we can direct interactions
+    /// accordingly
     pub focused_field: FormField,
-    pub marker: std::marker::PhantomData<State>,
     /// `request` is only used when editing a request so we can update it directly
     pub request: Option<Arc<RwLock<Request>>>,
+    /// parent selector is the form used to select a parent for the current edited
+    /// or created request
     pub parent_selector: SelectRequestParent<'rf>,
     /// when the user tries to select a parent for a given request but there are
     /// no directories on the collection, we use this timer to show a message for
     /// a short duration, alerting the user
     pub no_available_parent_timer: Option<std::time::Instant>,
+
+    pub marker: std::marker::PhantomData<State>,
 }
 
 impl<'rf, State> RequestForm<'rf, State> {
@@ -149,24 +163,32 @@ impl<'rf, State> Renderable for RequestForm<'rf, State> {
             .constraints((0..5).map(|_| Constraint::Length(13)))
             .split(methods_size);
 
-        let parent_name = format!(
-            "{}None{}",
-            " ".repeat(parent_size.width.div(2).sub(2).into()),
-            " ".repeat(parent_size.width.div(2).sub(2).into())
-        );
-        let parent = Paragraph::new(parent_name)
-            .centered()
-            .block(
-                Block::default()
-                    .title("Parent".fg(self.colors.normal.white))
-                    .borders(Borders::ALL)
-                    .fg(if self.focused_field.eq(&FormField::Parent) {
-                        self.colors.normal.red
-                    } else {
-                        self.colors.bright.black
-                    }),
+        let parent_name = if self.parent_dir.is_none() {
+            format!(
+                "{}None{}",
+                " ".repeat(parent_size.width.div(2).sub(2).into()),
+                " ".repeat(parent_size.width.div(2).sub(2).into())
             )
-            .fg(self.colors.bright.black);
+            .fg(self.colors.bright.black)
+        } else {
+            format!(
+                "{}{}{}",
+                " ".repeat(parent_size.width.div(2).sub(2).into()),
+                self.parent_dir.as_ref().unwrap().1.clone(),
+                " ".repeat(parent_size.width.div(2).sub(2).into())
+            )
+            .fg(self.colors.normal.white)
+        };
+        let parent = Paragraph::new(parent_name).centered().block(
+            Block::default()
+                .title("Parent".fg(self.colors.normal.white))
+                .borders(Borders::ALL)
+                .fg(if self.focused_field.eq(&FormField::Parent) {
+                    self.colors.normal.red
+                } else {
+                    self.colors.bright.black
+                }),
+        );
 
         for (idx, method) in RequestMethod::iter().enumerate() {
             let border_color = match (&self.request_method, &self.focused_field) {

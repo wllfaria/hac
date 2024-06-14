@@ -1,5 +1,6 @@
 mod create_directory_form;
 mod create_request_form;
+mod delete_item_prompt;
 mod edit_request_form;
 mod request_form;
 mod select_request_parent;
@@ -7,6 +8,7 @@ mod select_request_parent;
 use hac_core::collection::types::{Request, RequestKind, RequestMethod};
 
 use super::sidebar::create_directory_form::{CreateDirectoryForm, CreateDirectoryFormEvent};
+use super::sidebar::delete_item_prompt::{DeleteItemPrompt, DeleteItemPromptEvent};
 use super::sidebar::request_form::RequestForm;
 use super::sidebar::request_form::RequestFormCreate;
 use super::sidebar::request_form::RequestFormEdit;
@@ -28,7 +30,7 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
 /// set of events Sidebar can emit to the caller when handling events.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SidebarEvent {
     /// user pressed `CreateRequest (n)` hotkey, which should notify the caller to open
     /// the create_request_form and properly handle the creation of a new request
@@ -42,9 +44,14 @@ pub enum SidebarEvent {
     /// user pressed `Esc` so we notify the caller to remove the selection from
     /// this pane, essentially bubbling the key handling scope to the caller
     RemoveSelection,
+    /// event to force a full rebuild of the view, when a request is deleted
+    RebuildView,
     /// this event is used when a request or directory is created, this notify the parent
     /// to sync changes with the file system.
     SyncCollection,
+    /// user pressed `DeleteItem (D)` hotkey, which should notify the caller to open the
+    /// delete_item_prompt to ask the user for confirmation
+    DeleteItem(String),
     /// user pressed a hotkey to quit the application, so we bubble up so the caller
     /// can do a few things before bubbling the quit request further up
     Quit,
@@ -83,6 +90,7 @@ pub struct Sidebar<'sbar> {
     collection_store: Rc<RefCell<CollectionStore>>,
     request_form: FormVariant<'sbar>,
     directory_form: CreateDirectoryForm<'sbar>,
+    delete_item_prompt: DeleteItemPrompt<'sbar>,
 }
 
 impl<'sbar> Sidebar<'sbar> {
@@ -97,6 +105,7 @@ impl<'sbar> Sidebar<'sbar> {
                 collection_store.clone(),
             )),
             directory_form: CreateDirectoryForm::new(colors, collection_store.clone()),
+            delete_item_prompt: DeleteItemPrompt::new(colors, collection_store.clone()),
             lines: vec![],
             collection_store,
         };
@@ -135,6 +144,9 @@ impl<'sbar> Sidebar<'sbar> {
             }
             CollectionViewerOverlay::CreateDirectory => {
                 self.directory_form.draw(frame, frame.size())?;
+            }
+            CollectionViewerOverlay::DeleteSidebarItem(_) => {
+                self.delete_item_prompt.draw(frame, frame.size())?;
             }
             _ => {}
         };
@@ -200,6 +212,8 @@ impl<'a> Eventful for Sidebar<'a> {
         );
 
         let overlay = self.collection_store.borrow_mut().peek_overlay();
+
+        tracing::debug!("{:?}", key_event.code);
 
         match overlay {
             CollectionViewerOverlay::CreateRequest => {
@@ -268,6 +282,34 @@ impl<'a> Eventful for Sidebar<'a> {
                     None => return Ok(None),
                 }
             }
+            CollectionViewerOverlay::DeleteSidebarItem(item_id) => {
+                match self.delete_item_prompt.handle_key_event(key_event)? {
+                    Some(DeleteItemPromptEvent::Confirm) => {
+                        let mut store = self.collection_store.borrow_mut();
+                        let changed_selection = store
+                            .get_selected_request()
+                            .is_some_and(|req| req.read().unwrap().id.eq(&item_id));
+                        store.remove_item(item_id);
+                        store.pop_overlay();
+                        drop(store);
+                        self.rebuild_tree_view();
+
+                        if changed_selection {
+                            return Ok(Some(SidebarEvent::RebuildView));
+                        } else {
+                            return Ok(None);
+                        }
+                    }
+                    Some(DeleteItemPromptEvent::Cancel) => {
+                        let mut store = self.collection_store.borrow_mut();
+                        store.pop_overlay();
+                        drop(store);
+                        self.rebuild_tree_view();
+                        return Ok(None);
+                    }
+                    None => return Ok(None),
+                }
+            }
             _ => {}
         };
 
@@ -290,6 +332,7 @@ impl<'a> Eventful for Sidebar<'a> {
                     }
                     RequestKind::Single(req) => {
                         store.dispatch(CollectionStoreAction::SetSelectedRequest(Some(req)));
+                        return Ok(Some(SidebarEvent::RebuildView));
                     }
                 }
             }
@@ -306,12 +349,18 @@ impl<'a> Eventful for Sidebar<'a> {
                 let RequestKind::Single(request) = store.find_hovered_request() else {
                     return Ok(None);
                 };
+                drop(store);
                 self.request_form = FormVariant::Edit(RequestForm::<RequestFormEdit>::new(
                     self.colors,
                     self.collection_store.clone(),
                     request.clone(),
                 ));
                 return Ok(Some(SidebarEvent::EditRequest));
+            }
+            KeyCode::Char('D') => {
+                if let Some(item_id) = store.get_hovered_request() {
+                    return Ok(Some(SidebarEvent::DeleteItem(item_id)));
+                }
             }
             KeyCode::Char('d') => return Ok(Some(SidebarEvent::CreateDirectory)),
             KeyCode::Esc => return Ok(Some(SidebarEvent::RemoveSelection)),

@@ -43,6 +43,7 @@ pub struct BodyEditor<'be> {
     /// Only KeyAction::Complex are stored here as any other kind of key action can be acted upon
     /// instantly
     keymap_buffer: Option<KeyAction>,
+    collection_store: Rc<RefCell<CollectionStore>>,
 }
 
 impl<'be> BodyEditor<'be> {
@@ -52,25 +53,14 @@ impl<'be> BodyEditor<'be> {
         collection_store: Rc<RefCell<CollectionStore>>,
         size: Rect,
     ) -> Self {
-        let (body, tree) = if let Some(request) = collection_store.borrow().get_selected_request() {
-            if let Some(body) = request.read().unwrap().body.as_ref() {
-                let mut highlighter = HIGHLIGHTER.write().unwrap();
-                let tree = highlighter.parse(body);
-
-                (TextObject::from(body).with_write(), tree)
-            } else {
-                Default::default()
-            }
-        } else {
-            Default::default()
-        };
-
+        let (body, tree) = make_body(&collection_store);
         let content = body.to_string();
         let styled_display = build_syntax_highlighted_lines(&content, tree.as_ref(), colors);
 
         Self {
             body,
             tree,
+            collection_store,
             styled_display,
             cursor: Cursor::default(),
             editor_mode: EditorMode::Normal,
@@ -661,4 +651,21 @@ fn get_visible_spans(line: &Line<'static>, scroll: usize) -> Line<'static> {
     }
 
     Line::from(new_spans)
+}
+
+fn make_body(collection_store: &Rc<RefCell<CollectionStore>>) -> (TextObject<Write>, Option<Tree>) {
+    let (body, tree) = if let Some(request) = collection_store.borrow().get_selected_request() {
+        if let Some(body) = request.read().unwrap().body.as_ref() {
+            let mut highlighter = HIGHLIGHTER.write().unwrap();
+            let tree = highlighter.parse(body);
+
+            (TextObject::from(body).with_write(), tree)
+        } else {
+            Default::default()
+        }
+    } else {
+        Default::default()
+    };
+
+    (body, tree)
 }

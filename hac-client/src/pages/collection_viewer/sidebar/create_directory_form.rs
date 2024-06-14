@@ -82,7 +82,7 @@ impl Renderable for CreateDirectoryForm<'_> {
 
         let logo = logo
             .iter()
-            .map(|line| Line::from(line.to_string().fg(self.colors.normal.red)))
+            .map(|line| Line::from(line.to_string().fg(self.colors.normal.red)).centered())
             .collect::<Vec<_>>();
 
         let mut input = Input::new(self.colors, "Name".into());

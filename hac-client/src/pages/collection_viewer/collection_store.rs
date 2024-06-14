@@ -26,6 +26,7 @@ pub struct CollectionStore {
     state: Option<Rc<RefCell<CollectionState>>>,
 }
 
+#[derive(Debug)]
 pub enum CollectionStoreAction {
     SetSelectedRequest(Option<Arc<RwLock<Request>>>),
     SetHoveredRequest(Option<String>),
@@ -199,9 +200,17 @@ impl CollectionStore {
     }
 
     fn maybe_hover_prev(&mut self) {
-        if self.get_hovered_request().is_some() && self.get_requests().is_some() {
-            let id = self.get_hovered_request().unwrap();
+        if self.get_requests().is_some() {
             let requests = self.get_requests().unwrap();
+
+            let Some(id) = self.get_hovered_request() else {
+                tracing::debug!("{:?}", self.get_hovered_request());
+                self.dispatch(CollectionStoreAction::SetHoveredRequest(
+                    requests.read().unwrap().first().map(|req| req.get_id()),
+                ));
+                tracing::debug!("{:?}", self.get_hovered_request());
+                return;
+            };
 
             if let Some(next) = find_next_entry(
                 &requests.read().unwrap(),
@@ -217,9 +226,17 @@ impl CollectionStore {
     }
 
     fn maybe_hover_next(&mut self) {
-        if self.get_hovered_request().is_some() && self.get_requests().is_some() {
-            let id = self.get_hovered_request().unwrap();
+        if self.get_requests().is_some() {
             let requests = self.get_requests().unwrap();
+
+            let Some(id) = self.get_hovered_request() else {
+                tracing::debug!("{:?}", self.get_hovered_request());
+                self.dispatch(CollectionStoreAction::SetHoveredRequest(
+                    requests.read().unwrap().first().map(|req| req.get_id()),
+                ));
+                tracing::debug!("{:?}", self.get_hovered_request());
+                return;
+            };
 
             if let Some(next) = find_next_entry(
                 &requests.read().unwrap(),
@@ -240,6 +257,28 @@ impl CollectionStore {
             &self.get_dirs_expanded().unwrap().borrow(),
             self.get_hovered_request().as_ref().unwrap(),
         )
+    }
+
+    pub fn remove_item(&mut self, item_id: String) {
+        if let Some(request) = self.get_selected_request() {
+            if request.read().unwrap().id.eq(&item_id) {
+                self.dispatch(CollectionStoreAction::SetSelectedRequest(None));
+            }
+        }
+        let mut requests = self.get_requests();
+        let mut requests = requests.as_mut().unwrap().write().unwrap();
+        requests.retain(|req| req.get_id().ne(&item_id));
+        requests.iter_mut().for_each(|req| {
+            if let RequestKind::Nested(dir) = req {
+                dir.requests
+                    .write()
+                    .unwrap()
+                    .retain(|child| child.get_id().ne(&item_id));
+            }
+        });
+        self.dispatch(CollectionStoreAction::SetHoveredRequest(
+            requests.first().map(|req| req.get_id()),
+        ));
     }
 }
 
@@ -276,6 +315,8 @@ fn traverse(
         // We are looking for the next and just found the current one, so we set the flag to
         // true in order to know when to return the next.
         (VisitNode::Next, true, false) => *found = true,
+        // we are looking for the current node and we found it, so we set the flag to true
+        // and return immediatly
         (VisitNode::Curr, true, _) => {
             path.push(current.clone());
             *found = true;

@@ -53,6 +53,7 @@ impl<'rf> RequestForm<'rf, RequestFormCreate> {
             marker: std::marker::PhantomData,
             request: None,
             no_available_parent_timer: None,
+            previous_parent: None,
         }
     }
 }
@@ -62,6 +63,40 @@ impl Eventful for RequestForm<'_, RequestFormCreate> {
 
     #[tracing::instrument(skip_all, err)]
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
+        let overlay = self.collection_store.borrow_mut().peek_overlay();
+
+        if overlay.eq(&CollectionViewerOverlay::SelectParentDir) {
+            match self.parent_selector.handle_key_event(key_event)? {
+                Some(SelectRequestParentEvent::Confirm(dir_id)) => {
+                    let mut store = self.collection_store.borrow_mut();
+                    let collection = store
+                        .get_collection()
+                        .expect("tried attach a parent to a request without having a collection");
+                    let collection = collection.borrow();
+                    let requests = collection
+                        .requests
+                        .as_ref()
+                        .expect("tried to attach a parent to a request with empty collection");
+                    let dir_name = requests
+                        .read()
+                        .unwrap()
+                        .iter()
+                        .find(|req| req.get_id().eq(&dir_id))
+                        .as_ref()
+                        // its safe to unwrap here as to have an id we for sure have the directory
+                        .unwrap()
+                        .get_name();
+                    self.parent_dir = Some((dir_id, dir_name));
+                    store.pop_overlay();
+                }
+                Some(SelectRequestParentEvent::Cancel) => {
+                    self.collection_store.borrow_mut().pop_overlay();
+                }
+                None => {}
+            }
+            return Ok(None);
+        }
+
         if let KeyCode::Tab = key_event.code {
             self.focused_field = self.focused_field.next();
             return Ok(None);
@@ -88,16 +123,28 @@ impl Eventful for RequestForm<'_, RequestFormCreate> {
                 self.request_name = String::from("unnamed request");
             }
 
-            requests.push(RequestKind::Single(Arc::new(RwLock::new(Request {
+            let request = RequestKind::Single(Arc::new(RwLock::new(Request {
                 id: uuid::Uuid::new_v4().to_string(),
                 body: None,
                 body_type: None,
-                parent: None,
+                parent: self.parent_dir.as_ref().map(|(id, _)| id.clone()),
                 headers: None,
                 method: self.request_method.clone(),
                 name: self.request_name.clone(),
                 uri: String::default(),
-            }))));
+            })));
+
+            if let Some((dir_id, _)) = self.parent_dir.as_ref() {
+                if let RequestKind::Nested(dir) = requests
+                    .iter_mut()
+                    .find(|req| req.get_id().eq(dir_id))
+                    .unwrap()
+                {
+                    dir.requests.write().unwrap().push(request);
+                }
+            } else {
+                requests.push(request);
+            }
 
             drop(store);
             self.reset();

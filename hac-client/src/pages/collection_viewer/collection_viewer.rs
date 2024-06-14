@@ -31,7 +31,7 @@ pub struct ExplorerLayout {
     pub create_req_form: Rect,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum CollectionViewerOverlay {
     None,
     CreateRequest,
@@ -41,6 +41,7 @@ pub enum CollectionViewerOverlay {
     HeadersHelp,
     HeadersDelete,
     HeadersForm(usize),
+    DeleteSidebarItem(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -79,6 +80,7 @@ pub struct CollectionViewer<'cv> {
     sidebar: Sidebar<'cv>,
 
     colors: &'cv hac_colors::Colors,
+    config: &'cv hac_config::Config,
     layout: ExplorerLayout,
     global_command_sender: Option<UnboundedSender<Command>>,
     collection_sync_timer: std::time::Instant,
@@ -123,6 +125,7 @@ impl<'cv> CollectionViewer<'cv> {
             request_uri,
             colors,
             layout,
+            config,
             global_command_sender: None,
             collection_sync_timer: std::time::Instant::now(),
             responses_map: HashMap::default(),
@@ -131,6 +134,27 @@ impl<'cv> CollectionViewer<'cv> {
             dry_run,
             collection_store,
         }
+    }
+
+    fn rebuild_everything(&mut self) {
+        self.sidebar = sidebar::Sidebar::new(self.colors, self.collection_store.clone());
+        self.request_editor = RequestEditor::new(
+            self.colors,
+            self.config,
+            self.collection_store.clone(),
+            self.layout.req_editor,
+        );
+        self.response_viewer = ResponseViewer::new(
+            self.colors,
+            self.collection_store.clone(),
+            None,
+            self.layout.response_preview,
+        );
+        self.request_uri = RequestUri::new(
+            self.colors,
+            self.collection_store.clone(),
+            self.layout.req_uri,
+        );
     }
 
     // collect all pending responses from the channel. Here, I don't see a way we
@@ -271,6 +295,9 @@ impl Renderable for CollectionViewer<'_> {
             CollectionViewerOverlay::EditRequest => {
                 self.sidebar.draw_overlay(frame, overlay)?;
             }
+            CollectionViewerOverlay::DeleteSidebarItem(_) => {
+                self.sidebar.draw_overlay(frame, overlay)?;
+            }
             CollectionViewerOverlay::HeadersHelp => {
                 self.request_editor.draw_overlay(frame, overlay)?;
             }
@@ -409,9 +436,14 @@ impl Eventful for CollectionViewer<'_> {
                         .collection_store
                         .borrow_mut()
                         .push_overlay(CollectionViewerOverlay::CreateDirectory),
+                    Some(SidebarEvent::DeleteItem(item_id)) => self
+                        .collection_store
+                        .borrow_mut()
+                        .push_overlay(CollectionViewerOverlay::DeleteSidebarItem(item_id)),
                     Some(SidebarEvent::RemoveSelection) => self.update_selection(None),
                     Some(SidebarEvent::SyncCollection) => self.sync_collection_changes(),
                     Some(SidebarEvent::Quit) => return Ok(Some(Command::Quit)),
+                    Some(SidebarEvent::RebuildView) => self.rebuild_everything(),
                     // when theres no event we do nothing
                     None => {}
                 },
