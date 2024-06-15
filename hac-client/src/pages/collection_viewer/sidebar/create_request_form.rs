@@ -107,6 +107,11 @@ impl Eventful for RequestForm<'_, RequestFormCreate> {
             return Ok(None);
         }
 
+        if let (KeyCode::Char('p'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            self.parent_dir = None;
+            return Ok(None);
+        }
+
         if let KeyCode::Enter = key_event.code {
             let store = self.collection_store.borrow_mut();
             let collection = store

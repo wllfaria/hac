@@ -189,9 +189,14 @@ impl Eventful for RequestForm<'_, RequestFormEdit> {
             return Ok(Some(RequestFormEvent::Cancel));
         }
 
+        if let (KeyCode::Char('p'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            self.parent_dir = None;
+            return Ok(Some(RequestFormEvent::Cancel));
+        }
+
         if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
             self.reset();
-            return Ok(Some(RequestFormEvent::Cancel));
+            return Ok(None);
         }
 
         match self.focused_field {

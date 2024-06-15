@@ -142,11 +142,10 @@ impl<'rf, State> Renderable for RequestForm<'rf, State> {
 
         let mut name_input = Input::new(self.colors, "Name".into());
         let method_title = Paragraph::new("Method".fg(self.colors.normal.white));
-        let hint = Paragraph::new(
-            "[Confirm: Enter] [Cancel: Esc] [Switch: Tab] [Select: Space]"
-                .fg(self.colors.bright.black),
-        )
-        .centered();
+        let hint =
+            "[Confirm: Enter] [Cancel: Esc] [Switch: Tab] [Select: Space] [Remove Parent: <C-p>]";
+        let hint_size = hint.len() as u16;
+        let hint = Paragraph::new(hint.fg(self.colors.bright.black)).centered();
 
         if self.focused_field.eq(&FormField::Name) {
             name_input.focus();
@@ -156,7 +155,12 @@ impl<'rf, State> Renderable for RequestForm<'rf, State> {
         let method_title_size = Rect::new(size.x, name_size.y.add(3), size.width, 1);
         let methods_size = Rect::new(size.x, method_title_size.y.add(1), size.width, 3);
         let parent_size = Rect::new(size.x, methods_size.y.add(3), size.width, 3);
-        let hint_size = Rect::new(size.x, parent_size.y.add(4), size.width, 1);
+        let hint_size = Rect::new(
+            frame.size().width.div(2).saturating_sub(hint_size.div(2)),
+            parent_size.y.add(4),
+            hint_size,
+            1,
+        );
 
         let methods_items = Layout::default()
             .direction(Direction::Horizontal)
