@@ -1,6 +1,6 @@
 use hac_core::collection::types::*;
 
-use super::directory_form::{DirectoryForm, DirectoryFormCreate, DirectoryFormEvent};
+use super::directory_form::{DirectoryForm, DirectoryFormEdit, DirectoryFormEvent};
 use crate::ascii::LOGO_ASCII;
 use crate::pages::collection_viewer::collection_store::CollectionStore;
 use crate::pages::collection_viewer::sidebar::DirectoryFormTrait;
@@ -13,27 +13,32 @@ use std::sync::{Arc, RwLock};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use rand::Rng;
 
-impl<'df> DirectoryForm<'df, DirectoryFormCreate> {
+impl<'df> DirectoryForm<'df, DirectoryFormEdit> {
     pub fn new(
         colors: &'df hac_colors::Colors,
         collection_store: Rc<RefCell<CollectionStore>>,
-    ) -> DirectoryForm<'df, DirectoryFormCreate> {
+        directory: Option<(String, String)>,
+    ) -> DirectoryForm<'df, DirectoryFormEdit> {
         let logo_idx = rand::thread_rng().gen_range(0..LOGO_ASCII.len());
+        let dir_name = directory
+            .as_ref()
+            .map(|dir| dir.1.clone())
+            .unwrap_or_default();
 
         DirectoryForm {
             colors,
             collection_store,
-            dir_name: String::default(),
+            dir_name,
             logo_idx,
             marker: std::marker::PhantomData,
-            directory: None,
+            directory,
         }
     }
 }
 
-impl DirectoryFormTrait for DirectoryForm<'_, DirectoryFormCreate> {}
+impl DirectoryFormTrait for DirectoryForm<'_, DirectoryFormEdit> {}
 
-impl Eventful for DirectoryForm<'_, DirectoryFormCreate> {
+impl Eventful for DirectoryForm<'_, DirectoryFormEdit> {
     type Result = DirectoryFormEvent;
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
@@ -63,11 +68,12 @@ impl Eventful for DirectoryForm<'_, DirectoryFormCreate> {
                     self.dir_name = "unnamed directory".into();
                 }
 
-                requests.push(RequestKind::Nested(Directory {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    name: self.dir_name.clone(),
-                    requests: Arc::new(RwLock::new(vec![])),
-                }));
+                if let Some(RequestKind::Nested(dir)) = requests
+                    .iter_mut()
+                    .find(|req| req.get_id().eq(&self.directory.as_ref().unwrap().0))
+                {
+                    dir.name.clone_from(&self.dir_name);
+                }
 
                 drop(store);
                 self.reset();

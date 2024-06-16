@@ -37,6 +37,7 @@ pub enum CollectionViewerOverlay {
     CreateRequest,
     SelectParentDir,
     EditRequest,
+    EditDirectory,
     CreateDirectory,
     HeadersHelp,
     HeadersDelete,
@@ -295,6 +296,9 @@ impl Renderable for CollectionViewer<'_> {
             CollectionViewerOverlay::EditRequest => {
                 self.sidebar.draw_overlay(frame, overlay)?;
             }
+            CollectionViewerOverlay::EditDirectory => {
+                self.sidebar.draw_overlay(frame, overlay)?;
+            }
             CollectionViewerOverlay::DeleteSidebarItem(_) => {
                 self.sidebar.draw_overlay(frame, overlay)?;
             }
@@ -432,6 +436,10 @@ impl Eventful for CollectionViewer<'_> {
                         .collection_store
                         .borrow_mut()
                         .push_overlay(CollectionViewerOverlay::EditRequest),
+                    Some(SidebarEvent::EditDirectory) => self
+                        .collection_store
+                        .borrow_mut()
+                        .push_overlay(CollectionViewerOverlay::EditDirectory),
                     Some(SidebarEvent::CreateDirectory) => self
                         .collection_store
                         .borrow_mut()

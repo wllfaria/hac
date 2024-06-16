@@ -1,18 +1,19 @@
 mod create_directory_form;
 mod create_request_form;
 mod delete_item_prompt;
+mod directory_form;
+mod edit_directory_form;
 mod edit_request_form;
 mod request_form;
 mod select_request_parent;
 
 use hac_core::collection::types::{Request, RequestKind, RequestMethod};
 
-use super::sidebar::create_directory_form::{CreateDirectoryForm, CreateDirectoryFormEvent};
 use super::sidebar::delete_item_prompt::{DeleteItemPrompt, DeleteItemPromptEvent};
-use super::sidebar::request_form::RequestForm;
-use super::sidebar::request_form::RequestFormCreate;
-use super::sidebar::request_form::RequestFormEdit;
-use super::sidebar::request_form::RequestFormEvent;
+use super::sidebar::directory_form::{DirectoryForm, DirectoryFormEvent};
+use super::sidebar::directory_form::{DirectoryFormCreate, DirectoryFormEdit};
+use super::sidebar::request_form::{RequestForm, RequestFormEvent};
+use super::sidebar::request_form::{RequestFormCreate, RequestFormEdit};
 use crate::pages::collection_viewer::collection_store::{CollectionStore, CollectionStoreAction};
 use crate::pages::collection_viewer::collection_viewer::{CollectionViewerOverlay, PaneFocus};
 use crate::pages::{Eventful, Renderable};
@@ -35,9 +36,12 @@ pub enum SidebarEvent {
     /// user pressed `CreateRequest (n)` hotkey, which should notify the caller to open
     /// the create_request_form and properly handle the creation of a new request
     CreateRequest,
-    /// user pressed `EditRequest (e)` hotkey, which should notify the caller to open
-    /// the create_request_form and propery handle the editing of the existing request
+    /// user pressed `Edit (e)` hotkey on a request, which should notify the caller to open
+    /// the edit_request_form and properly handle the editing of the existing request
     EditRequest,
+    /// user pressed `Edit (e)` hotkey on a directory, which should notify the caller to
+    /// open the `edit_request_form` and properly handle the editing of the current directory
+    EditDirectory,
     /// user pressed `CreateDirectory (d)` hotkey, which should notify the caller to open
     /// the `create_directory_form` overlay to create a new directory on the collection
     CreateDirectory,
@@ -58,27 +62,50 @@ pub enum SidebarEvent {
 }
 
 #[derive(Debug)]
-enum FormVariant<'sbar> {
+enum DirectoryFormVariant<'sbar> {
+    Create(DirectoryForm<'sbar, DirectoryFormCreate>),
+    Edit(DirectoryForm<'sbar, DirectoryFormEdit>),
+}
+
+impl DirectoryFormVariant<'_> {
+    pub fn inner(&mut self) -> &mut dyn DirectoryFormTrait {
+        match self {
+            DirectoryFormVariant::Create(form) => form,
+            DirectoryFormVariant::Edit(form) => form,
+        }
+    }
+}
+
+#[derive(Debug)]
+enum RequestFormVariant<'sbar> {
     Create(RequestForm<'sbar, RequestFormCreate>),
     Edit(RequestForm<'sbar, RequestFormEdit>),
 }
 
 /// this is just a helper trait to be able to return the inner reference of the form
 /// from the enum as we cannot return it like:
+/// `&mut dyn Renderable + Eventful<Result = DirectoryFormEvent>;`
+pub trait DirectoryFormTrait: Renderable + Eventful<Result = DirectoryFormEvent> {}
+
+/// this is just a helper trait to be able to return the inner reference of the form
+/// from the enum as we cannot return it like:
 /// `&mut dyn Renderable + Eventful<Result = RequestFormEvent>;`
+#[allow(unused_variables)]
 pub trait RequestFormTrait: Renderable + Eventful<Result = RequestFormEvent> {
     fn draw_overlay(
         &mut self,
         frame: &mut Frame,
         overlay: CollectionViewerOverlay,
-    ) -> anyhow::Result<()>;
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
-impl FormVariant<'_> {
+impl RequestFormVariant<'_> {
     pub fn inner(&mut self) -> &mut dyn RequestFormTrait {
         match self {
-            FormVariant::Create(form) => form,
-            FormVariant::Edit(form) => form,
+            RequestFormVariant::Create(form) => form,
+            RequestFormVariant::Edit(form) => form,
         }
     }
 }
@@ -88,8 +115,8 @@ pub struct Sidebar<'sbar> {
     colors: &'sbar hac_colors::Colors,
     lines: Vec<Paragraph<'static>>,
     collection_store: Rc<RefCell<CollectionStore>>,
-    request_form: FormVariant<'sbar>,
-    directory_form: CreateDirectoryForm<'sbar>,
+    request_form: RequestFormVariant<'sbar>,
+    directory_form: DirectoryFormVariant<'sbar>,
     delete_item_prompt: DeleteItemPrompt<'sbar>,
 }
 
@@ -100,11 +127,13 @@ impl<'sbar> Sidebar<'sbar> {
     ) -> Self {
         let mut sidebar = Self {
             colors,
-            request_form: FormVariant::Create(RequestForm::<RequestFormCreate>::new(
+            request_form: RequestFormVariant::Create(RequestForm::<RequestFormCreate>::new(
                 colors,
                 collection_store.clone(),
             )),
-            directory_form: CreateDirectoryForm::new(colors, collection_store.clone()),
+            directory_form: DirectoryFormVariant::Create(
+                DirectoryForm::<DirectoryFormCreate>::new(colors, collection_store.clone()),
+            ),
             delete_item_prompt: DeleteItemPrompt::new(colors, collection_store.clone()),
             lines: vec![],
             collection_store,
@@ -143,7 +172,10 @@ impl<'sbar> Sidebar<'sbar> {
                 self.request_form.inner().draw_overlay(frame, overlay)?;
             }
             CollectionViewerOverlay::CreateDirectory => {
-                self.directory_form.draw(frame, frame.size())?;
+                self.directory_form.inner().draw(frame, frame.size())?;
+            }
+            CollectionViewerOverlay::EditDirectory => {
+                self.directory_form.inner().draw(frame, frame.size())?;
             }
             CollectionViewerOverlay::DeleteSidebarItem(_) => {
                 self.delete_item_prompt.draw(frame, frame.size())?;
@@ -244,15 +276,34 @@ impl<'a> Eventful for Sidebar<'a> {
                 return Ok(None);
             }
             CollectionViewerOverlay::CreateDirectory => {
-                match self.directory_form.handle_key_event(key_event)? {
-                    Some(CreateDirectoryFormEvent::Confirm) => {
+                match self.directory_form.inner().handle_key_event(key_event)? {
+                    Some(DirectoryFormEvent::Confirm) => {
                         let mut store = self.collection_store.borrow_mut();
                         store.pop_overlay();
                         drop(store);
                         self.rebuild_tree_view();
                         return Ok(Some(SidebarEvent::SyncCollection));
                     }
-                    Some(CreateDirectoryFormEvent::Cancel) => {
+                    Some(DirectoryFormEvent::Cancel) => {
+                        let mut store = self.collection_store.borrow_mut();
+                        store.pop_overlay();
+                        drop(store);
+                        self.rebuild_tree_view();
+                        return Ok(None);
+                    }
+                    None => return Ok(None),
+                }
+            }
+            CollectionViewerOverlay::EditDirectory => {
+                match self.directory_form.inner().handle_key_event(key_event)? {
+                    Some(DirectoryFormEvent::Confirm) => {
+                        let mut store = self.collection_store.borrow_mut();
+                        store.pop_overlay();
+                        drop(store);
+                        self.rebuild_tree_view();
+                        return Ok(Some(SidebarEvent::SyncCollection));
+                    }
+                    Some(DirectoryFormEvent::Cancel) => {
                         let mut store = self.collection_store.borrow_mut();
                         store.pop_overlay();
                         drop(store);
@@ -339,23 +390,36 @@ impl<'a> Eventful for Sidebar<'a> {
             KeyCode::Char('j') | KeyCode::Down => store.dispatch(CollectionStoreAction::HoverNext),
             KeyCode::Char('k') | KeyCode::Up => store.dispatch(CollectionStoreAction::HoverPrev),
             KeyCode::Char('n') => {
-                self.request_form = FormVariant::Create(RequestForm::<RequestFormCreate>::new(
-                    self.colors,
-                    self.collection_store.clone(),
-                ));
+                self.request_form =
+                    RequestFormVariant::Create(RequestForm::<RequestFormCreate>::new(
+                        self.colors,
+                        self.collection_store.clone(),
+                    ));
                 return Ok(Some(SidebarEvent::CreateRequest));
             }
             KeyCode::Char('e') => {
-                let RequestKind::Single(request) = store.find_hovered_request() else {
-                    return Ok(None);
-                };
+                let hovered_request = store.find_hovered_request();
                 drop(store);
-                self.request_form = FormVariant::Edit(RequestForm::<RequestFormEdit>::new(
-                    self.colors,
-                    self.collection_store.clone(),
-                    request.clone(),
-                ));
-                return Ok(Some(SidebarEvent::EditRequest));
+                match hovered_request {
+                    RequestKind::Single(req) => {
+                        self.request_form =
+                            RequestFormVariant::Edit(RequestForm::<RequestFormEdit>::new(
+                                self.colors,
+                                self.collection_store.clone(),
+                                req.clone(),
+                            ));
+                        return Ok(Some(SidebarEvent::EditRequest));
+                    }
+                    RequestKind::Nested(dir) => {
+                        self.directory_form =
+                            DirectoryFormVariant::Edit(DirectoryForm::<DirectoryFormEdit>::new(
+                                self.colors,
+                                self.collection_store.clone(),
+                                Some((dir.id.clone(), dir.name.clone())),
+                            ));
+                        return Ok(Some(SidebarEvent::EditDirectory));
+                    }
+                }
             }
             KeyCode::Char('D') => {
                 if let Some(item_id) = store.get_hovered_request() {
