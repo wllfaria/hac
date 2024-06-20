@@ -162,7 +162,7 @@ impl<'re> RequestEditor<'re> {
             ReqEditorTabs::Body => self.body_editor.draw(frame, size)?,
             ReqEditorTabs::Headers => self.headers_editor.draw(frame, size)?,
             ReqEditorTabs::Query => UnderConstruction::new(self.colors).draw(frame, size)?,
-            ReqEditorTabs::Auth => self.auth_editor.draw(frame, size)?,
+            ReqEditorTabs::Auth => UnderConstruction::new(self.colors).draw(frame, size)?,
         }
 
         Ok(())
@@ -285,13 +285,17 @@ impl Eventful for RequestEditor<'_> {
             },
             ReqEditorTabs::Headers => match self.headers_editor.handle_key_event(key_event)? {
                 Some(HeadersEditorEvent::Quit) => return Ok(Some(RequestEditorEvent::Quit)),
+                Some(HeadersEditorEvent::RemoveSelection) => {
+                    return Ok(Some(RequestEditorEvent::RemoveSelection))
+                }
                 None => {}
             },
             ReqEditorTabs::Query => {}
-            ReqEditorTabs::Auth => match self.auth_editor.handle_key_event(key_event)? {
-                Some(_) => todo!(),
-                None => {}
-            },
+            ReqEditorTabs::Auth => {
+                if (self.auth_editor.handle_key_event(key_event)?).is_some() {
+                    todo!()
+                }
+            }
         }
 
         Ok(None)

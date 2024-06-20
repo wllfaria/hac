@@ -43,7 +43,7 @@ pub struct BodyEditor<'be> {
     /// Only KeyAction::Complex are stored here as any other kind of key action can be acted upon
     /// instantly
     keymap_buffer: Option<KeyAction>,
-    collection_store: Rc<RefCell<CollectionStore>>,
+    _collection_store: Rc<RefCell<CollectionStore>>,
 }
 
 impl<'be> BodyEditor<'be> {
@@ -60,7 +60,7 @@ impl<'be> BodyEditor<'be> {
         Self {
             body,
             tree,
-            collection_store,
+            _collection_store: collection_store,
             styled_display,
             cursor: Cursor::default(),
             editor_mode: EditorMode::Normal,

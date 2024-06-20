@@ -71,9 +71,6 @@ pub struct RequestForm<'rf, State = RequestFormCreate> {
     /// lifetimes or to Rc our way to hell, along with it we also store the name
     /// for displaying purposes
     pub parent_dir: Option<(String, String)>,
-    /// the previous parent of the request, used when editing to remove the request
-    /// from the previous directory when changing parents
-    pub previous_parent: Option<String>,
     /// which form field is currently focused, so we can direct interactions
     /// accordingly
     pub focused_field: FormField,

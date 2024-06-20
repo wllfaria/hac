@@ -53,7 +53,6 @@ impl<'rf> RequestForm<'rf, RequestFormCreate> {
             marker: std::marker::PhantomData,
             request: None,
             no_available_parent_timer: None,
-            previous_parent: None,
         }
     }
 }

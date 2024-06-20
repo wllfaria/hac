@@ -80,7 +80,6 @@ impl<'rf> RequestForm<'rf, RequestFormEdit> {
             marker: std::marker::PhantomData,
             request: Some(request),
             no_available_parent_timer: None,
-            previous_parent: None,
         }
     }
 }
