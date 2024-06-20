@@ -1,5 +1,3 @@
-use hac_core::collection::types::*;
-
 use crate::ascii::LOGO_ASCII;
 use crate::pages::collection_viewer::collection_store::CollectionStore;
 use crate::pages::input::Input;
