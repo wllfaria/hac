@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.1.2] - 2024-06-20
+
+### Bug Fixes
+
+- Fixing resizing crashing when drawing hint
+- Using chars().count() instead of len()
+- Fixing broken tests
+
+### Features
+
+- Rendering request headers onscreen
+- Selecting and moving around headers
+- Deleting headers and help overlays
+- Header forms editing and creation
+- Sending headers through request
+- Redesign of create request form
+- Editing headers on the sidebar
+- Creating directories on the sidebar
+- Initial implementation of parent selector
+- Deleting requests and headers
+- Removing parent from a request
+- Editing directories on the sidebar
+
+### Refactor
+
+- Separating body editor to request editor to implement headers
+- Hints are now controlled by its own component
+
+### Wip
+
+- Headers pane rendering
+- Header edit form without key handling
+
 ## [0.1.1] - 2024-06-03
 
 ### Bug Fixes
@@ -10,6 +43,7 @@
 
 - Packaging hac as nix flake
 - Adding how to try with nix to readme
+- Release hac v0.1.1
 
 ### Refactor
 
@@ -29,49 +63,22 @@
 
 ### Bug Fixes
 
-- Weird coloring of status bar
-- Fixing delete backwards
 - Fixing broken tests for tree traversal
 - Fixing screen manager tests failing
 - Only showing cursor when editing the uri
 
 ### Features
 
-- Synchronization of requests to file system
-- Properly syncing and allowing further edits
-- Adding better comments througout the app
-- Adding initial CLI interfacing
-- Proper extension for collections
-- Handling other http methods
-- Allow for changing urls
-- Correct handling of new collections
-- Showing cursor on uri pane
-- Displaying status time and size of requests
-- Hiding body tab when request method has no body
-- Displaying error messages on request
-- Chunking error text to multiline
 - Synchronization problems are now gone
 - Empty state for responses
 - Enabling dry run and better readme
 
 ### Miscellaneous Tasks
 
-- Updated readme, licensing and getting project ready for use
-- Adding contributing guidelines
-- Pull request and issue templates
-- Initial todos, have to do a lot more
 - Renaming project to hac
 - Setting up publishing to crates.io
 - Setting packages metadata
 - Renaming tui to client for publishing
 - Release hac v0.1.0
-
-### Refactor
-
-- Changing schemas to collection naming
-
-### Testing
-
-- Testing ascii error art
 
 
