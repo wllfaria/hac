@@ -30,7 +30,7 @@ lint:
 # =================================== #
 
 # uses convco to figure out the next version
-new_version := "$(convco version --bump)"
+new_version := "$(convco version --bump --minor)"
 
 release:
     git cliff -t "{{new_version}}" > CHANGELOG.md
