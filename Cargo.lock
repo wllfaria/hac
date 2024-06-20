@@ -587,14 +587,14 @@ checksum = "4271d37baee1b8c7e4b708028c57d816cf9d2434acb33a549475f78c181f6253"
 
 [[package]]
 name = "hac-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
 ]
 
 [[package]]
 name = "hac-client"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "crossterm",
@@ -622,7 +622,7 @@ dependencies = [
 
 [[package]]
 name = "hac-colors"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "crossterm",
@@ -634,7 +634,7 @@ dependencies = [
 
 [[package]]
 name = "hac-config"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "dirs",
@@ -645,7 +645,7 @@ dependencies = [
 
 [[package]]
 name = "hac-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "hac-config",

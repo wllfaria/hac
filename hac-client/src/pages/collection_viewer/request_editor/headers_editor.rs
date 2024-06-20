@@ -23,6 +23,7 @@ use super::headers_editor_edit_form::{HeadersEditorForm, HeadersEditorFormEvent}
 #[derive(Debug)]
 pub enum HeadersEditorEvent {
     Quit,
+    RemoveSelection,
 }
 
 #[derive(Debug)]
@@ -438,6 +439,7 @@ impl Eventful for HeadersEditor<'_> {
                     .borrow_mut()
                     .push_overlay(CollectionViewerOverlay::HeadersForm(self.selected_row));
             }
+            KeyCode::Esc => return Ok(Some(HeadersEditorEvent::RemoveSelection)),
             KeyCode::Char('n') => {
                 let idx = headers.len();
                 headers.push(HeaderMap {

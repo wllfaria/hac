@@ -20,4 +20,3 @@ where
         CollectionError::Unknown(msg)
     }
 }
-
