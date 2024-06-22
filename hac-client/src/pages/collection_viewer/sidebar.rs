@@ -245,8 +245,6 @@ impl<'a> Eventful for Sidebar<'a> {
 
         let overlay = self.collection_store.borrow_mut().peek_overlay();
 
-        tracing::debug!("{:?}", key_event.code);
-
         match overlay {
             CollectionViewerOverlay::CreateRequest => {
                 match self.request_form.inner().handle_key_event(key_event)? {

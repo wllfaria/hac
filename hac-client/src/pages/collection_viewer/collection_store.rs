@@ -230,11 +230,9 @@ impl CollectionStore {
             let requests = self.get_requests().unwrap();
 
             let Some(id) = self.get_hovered_request() else {
-                tracing::debug!("{:?}", self.get_hovered_request());
                 self.dispatch(CollectionStoreAction::SetHoveredRequest(
                     requests.read().unwrap().first().map(|req| req.get_id()),
                 ));
-                tracing::debug!("{:?}", self.get_hovered_request());
                 return;
             };
 

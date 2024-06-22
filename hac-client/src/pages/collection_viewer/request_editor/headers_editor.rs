@@ -67,7 +67,7 @@ impl<'he> HeadersEditor<'he> {
             colors,
             collection_store,
             scroll: 0,
-            selected_row: 5,
+            selected_row: 0,
             row_height,
             amount_on_view: layout.content_size.height.div_ceil(row_height).into(),
             layout,
@@ -371,11 +371,12 @@ impl Eventful for HeadersEditor<'_> {
         };
 
         let mut request = request.write().unwrap();
-        let Some(headers) = request.headers.as_mut() else {
-            return Ok(None);
-        };
 
-        let total_headers = headers.len();
+        let total_headers = request
+            .headers
+            .as_ref()
+            .map(|h| h.len())
+            .unwrap_or_default();
 
         match key_event.code {
             KeyCode::Char('j') | KeyCode::Down => {
@@ -395,64 +396,70 @@ impl Eventful for HeadersEditor<'_> {
                 };
             }
             KeyCode::Char(' ') => {
-                if headers.is_empty() {
+                if total_headers.eq(&0) {
                     return Ok(None);
                 }
 
-                let header = match headers.get_mut(self.selected_row) {
-                    Some(header) => header,
-                    None => {
-                        tracing::error!("tried to disable a non-existing header");
-                        anyhow::bail!("tried to disable a non-existing header");
-                    }
-                };
+                if let Some(headers) = request.headers.as_mut() {
+                    let header = match headers.get_mut(self.selected_row) {
+                        Some(header) => header,
+                        None => {
+                            tracing::error!("tried to disable a non-existing header");
+                            anyhow::bail!("tried to disable a non-existing header");
+                        }
+                    };
 
-                header.enabled = !header.enabled;
+                    header.enabled = !header.enabled;
+                }
             }
             KeyCode::Char('d') => {
-                if headers.is_empty() {
+                if total_headers.eq(&0) {
                     return Ok(None);
                 }
 
-                if headers.get(self.selected_row).is_none() {
-                    tracing::error!("tried to delete a non-existing header");
-                    anyhow::bail!("tried to delete a non-existing header");
-                }
+                if let Some(headers) = request.headers.as_ref() {
+                    if headers.get(self.selected_row).is_none() {
+                        tracing::error!("tried to delete a non-existing header");
+                        anyhow::bail!("tried to delete a non-existing header");
+                    }
 
-                drop(request);
-                self.collection_store
-                    .borrow_mut()
-                    .push_overlay(CollectionViewerOverlay::HeadersDelete);
+                    drop(request);
+                    self.collection_store
+                        .borrow_mut()
+                        .push_overlay(CollectionViewerOverlay::HeadersDelete);
+                }
             }
             KeyCode::Enter => {
-                if headers.is_empty() {
+                if total_headers.eq(&0) {
                     return Ok(None);
                 }
 
-                if headers.get(self.selected_row).is_none() {
-                    tracing::error!("tried to edit a non-existing header");
-                    anyhow::bail!("tried to edit a non-existing header");
-                };
+                if let Some(headers) = request.headers.as_ref() {
+                    if headers.get(self.selected_row).is_none() {
+                        tracing::error!("tried to edit a non-existing header");
+                        anyhow::bail!("tried to edit a non-existing header");
+                    };
 
-                drop(request);
-                self.collection_store
-                    .borrow_mut()
-                    .push_overlay(CollectionViewerOverlay::HeadersForm(self.selected_row));
+                    drop(request);
+                    self.collection_store
+                        .borrow_mut()
+                        .push_overlay(CollectionViewerOverlay::HeadersForm(self.selected_row));
+                }
             }
             KeyCode::Esc => return Ok(Some(HeadersEditorEvent::RemoveSelection)),
             KeyCode::Char('n') => {
-                let idx = headers.len();
+                let headers = request.headers.get_or_insert_with(Vec::new);
                 headers.push(HeaderMap {
                     pair: Default::default(),
                     enabled: true,
                 });
 
-                self.selected_row = idx;
+                self.selected_row = total_headers;
 
                 drop(request);
                 self.collection_store
                     .borrow_mut()
-                    .push_overlay(CollectionViewerOverlay::HeadersForm(idx));
+                    .push_overlay(CollectionViewerOverlay::HeadersForm(total_headers));
             }
             _ => {}
         }
