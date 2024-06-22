@@ -31,11 +31,9 @@ free and open source.
 <details>
 <summary>Expand to see more examples</summary>
 
-![Creating a new request](./extra/creating-new-request.gif)
+![Creating a new request](./extra/new-request.gif)
 
-![Making a new request](./extra/making-a-request.gif)
-
-![Error on invalid uri](./extra/error-invalid-uri.gif)
+![Error on invalid uri](./extra/error-request.gif)
 
 </details>
 

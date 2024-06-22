@@ -14,7 +14,6 @@ Hide
     Set WindowBar Colorful
     Set WindowBarSize 50
 
-    # Set Theme "Rose Pine"
     Type "cargo run -q -- --dry-run"
     Enter
     # enter the editor
@@ -25,23 +24,56 @@ Show
 Sleep 2s
 # select sidebar
 Enter
-Sleep 200ms
-# enter form
+Sleep 500ms
+# enter dir form
+Type "d"
+Sleep 1s
+Type@100ms "users"
+Sleep 1s
+# create the form
+Enter
+Sleep 1s
+# enter request form
 Type "n"
 Sleep 1s
-Type@100ms "My awesome request"
+Type@100ms "register"
 Sleep 1s
 Tab
-Sleep 100ms
+Sleep 500ms
+# should be a post
+Type "2"
+Sleep 500ms
 Tab
-Sleep 100ms
+# enter parent selector
+Space
+Sleep 2s
+Enter
+Sleep 2s
+# create the request
+Enter
+Sleep 2s
+Type "j"
+Sleep 300ms
+Enter
+Sleep 300ms
+Type "j"
+Sleep 2s
+Enter
+Sleep 1s
+Escape
+Sleep 300ms
 Tab
-Sleep 100ms
+Sleep 300ms
+Tab
 Enter
 Sleep 1s
 Tab
-Sleep 100ms
+Sleep 1s
+Type "n"
+Sleep 1s
+Type "Authorization"
+Sleep 1s
 Tab
-Sleep 100ms
-Enter
+Sleep 200ms
+Type "Bearer your token"
 Sleep 3s
