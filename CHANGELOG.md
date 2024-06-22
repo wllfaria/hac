@@ -1,6 +1,18 @@
 # Changelog
 
+## [0.2.1] - 2024-06-22
+
+### Bug Fixes
+
+- Enabling creation of headers on empty request
+
 ## [0.2.0] - 2024-06-20
+
+### Miscellaneous Tasks
+
+- Release hac v0.2.0
+
+## [0.1.2] - 2024-06-20
 
 ### Bug Fixes
 
@@ -69,8 +81,6 @@
 
 ### Features
 
-- Synchronization problems are now gone
-- Empty state for responses
 - Enabling dry run and better readme
 
 ### Miscellaneous Tasks
