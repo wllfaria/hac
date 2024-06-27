@@ -1,8 +1,6 @@
 mod auth_editor;
 mod body_editor;
 mod headers_editor;
-mod headers_editor_delete_prompt;
-mod headers_editor_edit_form;
 
 use auth_editor::AuthEditor;
 use body_editor::{BodyEditor, BodyEditorEvent};
@@ -134,7 +132,7 @@ impl<'re> RequestEditor<'re> {
                 collection_store.clone(),
                 layout.content_pane,
             ),
-            auth_editor: AuthEditor::new(colors),
+            auth_editor: AuthEditor::new(colors, collection_store.clone()),
             layout,
             curr_tab,
             collection_store,

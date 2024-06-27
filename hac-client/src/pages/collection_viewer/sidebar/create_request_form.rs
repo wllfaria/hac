@@ -129,6 +129,7 @@ impl Eventful for RequestForm<'_, RequestFormCreate> {
 
             let request = RequestKind::Single(Arc::new(RwLock::new(Request {
                 id: uuid::Uuid::new_v4().to_string(),
+                auth_method: None,
                 body: None,
                 body_type: None,
                 parent: self.parent_dir.as_ref().map(|(id, _)| id.clone()),

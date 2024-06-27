@@ -397,6 +397,7 @@ mod tests {
             id: "root".to_string(),
             method: RequestMethod::Get,
             name: "Root1".to_string(),
+            auth_method: None,
             parent: None,
             headers: None,
             uri: "/root1".to_string(),
@@ -408,6 +409,7 @@ mod tests {
     fn create_child_one() -> RequestKind {
         RequestKind::Single(Arc::new(RwLock::new(Request {
             id: "child_one".to_string(),
+            auth_method: None,
             parent: Some(String::from("dir")),
             method: RequestMethod::Post,
             name: "Child1".to_string(),
@@ -422,6 +424,7 @@ mod tests {
         RequestKind::Single(Arc::new(RwLock::new(Request {
             id: "child_two".to_string(),
             method: RequestMethod::Put,
+            auth_method: None,
             name: "Child2".to_string(),
             headers: None,
             parent: Some(String::from("dir")),
@@ -437,6 +440,7 @@ mod tests {
             method: RequestMethod::Put,
             name: "NotUsed".to_string(),
             parent: None,
+            auth_method: None,
             headers: None,
             uri: "/not/used".to_string(),
             body_type: None,
@@ -460,6 +464,7 @@ mod tests {
         RequestKind::Single(Arc::new(RwLock::new(Request {
             id: "root_two".to_string(),
             method: RequestMethod::Delete,
+            auth_method: None,
             headers: None,
             parent: None,
             name: "Root2".to_string(),

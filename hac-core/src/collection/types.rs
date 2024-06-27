@@ -168,6 +168,8 @@ pub struct Request {
     /// all headers used on given request, sometimes, we may include additional
     /// headers if required to make a request
     pub headers: Option<Vec<HeaderMap>>,
+    /// auth method used by the request, eg: Bearer or basic auth
+    pub auth_method: Option<AuthMethod>,
     /// if this request lives as a children of a directory, the uuid of given
     /// directory will be stored here, this is mainly used to know where to
     /// insert or move the request
@@ -179,6 +181,12 @@ pub struct Request {
     /// the type of the body to be used, like `application/json` or any other
     /// accepted body type
     pub body_type: Option<BodyType>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum AuthMethod {
+    Bearer,
+    Basic,
 }
 
 /// a collection of all available body types we support.
