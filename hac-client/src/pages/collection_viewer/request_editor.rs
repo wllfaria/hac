@@ -160,7 +160,7 @@ impl<'re> RequestEditor<'re> {
             ReqEditorTabs::Body => self.body_editor.draw(frame, size)?,
             ReqEditorTabs::Headers => self.headers_editor.draw(frame, size)?,
             ReqEditorTabs::Query => UnderConstruction::new(self.colors).draw(frame, size)?,
-            ReqEditorTabs::Auth => UnderConstruction::new(self.colors).draw(frame, size)?,
+            ReqEditorTabs::Auth => self.auth_editor.draw(frame, size)?,
         }
 
         Ok(())
