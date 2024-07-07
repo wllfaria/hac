@@ -1,20 +1,27 @@
+use super::auth_kind_prompt::AuthKindPrompt;
 use crate::pages::collection_viewer::collection_store::CollectionStore;
+use crate::pages::collection_viewer::collection_viewer::CollectionViewerOverlay;
 use crate::pages::{Eventful, Renderable};
 
 use std::cell::RefCell;
-use std::ops::Sub;
+use std::ops::{Add, Sub};
 use std::rc::Rc;
 
-use crossterm::event::KeyEvent;
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
+pub enum AuthEditorEvent {
+    ChangeAuthMethod,
+}
+
 #[derive(Debug)]
 pub struct AuthEditor<'ae> {
     colors: &'ae hac_colors::colors::Colors,
     collection_store: Rc<RefCell<CollectionStore>>,
+    auth_kind_prompt: AuthKindPrompt<'ae>,
 }
 
 impl<'ae> AuthEditor<'ae> {
@@ -23,6 +30,7 @@ impl<'ae> AuthEditor<'ae> {
         collection_store: Rc<RefCell<CollectionStore>>,
     ) -> Self {
         AuthEditor {
+            auth_kind_prompt: AuthKindPrompt::new(colors, collection_store.clone()),
             colors,
             collection_store,
         }
@@ -48,6 +56,20 @@ impl<'ae> AuthEditor<'ae> {
             hint_size,
         );
     }
+
+    pub fn draw_overlay(
+        &mut self,
+        frame: &mut Frame,
+        overlay: CollectionViewerOverlay,
+    ) -> anyhow::Result<()> {
+        match overlay {
+            CollectionViewerOverlay::ChangeAuthMethod => {
+                self.auth_kind_prompt.draw(frame, frame.size())?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
 }
 
 impl Renderable for AuthEditor<'_> {
@@ -70,7 +92,7 @@ impl Renderable for AuthEditor<'_> {
                     .borders(Borders::ALL),
             );
 
-            let size = Rect::new(size.x, size.y, size.width.sub(10), 3);
+            let size = Rect::new(size.x.add(5), size.y, size.width.sub(10), 3);
             frame.render_widget(no_request, size);
             return Ok(());
         }
@@ -80,9 +102,21 @@ impl Renderable for AuthEditor<'_> {
 }
 
 impl Eventful for AuthEditor<'_> {
-    type Result = ();
+    type Result = AuthEditorEvent;
 
-    fn handle_key_event(&mut self, _key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
+    fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
+        let overlay = self.collection_store.borrow().peek_overlay();
+
+        if let CollectionViewerOverlay::ChangeAuthMethod = overlay {
+            self.collection_store.borrow_mut().pop_overlay();
+            return Ok(None);
+        }
+
+        match key_event.code {
+            KeyCode::Char('e') => return Ok(Some(AuthEditorEvent::ChangeAuthMethod)),
+            _ => {}
+        }
+
         Ok(None)
     }
 }

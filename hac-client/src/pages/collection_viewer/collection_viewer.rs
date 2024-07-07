@@ -41,6 +41,7 @@ pub enum CollectionViewerOverlay {
     CreateDirectory,
     HeadersHelp,
     HeadersDelete,
+    ChangeAuthMethod,
     HeadersForm(usize),
     DeleteSidebarItem(String),
 }
@@ -309,6 +310,9 @@ impl Renderable for CollectionViewer<'_> {
                 self.request_editor.draw_overlay(frame, overlay)?;
             }
             CollectionViewerOverlay::HeadersForm(_) => {
+                self.request_editor.draw_overlay(frame, overlay)?;
+            }
+            CollectionViewerOverlay::ChangeAuthMethod => {
                 self.request_editor.draw_overlay(frame, overlay)?;
             }
             CollectionViewerOverlay::None => {}

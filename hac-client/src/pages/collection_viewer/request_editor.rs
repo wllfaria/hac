@@ -2,7 +2,7 @@ mod auth_editor;
 mod body_editor;
 mod headers_editor;
 
-use auth_editor::AuthEditor;
+use auth_editor::{AuthEditor, AuthEditorEvent};
 use body_editor::{BodyEditor, BodyEditorEvent};
 use hac_config::EditorMode;
 use hac_core::collection::types::{Request, RequestMethod};
@@ -221,7 +221,7 @@ impl<'re> RequestEditor<'re> {
             ReqEditorTabs::Body => todo!(),
             ReqEditorTabs::Headers => self.headers_editor.draw_overlay(frame, overlay),
             ReqEditorTabs::Query => todo!(),
-            ReqEditorTabs::Auth => todo!(),
+            ReqEditorTabs::Auth => self.auth_editor.draw_overlay(frame, overlay),
         }
     }
 }
@@ -289,11 +289,13 @@ impl Eventful for RequestEditor<'_> {
                 None => {}
             },
             ReqEditorTabs::Query => {}
-            ReqEditorTabs::Auth => {
-                if (self.auth_editor.handle_key_event(key_event)?).is_some() {
-                    todo!()
+            ReqEditorTabs::Auth => match self.auth_editor.handle_key_event(key_event)? {
+                Some(AuthEditorEvent::ChangeAuthMethod) => {
+                    let mut store = self.collection_store.borrow_mut();
+                    store.push_overlay(CollectionViewerOverlay::ChangeAuthMethod);
                 }
-            }
+                None => {}
+            },
         }
 
         Ok(None)
