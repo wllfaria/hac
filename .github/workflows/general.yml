@@ -24,8 +24,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: extractions/setup-just@v2
-        with:
-          components: rustfmt
       - name: Enforce formatting
         run: just fmt
 
