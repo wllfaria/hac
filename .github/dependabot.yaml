@@ -10,3 +10,23 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+  - package-ecosystem: "cargo"
+    directory: "/hac-cli"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "cargo"
+    directory: "/hac-client"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "cargo"
+    directory: "/hac-colors"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "cargo"
+    directory: "/hac-config"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "cargo"
+    directory: "/hac-core"
+    schedule:
+      interval: "weekly"
