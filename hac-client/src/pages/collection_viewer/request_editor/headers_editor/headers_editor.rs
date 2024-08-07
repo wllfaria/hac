@@ -12,7 +12,9 @@ use rand::Rng;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::Line;
-use ratatui::widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
+use ratatui::widgets::{
+    Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+};
 use ratatui::Frame;
 
 use super::headers_editor_delete_prompt::{
@@ -200,6 +202,20 @@ impl<'he> HeadersEditor<'he> {
         frame.render_widget(Paragraph::new(hint), hint_size);
     }
 
+    pub fn draw_empty_message(&self, frame: &mut Frame) {
+        let size = self.layout.content_size;
+        let no_headers = "No headers method".fg(self.colors.bright.black);
+        let no_request = Paragraph::new(no_headers).centered().block(
+            Block::default()
+                .fg(self.colors.normal.white)
+                .borders(Borders::ALL),
+        );
+
+        let size = Rect::new(size.x.add(5), size.y.sub(2), size.width.sub(10), 3);
+        frame.render_widget(no_request, size);
+        self.draw_hint(frame);
+    }
+
     pub fn draw_overlay(
         &mut self,
         frame: &mut Frame,
@@ -210,8 +226,8 @@ impl<'he> HeadersEditor<'he> {
             CollectionViewerOverlay::HeadersDelete => {
                 self.delete_prompt.draw(frame, frame.size())?;
             }
-            CollectionViewerOverlay::HeadersForm(header_idx) => {
-                self.header_form.update(header_idx)?;
+            CollectionViewerOverlay::HeadersForm(idx, _) => {
+                self.header_form.update(idx)?;
                 self.header_form.draw(frame, frame.size())?;
             }
             _ => {}
@@ -228,10 +244,14 @@ impl Renderable for HeadersEditor<'_> {
         };
 
         let request = request.read().expect("failed to read selected request");
-        let Some(headers) = request.headers.as_ref() else {
-            return Ok(());
-        };
+        let headers = request.headers.as_ref();
 
+        if headers.is_none() || headers.is_some_and(|h| h.is_empty()) {
+            self.draw_empty_message(frame);
+            return Ok(());
+        }
+
+        let headers = headers.unwrap();
         let title_name = Paragraph::new("Name").fg(self.colors.normal.yellow).bold();
         let title_value = Paragraph::new("Value").fg(self.colors.normal.yellow).bold();
         let title_enabled = Paragraph::new("Enabled")
@@ -335,7 +355,7 @@ impl Eventful for HeadersEditor<'_> {
                     headers.remove(self.selected_row);
                     // in case we deleted the last element, we must move the selection so we are
                     // not out of bounds
-                    self.selected_row = self.selected_row.min(headers.len().sub(1));
+                    self.selected_row = self.selected_row.min(headers.len().saturating_sub(1));
                     store.pop_overlay();
                 }
                 None => {}
@@ -344,7 +364,7 @@ impl Eventful for HeadersEditor<'_> {
             return Ok(None);
         }
 
-        if let CollectionViewerOverlay::HeadersForm(_) = overlay {
+        if let CollectionViewerOverlay::HeadersForm(_, _) = overlay {
             match self.header_form.handle_key_event(key_event)? {
                 Some(HeadersEditorFormEvent::Quit) => {
                     return Ok(Some(HeadersEditorEvent::Quit));
@@ -441,9 +461,9 @@ impl Eventful for HeadersEditor<'_> {
                     };
 
                     drop(request);
-                    self.collection_store
-                        .borrow_mut()
-                        .push_overlay(CollectionViewerOverlay::HeadersForm(self.selected_row));
+                    self.collection_store.borrow_mut().push_overlay(
+                        CollectionViewerOverlay::HeadersForm(self.selected_row, false),
+                    );
                 }
             }
             KeyCode::Esc => return Ok(Some(HeadersEditorEvent::RemoveSelection)),
@@ -459,7 +479,7 @@ impl Eventful for HeadersEditor<'_> {
                 drop(request);
                 self.collection_store
                     .borrow_mut()
-                    .push_overlay(CollectionViewerOverlay::HeadersForm(total_headers));
+                    .push_overlay(CollectionViewerOverlay::HeadersForm(total_headers, true));
             }
             _ => {}
         }

@@ -81,10 +81,10 @@ impl Renderable for AuthEditor<'_> {
         };
 
         let request = request.read().unwrap();
-        let has_auth = request.auth_method.is_none();
+        let has_auth = request.auth_method.is_some();
         self.draw_hint(frame, has_auth);
 
-        if has_auth {
+        if !has_auth {
             let no_request = "No authentication method".fg(self.colors.bright.black);
             let no_request = Paragraph::new(no_request).centered().block(
                 Block::default()

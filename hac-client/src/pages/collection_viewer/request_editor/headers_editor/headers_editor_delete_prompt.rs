@@ -85,10 +85,12 @@ impl Eventful for HeadersEditorDeletePrompt<'_> {
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
         match key_event.code {
-            KeyCode::Char('y') => Ok(Some(HeadersEditorDeletePromptEvent::Confirm)),
-            KeyCode::Char('n') => Ok(Some(HeadersEditorDeletePromptEvent::Cancel)),
-            KeyCode::Char('Y') => Ok(Some(HeadersEditorDeletePromptEvent::Confirm)),
-            KeyCode::Char('N') => Ok(Some(HeadersEditorDeletePromptEvent::Cancel)),
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                Ok(Some(HeadersEditorDeletePromptEvent::Confirm))
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') => {
+                Ok(Some(HeadersEditorDeletePromptEvent::Cancel))
+            }
             _ => Ok(None),
         }
     }

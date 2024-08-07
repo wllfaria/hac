@@ -100,6 +100,11 @@ impl<'app> App<'app> {
 fn startup() -> anyhow::Result<()> {
     crossterm::terminal::enable_raw_mode()?;
     crossterm::execute!(std::io::stdout(), crossterm::terminal::EnterAlternateScreen)?;
+
+    std::panic::set_hook(Box::new(|info| {
+        tracing::error!("{info:?}");
+        _ = shutdown();
+    }));
     Ok(())
 }
 

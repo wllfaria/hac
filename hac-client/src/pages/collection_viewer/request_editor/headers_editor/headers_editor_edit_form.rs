@@ -85,7 +85,7 @@ impl<'hef> HeadersEditorForm<'hef> {
             anyhow::bail!("trying to edit a header that don't exist");
         };
 
-        let CollectionViewerOverlay::HeadersForm(idx) = store.peek_overlay() else {
+        let CollectionViewerOverlay::HeadersForm(idx, _) = store.peek_overlay() else {
             anyhow::bail!("tried to display the header form without the proper overlay set");
         };
 
@@ -120,7 +120,7 @@ impl Renderable for HeadersEditorForm<'_> {
             anyhow::bail!("trying to edit a header that don't exist");
         };
 
-        let CollectionViewerOverlay::HeadersForm(idx) = store.peek_overlay() else {
+        let CollectionViewerOverlay::HeadersForm(idx, _) = store.peek_overlay() else {
             anyhow::bail!("tried to display the header form without the proper overlay set");
         };
 
@@ -212,7 +212,7 @@ impl Eventful for HeadersEditorForm<'_> {
             anyhow::bail!("tried to edit header on non-existing request");
         };
 
-        let CollectionViewerOverlay::HeadersForm(idx) = store.peek_overlay() else {
+        let CollectionViewerOverlay::HeadersForm(idx, is_new) = store.peek_overlay() else {
             anyhow::bail!("sent event to headers form without an overlay");
         };
 
@@ -245,6 +245,9 @@ impl Eventful for HeadersEditorForm<'_> {
             },
             KeyCode::Esc => {
                 header.pair = (self.original_name.clone(), self.original_value.clone());
+                if is_new {
+                    headers.remove(idx);
+                }
                 drop(store);
                 self.reset();
                 return Ok(Some(HeadersEditorFormEvent::CancelEdit));

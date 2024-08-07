@@ -299,10 +299,8 @@ impl TextObject<Write> {
 
     /// deletes a word forward in one of two ways:
     ///
-    /// - if the current character is alphanumeric, then this delete up to the first non
-    /// alphanumeric character
-    /// - if the current character is non alphanumeric, then delete up to the first alphanumeric
-    /// character
+    /// - if the current character is alphanumeric, then this delete up to the first non alphanumeric character
+    /// - if the current character is non alphanumeric, then delete up to the first alphanumeric character
     pub fn delete_word(&mut self, cursor: &Cursor) {
         let start_idx = self.content.line_to_char(cursor.row()).add(cursor.col());
         let mut end_idx = start_idx.saturating_sub(1);
@@ -329,10 +327,8 @@ impl TextObject<Write> {
 
     /// deletes a word backwards in one of two ways:
     ///
-    /// - if the current character is alphanumeric, then this delete up to the first non
-    /// alphanumeric character
-    /// - if the current character is non alphanumeric, then delete up to the first alphanumeric
-    /// character
+    /// - if the current character is alphanumeric, then this delete up to the first non alphanumeric character
+    /// - if the current character is non alphanumeric, then delete up to the first alphanumeric character
     ///
     /// will always return how many columns to advance the cursor
     pub fn delete_word_backwards(&mut self, cursor: &Cursor) -> usize {

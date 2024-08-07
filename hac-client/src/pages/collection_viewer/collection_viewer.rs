@@ -42,7 +42,7 @@ pub enum CollectionViewerOverlay {
     HeadersHelp,
     HeadersDelete,
     ChangeAuthMethod,
-    HeadersForm(usize),
+    HeadersForm(usize, bool),
     DeleteSidebarItem(String),
 }
 
@@ -309,7 +309,7 @@ impl Renderable for CollectionViewer<'_> {
             CollectionViewerOverlay::HeadersDelete => {
                 self.request_editor.draw_overlay(frame, overlay)?;
             }
-            CollectionViewerOverlay::HeadersForm(_) => {
+            CollectionViewerOverlay::HeadersForm(_, _) => {
                 self.request_editor.draw_overlay(frame, overlay)?;
             }
             CollectionViewerOverlay::ChangeAuthMethod => {
