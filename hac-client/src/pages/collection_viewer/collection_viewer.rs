@@ -159,6 +159,16 @@ impl<'cv> CollectionViewer<'cv> {
         );
     }
 
+    fn focus_next(&mut self) {
+        let next_pane = self.collection_store.borrow().get_focused_pane().next();
+        self.update_focus(next_pane);
+    }
+
+    fn focus_prev(&mut self) {
+        let prev_pane = self.collection_store.borrow().get_focused_pane().prev();
+        self.update_focus(prev_pane);
+    }
+
     // collect all pending responses from the channel. Here, I don't see a way we
     // may have more than one response on this channel at any point, but it shouldn't matter
     // if we have, so we can drain all the responses and update accordingly
@@ -411,14 +421,8 @@ impl Eventful for CollectionViewer<'_> {
                     self.update_focus(PaneFocus::Editor);
                     self.update_selection(Some(PaneFocus::Editor));
                 }
-                KeyCode::Tab => {
-                    let next_pane = self.collection_store.borrow().get_focused_pane().next();
-                    self.update_focus(next_pane);
-                }
-                KeyCode::BackTab => {
-                    let prev_pane = self.collection_store.borrow().get_focused_pane().prev();
-                    self.update_focus(prev_pane);
-                }
+                KeyCode::Tab => self.focus_next(),
+                KeyCode::BackTab => self.focus_prev(),
                 KeyCode::Enter => {
                     let curr_pane = self.collection_store.borrow().get_focused_pane();
                     self.update_selection(Some(curr_pane));
@@ -453,6 +457,14 @@ impl Eventful for CollectionViewer<'_> {
                         .borrow_mut()
                         .push_overlay(CollectionViewerOverlay::DeleteSidebarItem(item_id)),
                     Some(SidebarEvent::RemoveSelection) => self.update_selection(None),
+                    Some(SidebarEvent::SelectNext) => {
+                        self.update_selection(None);
+                        self.focus_next();
+                    }
+                    Some(SidebarEvent::SelectPrev) => {
+                        self.update_selection(None);
+                        self.focus_prev();
+                    }
                     Some(SidebarEvent::SyncCollection) => self.sync_collection_changes(),
                     Some(SidebarEvent::Quit) => return Ok(Some(Command::Quit)),
                     Some(SidebarEvent::RebuildView) => self.rebuild_everything(),

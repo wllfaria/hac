@@ -48,6 +48,10 @@ pub enum SidebarEvent {
     /// user pressed `Esc` so we notify the caller to remove the selection from
     /// this pane, essentially bubbling the key handling scope to the caller
     RemoveSelection,
+    /// tells the parent to move selection to the next pane
+    SelectNext,
+    /// tells the parent to move selection to the previous pane
+    SelectPrev,
     /// event to force a full rebuild of the view, when a request is deleted
     RebuildView,
     /// this event is used when a request or directory is created, this notify the parent
@@ -419,6 +423,8 @@ impl<'a> Eventful for Sidebar<'a> {
                     }
                 }
             }
+            KeyCode::Tab => return Ok(Some(SidebarEvent::SelectNext)),
+            KeyCode::BackTab => return Ok(Some(SidebarEvent::SelectPrev)),
             KeyCode::Char('D') => {
                 if let Some(item_id) = store.get_hovered_request() {
                     return Ok(Some(SidebarEvent::DeleteItem(item_id)));

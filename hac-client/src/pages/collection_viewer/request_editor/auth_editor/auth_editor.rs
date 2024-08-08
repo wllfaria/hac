@@ -49,7 +49,7 @@ impl<'ae> AuthEditor<'ae> {
                 _ => "[e: Change method] [Tab: Change focus] [?: Help]",
             }
         } else {
-            "[e: Select method]"
+            "[n: New auth method]"
         };
         frame.render_widget(
             Paragraph::new(hint).fg(self.colors.bright.black).centered(),
@@ -113,7 +113,7 @@ impl Eventful for AuthEditor<'_> {
         }
 
         match key_event.code {
-            KeyCode::Char('e') => return Ok(Some(AuthEditorEvent::ChangeAuthMethod)),
+            KeyCode::Char('n') => return Ok(Some(AuthEditorEvent::ChangeAuthMethod)),
             _ => {}
         }
 
