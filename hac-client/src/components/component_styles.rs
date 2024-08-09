@@ -7,8 +7,8 @@ pub enum ComponentBorder {
 
 #[derive(Debug, Clone, Copy)]
 pub enum ComponentFocus {
-    Focused,
     Unfocused,
+    Focused,
 }
 
 pub fn color_from_focus(
@@ -18,5 +18,14 @@ pub fn color_from_focus(
     match focus {
         ComponentFocus::Focused => colors.normal.red,
         ComponentFocus::Unfocused => colors.normal.white,
+    }
+}
+
+impl From<bool> for ComponentFocus {
+    fn from(value: bool) -> Self {
+        match value {
+            true => ComponentFocus::Focused,
+            false => ComponentFocus::Unfocused,
+        }
     }
 }

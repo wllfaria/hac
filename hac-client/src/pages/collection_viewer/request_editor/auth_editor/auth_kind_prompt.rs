@@ -1,6 +1,6 @@
 use crate::ascii::LOGO_ASCII;
 use crate::components::component_styles::{ComponentBorder, ComponentFocus};
-use crate::components::list_item::list_item;
+use crate::components::list_item::{list_item, ListItemKind};
 use crate::pages::collection_viewer::collection_store::CollectionStore;
 use crate::pages::{overlay::make_overlay, Eventful, Renderable};
 
@@ -50,11 +50,13 @@ impl Renderable for AuthKindPrompt<'_> {
         //let mut logo_size = logo.len() as u16;
 
         let auth_kinds = AuthKind::iter()
-            .map(|v| {
+            .enumerate()
+            .map(|(idx, v)| {
                 list_item(
                     v.to_string(),
-                    ComponentFocus::Focused,
+                    self.selected_idx.eq(&idx).into(),
                     ComponentBorder::All,
+                    ListItemKind::Enumerated(idx + 1),
                     self.colors,
                 )
             })
