@@ -221,30 +221,3 @@ fn ansi_to_rgb(val: u8) -> Option<(u8, u8, u8)> {
         None
     }
 }
-
-pub trait EnumIter {
-    fn iter() -> &'static [Self]
-    where
-        Self: Sized;
-
-    fn len() -> usize
-    where
-        Self: Sized;
-}
-
-#[macro_export]
-macro_rules! impl_enum_iter {
-    ($name:ident { $($variant:ident),* $(,)? }) => {
-        impl $name {
-            pub const fn iter() -> &'static [$name] {
-                &[
-                    $( $name::$variant ),*
-                ]
-            }
-
-            pub const fn len() -> usize {
-                $name::iter().len()
-            }
-        }
-    };
-}
