@@ -39,11 +39,14 @@ where
 
     let text = match kind {
         ListItemKind::_Regular => Line::from(Span::from(text.into())),
-        ListItemKind::Enumerated(idx) => Line::from(vec![
-            Span::from(idx.to_string()).fg(colors.normal.red),
-            Span::from(" "),
-            Span::from(text.into()),
-        ]),
+        ListItemKind::Enumerated(idx) => {
+            let text = format!("{}{}", text.into(), " ".repeat(80));
+            Line::from(vec![
+                Span::from(idx.to_string()).fg(colors.normal.red),
+                Span::from(" "),
+                Span::from(text),
+            ])
+        }
     };
 
     Paragraph::new(text).block(block).style(style)

@@ -173,7 +173,10 @@ impl Renderable for HeadersEditorForm<'_> {
             frame.render_widget(Paragraph::new(logo), logo_size);
         }
 
-        let name_size = Rect::new(size.x, size.y.add(logo_size).add(1), size.width, 3);
+        let mut name_size = Rect::new(size.x, size.y.add(logo_size).add(1), size.width, 3);
+        if logo.is_empty() {
+            name_size = Rect::new(size.x, size.height.div_ceil(2).add(1), size.width, 3);
+        }
         let value_size = Rect::new(size.x, name_size.y.add(4), size.width, 3);
         let hint_size = Rect::new(size.x, value_size.y.add(4), size.width, 1);
 

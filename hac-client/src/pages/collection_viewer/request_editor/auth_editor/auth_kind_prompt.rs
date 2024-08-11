@@ -13,7 +13,7 @@ use hac_core::collection::types::AuthMethod;
 use rand::Rng;
 use ratatui::layout::{Constraint, Direction, Flex, Layout, Rect};
 use ratatui::style::Stylize;
-use ratatui::text::Line;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
@@ -63,11 +63,15 @@ impl Renderable for AuthKindPrompt<'_> {
             .direction(Direction::Horizontal)
             .areas(size);
 
-        let [logo_size, _, options_size] = Layout::default()
+        let [_, logo_size, _, header_size, _, options_size, hint_size] = Layout::default()
             .constraints([
+                Constraint::Length(2),
                 Constraint::Length(logo_size),
                 Constraint::Length(2),
+                Constraint::Length(1),
+                Constraint::Length(1),
                 Constraint::Fill(1),
+                Constraint::Length(1),
             ])
             .direction(Direction::Vertical)
             .areas(center);
@@ -92,14 +96,18 @@ impl Renderable for AuthKindPrompt<'_> {
 
         let layout = Layout::default()
             .constraints(constraints.clone())
-            .flex(Flex::Center)
-            .spacing(1)
             .direction(Direction::Vertical)
             .split(options_size);
 
         for (idx, item) in auth_kinds.iter().enumerate() {
             frame.render_widget(item, layout[idx]);
         }
+
+        let header = Span::from("Select an authentication method below")
+            .into_centered_line()
+            .fg(self.colors.bright.black);
+
+        frame.render_widget(header, header_size);
 
         let logo = logo
             .iter()
@@ -122,7 +130,7 @@ impl Eventful for AuthKindPrompt<'_> {
                 return Ok(Some(AuthKindPromptEvent::Confirm(selected_auth_kind)));
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.selected_idx = AuthMethod::len().min(self.selected_idx + 1);
+                self.selected_idx = usize::min(AuthMethod::len() - 1, self.selected_idx + 1);
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.selected_idx = self.selected_idx.saturating_sub(1);

@@ -293,10 +293,22 @@ impl<'a> ResponseViewer<'a> {
             request_pane,
         );
 
+        let mut empty_message = self.empty_lines.clone();
+
+        if self.empty_lines.len() >= request_pane.height.into() {
+            empty_message = vec![
+                "your handy API client".fg(self.colors.normal.red).into(),
+                "".into(),
+                "make a request and the result will appear here"
+                    .fg(self.colors.normal.red)
+                    .into(),
+            ];
+        }
+
         let center = request_pane
             .y
             .add(request_pane.height.div_ceil(2))
-            .sub(self.empty_lines.len().div_ceil(2) as u16);
+            .sub(empty_message.len().div_ceil(2) as u16);
 
         let size = Rect::new(
             request_pane.x.add(1),
@@ -306,7 +318,7 @@ impl<'a> ResponseViewer<'a> {
         );
 
         frame.render_widget(
-            Paragraph::new(self.empty_lines.clone())
+            Paragraph::new(empty_message)
                 .fg(self.colors.normal.red)
                 .centered(),
             size,

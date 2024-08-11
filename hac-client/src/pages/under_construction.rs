@@ -25,7 +25,9 @@ impl Renderable for UnderConstruction<'_> {
         let icon_height = icon_lines.len();
         let icon_half_height = icon_height.div_ceil(2);
         let half_height = size.height.div_ceil(2);
-        let starting_y = half_height.sub(icon_half_height as u16).sub(1);
+        let starting_y = half_height
+            .saturating_sub(icon_half_height as u16)
+            .saturating_sub(1);
 
         let icon_size = Rect::new(
             size.x,
@@ -44,8 +46,19 @@ impl Renderable for UnderConstruction<'_> {
             1,
         );
 
-        frame.render_widget(Paragraph::new(icon_lines).centered(), icon_size);
-        frame.render_widget(Paragraph::new(message).centered(), message_size);
+        if icon_height >= (size.height - 3).into() {
+            let rect = Rect::new(
+                size.x,
+                size.y.add(size.height.div_ceil(2).sub(1)),
+                size.width,
+                1,
+            );
+            frame.render_widget(Paragraph::new(message).centered(), rect);
+            return Ok(());
+        }
+
+        // frame.render_widget(Paragraph::new(icon_lines).centered(), icon_size);
+        // frame.render_widget(Paragraph::new(message).centered(), message_size);
 
         Ok(())
     }
