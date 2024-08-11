@@ -186,7 +186,75 @@ pub struct Request {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum AuthMethod {
     Bearer,
-    Basic,
+    None,
+    A,
+    B,
+    C,
+    D,
+    E,
+}
+
+#[derive(Default)]
+pub struct AuthKindIter {
+    inner: u8,
+}
+
+impl std::fmt::Display for AuthMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AuthMethod::None => write!(f, "None"),
+            AuthMethod::Bearer => write!(f, "Bearer"),
+            AuthMethod::A => write!(f, "Bearer"),
+            AuthMethod::B => write!(f, "Bearer"),
+            AuthMethod::C => write!(f, "Bearer"),
+            AuthMethod::D => write!(f, "Bearer"),
+            AuthMethod::E => write!(f, "Bearer"),
+        }
+    }
+}
+
+impl From<usize> for AuthMethod {
+    fn from(value: usize) -> Self {
+        match value {
+            0 => AuthMethod::None,
+            1 => AuthMethod::Bearer,
+            2 => AuthMethod::A,
+            3 => AuthMethod::B,
+            4 => AuthMethod::C,
+            5 => AuthMethod::D,
+            6 => AuthMethod::E,
+            _ => AuthMethod::None,
+        }
+    }
+}
+
+impl AuthMethod {
+    pub fn iter() -> AuthKindIter {
+        AuthKindIter::default()
+    }
+
+    pub fn len() -> usize {
+        AuthKindIter::default().count()
+    }
+}
+
+impl Iterator for AuthKindIter {
+    type Item = AuthMethod;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let variant = match self.inner {
+            0 => Some(AuthMethod::None),
+            1 => Some(AuthMethod::Bearer),
+            2 => Some(AuthMethod::A),
+            3 => Some(AuthMethod::B),
+            4 => Some(AuthMethod::C),
+            5 => Some(AuthMethod::D),
+            6 => Some(AuthMethod::E),
+            _ => None,
+        };
+        self.inner += 1;
+        variant
+    }
 }
 
 /// a collection of all available body types we support.

@@ -93,7 +93,6 @@ pub struct ResponseViewer<'a> {
     preview_layout: PreviewLayout,
     layout: ResViewerLayout,
     collection_store: Rc<RefCell<CollectionStore>>,
-
     active_tab: ResViewerTabs,
     raw_scroll: usize,
     headers_scroll_y: usize,

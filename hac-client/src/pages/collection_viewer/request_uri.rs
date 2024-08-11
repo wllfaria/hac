@@ -21,6 +21,10 @@ pub enum RequestUriEvent {
     /// user pressed `Esc` while request uri was selected, so we bubble
     /// the event up for the parent to handle
     RemoveSelection,
+    /// requests the parent to select the next pane
+    SelectNext,
+    /// requests the parent to select the previous pane
+    SelectPrev,
     /// user pressed `C-c` hotkey so we bubble up the event for the parent to handle
     Quit,
 }
@@ -115,6 +119,8 @@ impl Eventful for RequestUri<'_> {
 
         match key_event.code {
             KeyCode::Esc => return Ok(Some(RequestUriEvent::RemoveSelection)),
+            KeyCode::Tab => return Ok(Some(RequestUriEvent::SelectNext)),
+            KeyCode::BackTab => return Ok(Some(RequestUriEvent::SelectPrev)),
             KeyCode::Char(c) => {
                 if let Some(req) = self
                     .collection_store

@@ -1,20 +1,24 @@
 use crate::ascii::LOGO_ASCII;
-use crate::components::component_styles::{ComponentBorder, ComponentFocus};
+use crate::components::component_styles::ComponentBorder;
 use crate::components::list_item::{list_item, ListItemKind};
 use crate::pages::collection_viewer::collection_store::CollectionStore;
 use crate::pages::{overlay::make_overlay, Eventful, Renderable};
 
 use std::cell::RefCell;
+use std::ops::{Add, Div, Sub};
 use std::rc::Rc;
 
 use crossterm::event::{KeyCode, KeyEvent};
-use hac_core::AuthKind;
+use hac_core::collection::types::AuthMethod;
 use rand::Rng;
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::layout::{Constraint, Direction, Flex, Layout, Rect};
+use ratatui::style::Stylize;
+use ratatui::text::Line;
+use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 pub enum AuthKindPromptEvent {
-    Placeholder,
+    Confirm(AuthMethod),
     Cancel,
 }
 
@@ -46,10 +50,29 @@ impl Renderable for AuthKindPrompt<'_> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         make_overlay(self.colors, self.colors.normal.black, 0.1, frame);
 
-        //let mut logo = LOGO_ASCII[self.logo_idx];
-        //let mut logo_size = logo.len() as u16;
+        let logo = LOGO_ASCII[self.logo_idx];
+        let logo_size = logo.len() as u16;
+        // adding size of the form + spacing + hint
 
-        let auth_kinds = AuthKind::iter()
+        let [_, center, _] = Layout::default()
+            .constraints([
+                Constraint::Fill(1),
+                Constraint::Min(80),
+                Constraint::Fill(1),
+            ])
+            .direction(Direction::Horizontal)
+            .areas(size);
+
+        let [logo_size, _, options_size] = Layout::default()
+            .constraints([
+                Constraint::Length(logo_size),
+                Constraint::Length(2),
+                Constraint::Fill(1),
+            ])
+            .direction(Direction::Vertical)
+            .areas(center);
+
+        let auth_kinds = AuthMethod::iter()
             .enumerate()
             .map(|(idx, v)| {
                 list_item(
@@ -64,19 +87,25 @@ impl Renderable for AuthKindPrompt<'_> {
 
         let constraints = auth_kinds
             .iter()
-            .flat_map(|_| vec![Constraint::Length(3), Constraint::Length(1)])
+            .flat_map(|_| vec![Constraint::Length(3)])
             .collect::<Vec<_>>();
 
         let layout = Layout::default()
-            .constraints(constraints)
+            .constraints(constraints.clone())
+            .flex(Flex::Center)
+            .spacing(1)
             .direction(Direction::Vertical)
-            .split(size);
+            .split(options_size);
 
-        let mut idx = 0;
-        for item in auth_kinds {
+        for (idx, item) in auth_kinds.iter().enumerate() {
             frame.render_widget(item, layout[idx]);
-            idx += 2;
         }
+
+        let logo = logo
+            .iter()
+            .map(|line| Line::from(line.fg(self.colors.normal.red)).centered())
+            .collect::<Vec<_>>();
+        frame.render_widget(Paragraph::new(logo), logo_size);
 
         Ok(())
     }
@@ -88,12 +117,15 @@ impl Eventful for AuthKindPrompt<'_> {
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
         match key_event.code {
             KeyCode::Esc => return Ok(Some(AuthKindPromptEvent::Cancel)),
-            KeyCode::Enter => {}
+            KeyCode::Enter => {
+                let selected_auth_kind = AuthMethod::from(self.selected_idx);
+                return Ok(Some(AuthKindPromptEvent::Confirm(selected_auth_kind)));
+            }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.selected_idx = self.selected_idx.min(self.selected_idx + 1)
+                self.selected_idx = AuthMethod::len().min(self.selected_idx + 1);
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.selected_idx = self.selected_idx.saturating_sub(1)
+                self.selected_idx = self.selected_idx.saturating_sub(1);
             }
             _ => {}
         }

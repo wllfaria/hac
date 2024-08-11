@@ -482,6 +482,14 @@ impl Eventful for CollectionViewer<'_> {
                         self.request_tx.clone(),
                     ),
                     Some(RequestUriEvent::RemoveSelection) => self.update_selection(None),
+                    Some(RequestUriEvent::SelectNext) => {
+                        self.update_selection(None);
+                        self.focus_next();
+                    }
+                    Some(RequestUriEvent::SelectPrev) => {
+                        self.update_selection(None);
+                        self.focus_prev();
+                    }
                     // when theres no event we do nothing
                     None => {}
                 },

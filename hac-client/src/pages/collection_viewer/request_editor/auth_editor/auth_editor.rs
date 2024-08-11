@@ -1,4 +1,4 @@
-use super::auth_kind_prompt::AuthKindPrompt;
+use super::auth_kind_prompt::{AuthKindPrompt, AuthKindPromptEvent};
 use crate::pages::collection_viewer::collection_store::CollectionStore;
 use crate::pages::collection_viewer::collection_viewer::CollectionViewerOverlay;
 use crate::pages::{Eventful, Renderable};
@@ -7,7 +7,8 @@ use std::cell::RefCell;
 use std::ops::{Add, Sub};
 use std::rc::Rc;
 
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use hac_core::collection::types::AuthMethod;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
 use ratatui::widgets::{Block, Borders, Paragraph};
@@ -15,6 +16,7 @@ use ratatui::Frame;
 
 pub enum AuthEditorEvent {
     ChangeAuthMethod,
+    Quit,
 }
 
 #[derive(Debug)]
@@ -81,7 +83,10 @@ impl Renderable for AuthEditor<'_> {
         };
 
         let request = request.read().unwrap();
-        let has_auth = request.auth_method.is_some();
+        let has_auth = request
+            .auth_method
+            .as_ref()
+            .is_some_and(|method| !matches!(method, AuthMethod::None));
         self.draw_hint(frame, has_auth);
 
         if !has_auth {
@@ -107,8 +112,29 @@ impl Eventful for AuthEditor<'_> {
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
         let overlay = self.collection_store.borrow().peek_overlay();
 
+        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            return Ok(Some(AuthEditorEvent::Quit));
+        }
+
+        let mut store = self.collection_store.borrow_mut();
+        let Some(request) = store.get_selected_request() else {
+            return Ok(None);
+        };
+
+        let mut request = request.write().unwrap();
+
         if let CollectionViewerOverlay::ChangeAuthMethod = overlay {
-            self.collection_store.borrow_mut().pop_overlay();
+            match self.auth_kind_prompt.handle_key_event(key_event)? {
+                Some(AuthKindPromptEvent::Cancel) => {
+                    store.pop_overlay();
+                }
+                Some(AuthKindPromptEvent::Confirm(auth_kind)) => {
+                    request.auth_method = Some(auth_kind);
+                    store.pop_overlay();
+                }
+                None => (),
+            };
+
             return Ok(None);
         }
 

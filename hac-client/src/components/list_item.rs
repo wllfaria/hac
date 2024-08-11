@@ -1,12 +1,10 @@
 use std::borrow::Cow;
 
-use ratatui::{
-    style::{Style, Stylize},
-    text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
-};
+use ratatui::style::{Style, Stylize};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, Paragraph};
 
-use super::component_styles::{color_from_focus, ComponentBorder, ComponentFocus};
+use crate::components::component_styles::{color_from_focus, ComponentBorder, ComponentFocus};
 
 pub enum ListItemKind {
     _Regular,
