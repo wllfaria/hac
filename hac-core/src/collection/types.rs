@@ -190,6 +190,8 @@ pub struct Request {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SampleResponse {
+    #[serde(default = "temp_sample_resp_name")]
+    pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub body: Option<String>,
     #[serde(skip_serializing_if = "IndexMap::is_empty")]
@@ -198,6 +200,22 @@ pub struct SampleResponse {
     pub cookies: Option<CookieStore>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<u16>,
+}
+
+impl SampleResponse {
+    pub fn new() -> Self {
+        Self {
+            name: temp_sample_resp_name(),
+            body: None,
+            headers: IndexMap::new(),
+            cookies: None,
+            status: None,
+        }
+    }
+}
+
+fn temp_sample_resp_name() -> String {
+    "test - sample response foo".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -3,6 +3,7 @@ use hac_core::syntax::highlighter::HIGHLIGHTER;
 use ratatui::widgets::block::Title;
 
 use crate::ascii::{BIG_ERROR_ARTS, LOGO_ASCII, SMALL_ERROR_ARTS};
+use crate::components::sample_response_list::SampleResponseList;
 use crate::pages::collection_viewer::collection_viewer::PaneFocus;
 use crate::pages::under_construction::UnderConstruction;
 use crate::pages::{spinner::Spinner, Eventful, Renderable};
@@ -85,6 +86,7 @@ struct PreviewLayout {
 
 #[derive(Debug, Clone)]
 pub struct ResponseViewer<'a> {
+    sample_responses: SampleResponseList<'a>,
     colors: &'a hac_colors::Colors,
     response: Option<Rc<RefCell<Response>>>,
     tree: Option<Tree>,
@@ -122,8 +124,10 @@ impl<'a> ResponseViewer<'a> {
         let preview_layout = build_preview_layout(layout.content_pane);
 
         let empty_lines = make_empty_ascii_art(colors);
+        let sample_responses = SampleResponseList::new(colors, collection_store.clone(), size);
 
         ResponseViewer {
+            sample_responses,
             colors,
             response,
             tree,
@@ -345,24 +349,9 @@ impl<'a> ResponseViewer<'a> {
         let selected_pane = self.collection_store.borrow().get_selected_pane();
 
         match selected_pane {
-            Some(PaneFocus::SampleResponse) => self.draw_sample_response(frame, size),
+            Some(PaneFocus::SampleResponse) => self.sample_responses.draw(frame, size),
             Some(_) | None => self.draw_response_preview(frame, size),
         }
-    }
-
-    // TODO
-    fn draw_sample_response(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
-        let Some(selected_request) = self.collection_store.borrow().get_selected_request() else {
-            return self.draw_response_preview(frame, size);
-        };
-        let Ok(selected_request) = selected_request.read() else {
-            return self.draw_response_preview(frame, size);
-        };
-        // TODO: handle collections properly
-        let Some(_sample_response) = selected_request.sample_responses.first() else {
-            return self.draw_response_preview(frame, size);
-        };
-        Ok(())
     }
 
     fn draw_response_preview(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
