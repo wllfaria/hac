@@ -1,5 +1,6 @@
 use hac_core::net::request_manager::Response;
 use hac_core::syntax::highlighter::HIGHLIGHTER;
+use ratatui::widgets::block::Title;
 
 use crate::ascii::{BIG_ERROR_ARTS, LOGO_ASCII, SMALL_ERROR_ARTS};
 use crate::pages::collection_viewer::collection_viewer::PaneFocus;
@@ -14,7 +15,7 @@ use std::rc::Rc;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use rand::Rng;
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Scrollbar};
@@ -30,28 +31,28 @@ pub enum ResponseViewerEvent {
     Quit,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ResViewerTabs {
-    Preview,
+    Pretty,
     Raw,
     Cookies,
     Headers,
 }
 
 impl ResViewerTabs {
-    pub fn next(tab: &ResViewerTabs) -> Self {
+    fn next(tab: ResViewerTabs) -> Self {
         match tab {
-            Self::Preview => ResViewerTabs::Raw,
+            Self::Pretty => ResViewerTabs::Raw,
             Self::Raw => ResViewerTabs::Headers,
             Self::Headers => ResViewerTabs::Cookies,
-            Self::Cookies => ResViewerTabs::Preview,
+            Self::Cookies => ResViewerTabs::Pretty,
         }
     }
 
-    pub fn prev(tab: &ResViewerTabs) -> Self {
+    fn prev(tab: ResViewerTabs) -> Self {
         match tab {
-            Self::Preview => ResViewerTabs::Cookies,
-            Self::Raw => ResViewerTabs::Preview,
+            Self::Pretty => ResViewerTabs::Cookies,
+            Self::Raw => ResViewerTabs::Pretty,
             Self::Headers => ResViewerTabs::Raw,
             Self::Cookies => ResViewerTabs::Headers,
         }
@@ -61,7 +62,7 @@ impl ResViewerTabs {
 impl From<ResViewerTabs> for usize {
     fn from(value: ResViewerTabs) -> Self {
         match value {
-            ResViewerTabs::Preview => 0,
+            ResViewerTabs::Pretty => 0,
             ResViewerTabs::Raw => 1,
             ResViewerTabs::Headers => 2,
             ResViewerTabs::Cookies => 3,
@@ -131,7 +132,7 @@ impl<'a> ResponseViewer<'a> {
             empty_lines,
             preview_layout,
             layout,
-            active_tab: ResViewerTabs::Preview,
+            active_tab: ResViewerTabs::Pretty,
             raw_scroll: 0,
             headers_scroll_y: 0,
             headers_scroll_x: 0,
@@ -199,16 +200,15 @@ impl<'a> ResponseViewer<'a> {
     }
 
     fn draw_container(&self, size: Rect, frame: &mut Frame) {
-        let is_focused = self
-            .collection_store
-            .borrow()
-            .get_focused_pane()
-            .eq(&PaneFocus::Preview);
+        let is_focused = self.is_focused();
+        let focused_pane = self.collection_store.borrow().get_focused_pane();
         let is_selected = self
             .collection_store
             .borrow()
             .get_selected_pane()
-            .is_some_and(|pane| pane.eq(&PaneFocus::Preview));
+            .is_some_and(|pane| {
+                pane.eq(&PaneFocus::Preview) || pane.eq(&PaneFocus::SampleResponse)
+            });
 
         let block_border = match (is_focused, is_selected) {
             (true, false) => Style::default().fg(self.colors.bright.blue),
@@ -216,12 +216,28 @@ impl<'a> ResponseViewer<'a> {
             (_, _) => Style::default().fg(self.colors.bright.black),
         };
 
+        let (review, ample_response) = match focused_pane {
+            PaneFocus::Preview => (
+                "review".fg(self.colors.normal.red).bold(),
+                "ample Response".fg(self.colors.bright.black),
+            ),
+            PaneFocus::SampleResponse => (
+                "review".fg(self.colors.bright.black),
+                "ample Response".fg(self.colors.normal.red).bold(),
+            ),
+            _ => (
+                "review".fg(self.colors.bright.black),
+                "ample Response".fg(self.colors.bright.black),
+            ),
+        };
+
         let block = Block::default()
             .borders(Borders::ALL)
-            .title(vec![
-                "P".fg(self.colors.normal.red).bold(),
-                "review".fg(self.colors.bright.black),
-            ])
+            .title(vec!["P".fg(self.colors.normal.red).bold(), review])
+            .title(
+                Title::from(vec!["S".fg(self.colors.normal.red).bold(), ample_response])
+                    .alignment(Alignment::Right),
+            )
             .border_style(block_border);
 
         frame.render_widget(block, size);
@@ -230,7 +246,7 @@ impl<'a> ResponseViewer<'a> {
     fn draw_tabs(&self, frame: &mut Frame, size: Rect) {
         let tabs = Tabs::new(["Pretty", "Raw", "Headers", "Cookies"])
             .style(Style::default().fg(self.colors.bright.black))
-            .select(self.active_tab.clone().into())
+            .select(self.active_tab.into())
             .highlight_style(
                 Style::default()
                     .fg(self.colors.normal.white)
@@ -326,6 +342,30 @@ impl<'a> ResponseViewer<'a> {
     }
 
     fn draw_current_tab(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
+        let selected_pane = self.collection_store.borrow().get_selected_pane();
+
+        match selected_pane {
+            Some(PaneFocus::SampleResponse) => self.draw_sample_response(frame, size),
+            Some(_) | None => self.draw_response_preview(frame, size),
+        }
+    }
+
+    // TODO
+    fn draw_sample_response(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
+        let Some(selected_request) = self.collection_store.borrow().get_selected_request() else {
+            return self.draw_response_preview(frame, size);
+        };
+        let Ok(selected_request) = selected_request.read() else {
+            return self.draw_response_preview(frame, size);
+        };
+        // TODO: handle collections properly
+        let Some(_sample_response) = selected_request.sample_responses.first() else {
+            return self.draw_response_preview(frame, size);
+        };
+        Ok(())
+    }
+
+    fn draw_response_preview(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         if self
             .response
             .as_ref()
@@ -343,8 +383,8 @@ impl<'a> ResponseViewer<'a> {
             .as_ref()
             .is_some_and(|res| !res.borrow().is_error)
         {
-            match self.active_tab {
-                ResViewerTabs::Preview => self.draw_pretty_response(frame, size),
+            match &self.active_tab {
+                ResViewerTabs::Pretty => self.draw_pretty_response(frame, size),
                 ResViewerTabs::Raw => self.draw_raw_response(frame, size),
                 ResViewerTabs::Headers => self.draw_response_headers(frame),
                 ResViewerTabs::Cookies => UnderConstruction::new(self.colors).draw(frame, size)?,
@@ -594,6 +634,12 @@ impl<'a> ResponseViewer<'a> {
             frame.render_widget(Line::from(pieces), size);
         }
     }
+
+    fn is_focused(&self) -> bool {
+        let focused_pane = self.collection_store.borrow().get_focused_pane();
+
+        focused_pane == PaneFocus::Preview || focused_pane == PaneFocus::SampleResponse
+    }
 }
 
 impl<'a> Renderable for ResponseViewer<'a> {
@@ -622,11 +668,11 @@ impl<'a> Eventful for ResponseViewer<'a> {
         }
 
         if let KeyCode::Tab = key_event.code {
-            self.active_tab = ResViewerTabs::next(&self.active_tab);
+            self.active_tab = ResViewerTabs::next(self.active_tab);
         }
 
         if let KeyCode::BackTab = key_event.code {
-            self.active_tab = ResViewerTabs::prev(&self.active_tab);
+            self.active_tab = ResViewerTabs::prev(self.active_tab);
         }
 
         match key_event.code {
@@ -642,13 +688,13 @@ impl<'a> Eventful for ResponseViewer<'a> {
                 }
             }
             KeyCode::Char('j') => match self.active_tab {
-                ResViewerTabs::Preview => self.pretty_scroll = self.pretty_scroll.add(1),
+                ResViewerTabs::Pretty => self.pretty_scroll = self.pretty_scroll.add(1),
                 ResViewerTabs::Raw => self.raw_scroll = self.raw_scroll.add(1),
                 ResViewerTabs::Headers => self.headers_scroll_y = self.headers_scroll_y.add(1),
                 ResViewerTabs::Cookies => {}
             },
             KeyCode::Char('k') => match self.active_tab {
-                ResViewerTabs::Preview => self.pretty_scroll = self.pretty_scroll.saturating_sub(1),
+                ResViewerTabs::Pretty => self.pretty_scroll = self.pretty_scroll.saturating_sub(1),
                 ResViewerTabs::Raw => self.raw_scroll = self.raw_scroll.saturating_sub(1),
                 ResViewerTabs::Headers => {
                     self.headers_scroll_y = self.headers_scroll_y.saturating_sub(1)

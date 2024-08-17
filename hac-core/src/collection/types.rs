@@ -2,6 +2,8 @@ use std::hash::Hash;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
+use indexmap::IndexMap;
+use reqwest_cookie_store::CookieStore;
 use serde::{Deserialize, Serialize};
 
 /// a collection is represented as a file on the file system and holds every
@@ -181,6 +183,21 @@ pub struct Request {
     /// the type of the body to be used, like `application/json` or any other
     /// accepted body type
     pub body_type: Option<BodyType>,
+    /// Examples of what responses may look like, including possible error cases.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub sample_responses: Vec<SampleResponse>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SampleResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<String>,
+    #[serde(skip_serializing_if = "IndexMap::is_empty")]
+    pub headers: IndexMap<String, Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cookies: Option<CookieStore>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<u16>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
