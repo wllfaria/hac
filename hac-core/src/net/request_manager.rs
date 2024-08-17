@@ -13,6 +13,7 @@ pub struct Response {
     pub body: Option<String>,
     pub pretty_body: Option<TextObject<Readonly>>,
     pub headers: Option<HeaderMap<HeaderValue>>,
+    // TODO: make this optional
     pub duration: Duration,
     pub status: Option<reqwest::StatusCode>,
     pub headers_size: Option<u64>,

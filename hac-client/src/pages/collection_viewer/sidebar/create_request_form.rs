@@ -137,6 +137,15 @@ impl Eventful for RequestForm<'_, RequestFormCreate> {
                 method: self.request_method.clone(),
                 name: self.request_name.clone(),
                 uri: String::default(),
+                // TODO: remove temp sample resp creation
+                sample_responses: vec![
+                    SampleResponse::new(),
+                    SampleResponse::new(),
+                    SampleResponse::new(),
+                    SampleResponse::new(),
+                    SampleResponse::new(),
+                    SampleResponse::new(),
+                ],
             })));
 
             if let Some((dir_id, _)) = self.parent_dir.as_ref() {

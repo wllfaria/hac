@@ -403,6 +403,7 @@ mod tests {
             uri: "/root1".to_string(),
             body_type: None,
             body: None,
+            sample_responses: Vec::new(),
         })))
     }
 
@@ -417,6 +418,7 @@ mod tests {
             headers: None,
             body_type: None,
             body: None,
+            sample_responses: Vec::new(),
         })))
     }
 
@@ -431,6 +433,7 @@ mod tests {
             uri: "/nested1/child2".to_string(),
             body_type: None,
             body: None,
+            sample_responses: Vec::new(),
         })))
     }
 
@@ -445,6 +448,7 @@ mod tests {
             uri: "/not/used".to_string(),
             body_type: None,
             body: None,
+            sample_responses: Vec::new(),
         })))
     }
 
@@ -471,6 +475,7 @@ mod tests {
             uri: "/root2".to_string(),
             body_type: None,
             body: None,
+            sample_responses: Vec::new(),
         })))
     }
 

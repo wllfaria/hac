@@ -50,8 +50,9 @@ pub enum CollectionViewerOverlay {
 pub enum PaneFocus {
     Sidebar,
     ReqUri,
-    Preview,
     Editor,
+    Preview,
+    SampleResponse,
 }
 
 impl PaneFocus {
@@ -60,16 +61,18 @@ impl PaneFocus {
             PaneFocus::Sidebar => PaneFocus::ReqUri,
             PaneFocus::ReqUri => PaneFocus::Editor,
             PaneFocus::Editor => PaneFocus::Preview,
-            PaneFocus::Preview => PaneFocus::Sidebar,
+            PaneFocus::Preview => PaneFocus::SampleResponse,
+            PaneFocus::SampleResponse => PaneFocus::Sidebar,
         }
     }
 
     fn prev(&self) -> Self {
         match self {
-            PaneFocus::Sidebar => PaneFocus::Preview,
+            PaneFocus::Sidebar => PaneFocus::SampleResponse,
             PaneFocus::ReqUri => PaneFocus::Sidebar,
             PaneFocus::Editor => PaneFocus::ReqUri,
             PaneFocus::Preview => PaneFocus::Editor,
+            PaneFocus::SampleResponse => PaneFocus::Preview,
         }
     }
 }
@@ -493,12 +496,14 @@ impl Eventful for CollectionViewer<'_> {
                     // when theres no event we do nothing
                     None => {}
                 },
-                PaneFocus::Preview => match self.response_viewer.handle_key_event(key_event)? {
-                    Some(ResponseViewerEvent::RemoveSelection) => self.update_selection(None),
-                    Some(ResponseViewerEvent::Quit) => return Ok(Some(Command::Quit)),
-                    // when theres no event we do nothing
-                    None => {}
-                },
+                PaneFocus::Preview | PaneFocus::SampleResponse => {
+                    match self.response_viewer.handle_key_event(key_event)? {
+                        Some(ResponseViewerEvent::RemoveSelection) => self.update_selection(None),
+                        Some(ResponseViewerEvent::Quit) => return Ok(Some(Command::Quit)),
+                        // when theres no event we do nothing
+                        None => {}
+                    }
+                }
                 PaneFocus::Editor => match self.request_editor.handle_key_event(key_event)? {
                     Some(RequestEditorEvent::RemoveSelection) => self.update_selection(None),
                     Some(RequestEditorEvent::Quit) => return Ok(Some(Command::Quit)),

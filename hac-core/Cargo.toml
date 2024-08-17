@@ -17,10 +17,12 @@ workspace = "../"
 hac-config.workspace = true
 
 anyhow.workspace = true
+indexmap.workspace = true
 tracing.workspace = true
 serde.workspace = true
 tokio.workspace = true
 reqwest.workspace = true
+reqwest_cookie_store.workspace = true
 serde_json.workspace = true
 ratatui.workspace = true
 tree-sitter.workspace = true
