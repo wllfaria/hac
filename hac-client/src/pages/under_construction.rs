@@ -57,8 +57,8 @@ impl Renderable for UnderConstruction<'_> {
             return Ok(());
         }
 
-        // frame.render_widget(Paragraph::new(icon_lines).centered(), icon_size);
-        // frame.render_widget(Paragraph::new(message).centered(), message_size);
+        frame.render_widget(Paragraph::new(icon_lines).centered(), icon_size);
+        frame.render_widget(Paragraph::new(message).centered(), message_size);
 
         Ok(())
     }

@@ -15,6 +15,7 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
 pub enum AuthEditorEvent {
+    RemoveSelection,
     ChangeAuthMethod,
     Quit,
 }
@@ -139,6 +140,7 @@ impl Eventful for AuthEditor<'_> {
         }
 
         match key_event.code {
+            KeyCode::Esc => return Ok(Some(AuthEditorEvent::RemoveSelection)),
             KeyCode::Char('n') => return Ok(Some(AuthEditorEvent::ChangeAuthMethod)),
             _ => {}
         }

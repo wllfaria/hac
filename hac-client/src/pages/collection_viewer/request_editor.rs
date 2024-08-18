@@ -294,6 +294,9 @@ impl Eventful for RequestEditor<'_> {
                     let mut store = self.collection_store.borrow_mut();
                     store.push_overlay(CollectionViewerOverlay::ChangeAuthMethod);
                 }
+                Some(AuthEditorEvent::RemoveSelection) => {
+                    return Ok(Some(RequestEditorEvent::RemoveSelection))
+                }
                 Some(AuthEditorEvent::Quit) => return Ok(Some(RequestEditorEvent::Quit)),
                 None => {}
             },
