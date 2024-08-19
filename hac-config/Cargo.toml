@@ -19,4 +19,4 @@ tracing.workspace = true
 serde.workspace = true
 
 dirs = "5.0.1"
-toml = "0.8.12"
+toml = "0.8.19"
