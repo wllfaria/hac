@@ -49,9 +49,17 @@ pub enum Action {
     JumpToEmptyLineAbove,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, Copy, Clone)]
+pub enum CollectionExtensions {
+    #[default]
+    Json,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub editor_keys: Keys,
+    #[serde(default)]
+    pub collection_ext: CollectionExtensions,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

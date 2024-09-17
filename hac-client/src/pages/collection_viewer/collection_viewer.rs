@@ -247,21 +247,21 @@ impl<'cv> CollectionViewer<'cv> {
 
         self.collection_sync_timer = std::time::Instant::now();
 
-        if self.dry_run {
-            return;
-        }
+        //if self.dry_run {
+        //    return;
+        //}
 
-        tokio::spawn(async move {
-            match hac_core::fs::sync_collection(collection).await {
-                Ok(_) => {}
-                Err(e) => {
-                    if sender.send(Command::Error(e.to_string())).is_err() {
-                        tracing::error!("failed to send error command through channel");
-                        std::process::abort();
-                    }
-                }
-            }
-        });
+        //tokio::spawn(async move {
+        //    match hac_core::fs::sync_collection(collection).await {
+        //        Ok(_) => {}
+        //        Err(e) => {
+        //            if sender.send(Command::Error(e.to_string())).is_err() {
+        //                tracing::error!("failed to send error command through channel");
+        //                std::process::abort();
+        //            }
+        //        }
+        //    }
+        //});
     }
 
     fn update_selection(&mut self, pane_to_select: Option<PaneFocus>) {

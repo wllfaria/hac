@@ -18,6 +18,8 @@ hac-core.workspace = true
 hac-config.workspace = true
 hac-colors.workspace = true
 hac-cli.workspace = true
+hac-loader.workspace = true
+hac-store.workspace = true
 
 anyhow.workspace = true
 crossterm.workspace = true

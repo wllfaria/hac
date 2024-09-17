@@ -1,4 +1,5 @@
-use hac_core::{collection::Collection, command::Command};
+use hac_core::command::Command;
+use hac_loader::collection_loader::CollectionMeta;
 
 use crate::event_pool::{Event, EventPool};
 use crate::pages::{Eventful, Renderable};
@@ -19,19 +20,13 @@ pub struct App<'app> {
 impl<'app> App<'app> {
     pub fn new(
         colors: &'app hac_colors::Colors,
-        collections: Vec<Collection>,
+        collections: Vec<CollectionMeta>,
         config: &'app hac_config::Config,
         dry_run: bool,
     ) -> anyhow::Result<Self> {
         let terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
         Ok(Self {
-            screen_manager: ScreenManager::new(
-                terminal.size()?,
-                colors,
-                collections,
-                config,
-                dry_run,
-            )?,
+            screen_manager: ScreenManager::new(terminal.size()?, colors, collections, config, dry_run)?,
             event_pool: EventPool::new(60f64, 30f64),
             should_quit: false,
             terminal,
@@ -46,8 +41,7 @@ impl<'app> App<'app> {
 
         startup()?;
 
-        self.screen_manager
-            .register_command_handler(command_tx.clone())?;
+        self.screen_manager.register_command_handler(command_tx.clone())?;
 
         loop {
             {
@@ -74,9 +68,7 @@ impl<'app> App<'app> {
                         })?;
                     }
                     event => {
-                        if let Some(command) =
-                            self.screen_manager.handle_event(Some(event.clone()))?
-                        {
+                        if let Some(command) = self.screen_manager.handle_event(Some(event.clone()))? {
                             command_tx
                                 .send(command)
                                 .expect("failed to send command through channel")

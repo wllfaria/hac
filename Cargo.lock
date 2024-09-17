@@ -604,6 +604,8 @@ dependencies = [
  "hac-colors",
  "hac-config",
  "hac-core",
+ "hac-loader",
+ "hac-store",
  "lazy_static",
  "mutants",
  "rand",
@@ -660,6 +662,26 @@ dependencies = [
  "tracing",
  "tree-sitter",
  "tree-sitter-json",
+]
+
+[[package]]
+name = "hac-loader"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "dirs",
+ "hac-config",
+ "hac-store",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "hac-store"
+version = "0.2.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

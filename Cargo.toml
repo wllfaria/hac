@@ -1,5 +1,13 @@
 [workspace]
-members = ["hac-config", "hac-core", "hac-client", "hac-colors", "hac-cli"]
+members = [
+    "hac-config",
+    "hac-core",
+    "hac-client",
+    "hac-colors",
+    "hac-cli",
+    "hac-store",
+    "hac-loader",
+]
 default-members = ["hac-client"]
 resolver = "2"
 
@@ -10,10 +18,12 @@ name = "hac"
 version = "0.2.0"
 
 [workspace.dependencies]
+hac-store = { path = "hac-store" }
 hac-config = { path = "hac-config" }
 hac-core = { path = "hac-core" }
 hac-colors = { path = "hac-colors" }
 hac-cli = { path = "hac-cli" }
+hac-loader = { path = "hac-loader" }
 
 anyhow = "1.0.81"
 crossterm = { version = "0.27.0", features = ["event-stream"] }
