@@ -25,19 +25,11 @@ impl Renderable for UnderConstruction<'_> {
         let icon_height = icon_lines.len();
         let icon_half_height = icon_height.div_ceil(2);
         let half_height = size.height.div_ceil(2);
-        let starting_y = half_height
-            .saturating_sub(icon_half_height as u16)
-            .saturating_sub(1);
+        let starting_y = half_height.saturating_sub(icon_half_height as u16).saturating_sub(1);
 
-        let icon_size = Rect::new(
-            size.x,
-            size.y.add(starting_y),
-            size.width,
-            icon_height as u16,
-        );
+        let icon_size = Rect::new(size.x, size.y.add(starting_y), size.width, icon_height as u16);
 
-        let message =
-            Line::from("Hold on, we're cooking up something new!").fg(self.colors.normal.red);
+        let message = Line::from("Hold on, we're cooking up something new!").fg(self.colors.normal.red);
 
         let message_size = Rect::new(
             size.x,
@@ -47,12 +39,7 @@ impl Renderable for UnderConstruction<'_> {
         );
 
         if icon_height >= (size.height - 3).into() {
-            let rect = Rect::new(
-                size.x,
-                size.y.add(size.height.div_ceil(2).sub(1)),
-                size.width,
-                1,
-            );
+            let rect = Rect::new(size.x, size.y.add(size.height.div_ceil(2).sub(1)), size.width, 1);
             frame.render_widget(Paragraph::new(message).centered(), rect);
             return Ok(());
         }

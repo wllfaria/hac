@@ -16,7 +16,10 @@ use tokio::sync::mpsc::UnboundedSender;
 
 /// A `Page` is anything that is a top level page and can be drawn to the screen
 pub trait Renderable {
-    fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()>;
+    #[allow(unused_variables)]
+    fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
+        Ok(())
+    }
 
     /// pages need to adapt to change of sizes on the application, this function is called
     /// by the top level event loop whenever a resize event is produced

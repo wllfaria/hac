@@ -52,11 +52,7 @@ impl Renderable for TerminalTooSmall<'_> {
 
 fn build_layout(size: Rect) -> Rect {
     Layout::default()
-        .constraints([
-            Constraint::Fill(1),
-            Constraint::Length(5),
-            Constraint::Fill(1),
-        ])
+        .constraints([Constraint::Fill(1), Constraint::Length(5), Constraint::Fill(1)])
         .direction(Direction::Vertical)
         .flex(Flex::Center)
         .split(size)[1]

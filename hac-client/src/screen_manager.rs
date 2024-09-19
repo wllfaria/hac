@@ -118,7 +118,7 @@ impl<'sm> ScreenManager<'sm> {
 
 impl Renderable for ScreenManager<'_> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
-        match (size.width < 80, size.height < 22) {
+        match (size.width < 75, size.height < 22) {
             (true, _) => self.switch_screen(Screens::TerminalTooSmall),
             (_, true) => self.switch_screen(Screens::TerminalTooSmall),
             (false, false) if self.curr_screen.eq(&Screens::TerminalTooSmall) => self.restore_screen(),

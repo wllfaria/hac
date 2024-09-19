@@ -1,5 +1,5 @@
 use hac_core::command::Command;
-use hac_loader::collection_loader::CollectionMeta;
+use hac_loader::collection_loader::{CollectionMeta, ReadableByteSize};
 use hac_store::collection::Collection;
 
 use crate::pages::collection_dashboard::collection_list::{CollectionList, CollectionListState};
@@ -15,10 +15,9 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::{Alignment, Constraint, Direction, Flex, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::Line;
-use ratatui::widgets::{Block, Clear, Padding, Paragraph, StatefulWidget, Widget, Wrap};
+use ratatui::widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, StatefulWidget, Widget, Wrap};
 use ratatui::Frame;
 use tokio::sync::mpsc::UnboundedSender;
-use tui_big_text::{BigText, PixelSize};
 
 #[derive(Debug, PartialEq)]
 struct DashboardLayout {
@@ -31,14 +30,40 @@ struct DashboardLayout {
     error_popup: Rect,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum SortingKind {
+    #[default]
+    Recent,
+    Name,
+    Size,
+}
+
+impl SortingKind {
+    pub fn next(&self) -> Self {
+        match self {
+            SortingKind::Recent => SortingKind::Name,
+            SortingKind::Name => SortingKind::Size,
+            SortingKind::Size => SortingKind::Recent,
+        }
+    }
+
+    pub fn prev(&self) -> Self {
+        match self {
+            SortingKind::Recent => SortingKind::Size,
+            SortingKind::Name => SortingKind::Recent,
+            SortingKind::Size => SortingKind::Name,
+        }
+    }
+}
+
 pub struct CollectionDashboard<'a> {
     colors: &'a hac_colors::Colors,
     collections: Vec<CollectionMeta>,
+    sorting_kind: SortingKind,
     selected: usize,
+    scroll: usize,
 
     layout: DashboardLayout,
-    list: CollectionList<'a>,
     form_state: FormState,
     filter: String,
     pane_focus: PaneFocus,
@@ -58,6 +83,8 @@ enum PaneFocus {
 }
 
 impl<'a> CollectionDashboard<'a> {
+    const LIST_ITEM_HEIGHT: u16 = 3;
+
     pub fn new(
         size: Rect,
         colors: &'a hac_colors::Colors,
@@ -68,16 +95,138 @@ impl<'a> CollectionDashboard<'a> {
             collections,
             colors,
             selected: 0,
+            scroll: 0,
+            sorting_kind: SortingKind::default(),
 
             form_state: FormState::default(),
             layout: build_layout(size),
-            list: CollectionList::new(colors),
             filter: String::new(),
             command_sender: None,
             error_message: String::default(),
             pane_focus: PaneFocus::List,
             dry_run,
         })
+    }
+
+    fn sort_list(&mut self) {
+        match self.sorting_kind {
+            SortingKind::Recent => self.collections.sort_by(|a, b| a.modified().cmp(b.modified())),
+            SortingKind::Name => self.collections.sort_by(|a, b| a.name().cmp(b.name())),
+            SortingKind::Size => self.collections.sort_by_key(|a| std::cmp::Reverse(a.size())),
+        }
+    }
+
+    fn draw_title(&self, frame: &mut Frame) -> anyhow::Result<()> {
+        let selected_style = |kind: SortingKind| {
+            if kind == self.sorting_kind {
+                self.colors.bright.blue
+            } else {
+                self.colors.bright.black
+            }
+        };
+
+        let title = " HAC ".bg(self.colors.normal.red).fg(self.colors.normal.white);
+        let sorting = vec![
+            "Most recent".fg(selected_style(SortingKind::Recent)),
+            " ❘ ".fg(self.colors.bright.black),
+            "By name".fg(selected_style(SortingKind::Name)),
+            " ❘ ".fg(self.colors.bright.black),
+            "By size".fg(selected_style(SortingKind::Size)),
+        ];
+
+        let lines = vec![Line::from(title), "".into(), Line::from(sorting)];
+        frame.render_widget(Paragraph::new(lines), self.layout.title_pane);
+
+        Ok(())
+    }
+
+    fn max_items_onscreen(&self) -> usize {
+        (self.layout.collections_pane.height / Self::LIST_ITEM_HEIGHT).into()
+    }
+
+    fn draw_collection_list(&mut self, frame: &mut Frame) -> anyhow::Result<()> {
+        let layout = self.layout.collections_pane;
+        let max_items = self.max_items_onscreen();
+
+        for (ref mut idx, (i, item)) in self
+            .collections
+            .iter()
+            .enumerate()
+            .skip(self.scroll)
+            .take(max_items)
+            .enumerate()
+        {
+            let selected = i == self.selected;
+
+            let item = match selected {
+                true => Paragraph::new(vec![
+                    Line::from(item.name().to_string().fg(self.colors.bright.red)),
+                    Line::from(vec![
+                        item.modified().to_string().fg(self.colors.bright.black),
+                        " - ".fg(self.colors.bright.black),
+                        item.size().readable_byte_size().fg(self.colors.bright.black),
+                    ]),
+                ])
+                .block(
+                    Block::new()
+                        .borders(Borders::LEFT)
+                        .fg(self.colors.bright.red)
+                        .padding(Padding::left(1)),
+                ),
+                false => Paragraph::new(vec![
+                    Line::from(item.name().to_string().fg(self.colors.normal.white)),
+                    Line::from(vec![
+                        item.modified().to_string().fg(self.colors.bright.black),
+                        " - ".fg(self.colors.bright.black),
+                        item.size().readable_byte_size().fg(self.colors.bright.black),
+                    ]),
+                ])
+                .block(Block::new().padding(Padding::left(2))),
+            };
+
+            let size = Rect::new(layout.x, layout.y + (*idx as u16 * 3), layout.width, 2);
+            frame.render_widget(item, size);
+            *idx += 1;
+        }
+
+        Ok(())
+    }
+
+    fn draw_hint_text(&self, frame: &mut Frame) {
+        let hint = vec![
+            "j/k} ↑/↓".fg(self.colors.normal.green),
+            " - choose • ".fg(self.colors.bright.black),
+            "n".fg(self.colors.normal.green),
+            " - new • ".fg(self.colors.bright.black),
+            "enter".fg(self.colors.normal.green),
+            " - select • ".fg(self.colors.bright.black),
+            "?".fg(self.colors.normal.green),
+            " - show more • ".fg(self.colors.bright.black),
+            "ctrl c".fg(self.colors.normal.green),
+            " - quit".fg(self.colors.bright.black),
+        ];
+
+        frame.render_widget(Line::from(hint), self.layout.hint_pane);
+    }
+
+    fn draw_background(&self, size: Rect, frame: &mut Frame) {
+        frame.render_widget(Clear, size);
+        frame.render_widget(Block::default().bg(self.colors.primary.background), size);
+    }
+
+    fn maybe_scroll_list(&mut self) {
+        if self.scroll > self.selected {
+            let offset = self.scroll - self.selected;
+            self.scroll -= offset;
+            return;
+        }
+
+        let max_items = self.max_items_onscreen() - 1;
+        let normalized = self.selected - self.scroll;
+        if normalized >= max_items {
+            let offset = self.selected - max_items;
+            self.scroll = offset;
+        }
     }
 
     //pub fn display_error(&mut self, message: String) {
@@ -328,13 +477,6 @@ impl<'a> CollectionDashboard<'a> {
     //    Ok(None)
     //}
     //
-    fn draw_hint_text(&self, frame: &mut Frame) {
-        let hint = "[j/k ↑/↓ choose] [n -> new] [enter -> select] [? -> show more] [ctrl c -> quit]"
-            .fg(self.colors.normal.magenta)
-            .into_centered_line();
-
-        frame.render_widget(hint, self.layout.hint_pane);
-    }
     //
     //fn draw_help_popup(&self, frame: &mut Frame) {
     //    make_overlay(self.colors, self.colors.primary.background, 0.2, frame);
@@ -397,7 +539,6 @@ impl<'a> CollectionDashboard<'a> {
     //    frame.render_widget(filter, self.layout.hint_pane);
     //}
     //
-    fn draw_collection_list(&mut self, frame: &mut Frame) {}
     //
     //fn draw_no_matches_text(&self, frame: &mut Frame) -> anyhow::Result<()> {
     //    let layout = Layout::default()
@@ -444,10 +585,6 @@ impl<'a> CollectionDashboard<'a> {
     //    Ok(())
     //}
     //
-    fn draw_background(&self, size: Rect, frame: &mut Frame) {
-        frame.render_widget(Clear, size);
-        frame.render_widget(Block::default().bg(self.colors.primary.background), size);
-    }
     //
     //fn draw_error_popup(&self, frame: &mut Frame) {
     //    let popup = ErrorPopup::new(self.error_message.clone(), self.colors);
@@ -488,24 +625,14 @@ impl<'a> CollectionDashboard<'a> {
     //    confirm_popup.render(self.layout.confirm_popup, frame.buffer_mut());
     //}
     //
-    //fn draw_title(&self, frame: &mut Frame) -> anyhow::Result<()> {
-    //    let title = BigText::builder()
-    //        .pixel_size(PixelSize::Quadrant)
-    //        .style(Style::default().fg(self.colors.normal.red))
-    //        .lines(vec!["Select a collection".into()])
-    //        .alignment(Alignment::Center)
-    //        .build()?;
-    //
-    //    frame.render_widget(title, self.layout.title_pane);
-    //
-    //    Ok(())
-    //}
 }
 
 impl Renderable for CollectionDashboard<'_> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         self.draw_background(size, frame);
-        //self.draw_title(frame)?;
+        self.draw_title(frame)?;
+
+        self.draw_collection_list(frame)?;
 
         //match (
         //    self.collections.is_empty(),
@@ -547,7 +674,27 @@ impl Eventful for CollectionDashboard<'_> {
         if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
             return Ok(Some(Command::Quit));
         };
-        //
+
+        match key_event.code {
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.selected = usize::min(self.selected + 1, self.collections.len() - 1);
+                self.maybe_scroll_list();
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.selected = self.selected.saturating_sub(1);
+                self.maybe_scroll_list();
+            }
+            KeyCode::Tab => {
+                self.sorting_kind = self.sorting_kind.next();
+                self.sort_list();
+            }
+            KeyCode::BackTab => {
+                self.sorting_kind = self.sorting_kind.prev();
+                self.sort_list();
+            }
+            _ => {}
+        }
+
         //match self.pane_focus {
         //    PaneFocus::List => self.handle_list_key_event(key_event),
         //    PaneFocus::Form => self.handle_form_key_event(key_event),
@@ -559,6 +706,7 @@ impl Eventful for CollectionDashboard<'_> {
         //        Ok(None)
         //    }
         //}
+
         Ok(None)
     }
 }
@@ -570,9 +718,14 @@ fn build_layout(size: Rect) -> DashboardLayout {
         .constraints([Constraint::Fill(1), Constraint::Length(1)])
         .areas(size);
 
-    let [_, title_pane, collections_pane] = Layout::default()
+    let [_, title_pane, _, collections_pane] = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Length(5), Constraint::Fill(1)])
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(3),
+            Constraint::Length(1),
+            Constraint::Fill(1),
+        ])
         .areas(top);
 
     let help_popup = Rect::new(
