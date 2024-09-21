@@ -1,6 +1,10 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::RwLock;
+
 use hac_cli::RuntimeBehavior;
 use hac_client::app;
-use hac_core::collection;
+use hac_config::Config;
 
 fn setup_tracing() -> anyhow::Result<tracing_appender::non_blocking::WorkerGuard> {
     let logfile = hac_config::LOGFILE;
@@ -43,10 +47,11 @@ async fn main() -> anyhow::Result<()> {
     hac_loader::get_or_create_collections_dir();
 
     let collections = hac_loader::collection_loader::collections_metadata()?;
+
     let colors = hac_colors::Colors::default();
     let config = hac_config::load_config();
 
-    let mut app = app::App::new(&colors, collections, &config, dry_run)?;
+    let mut app = app::App::new(collections, Rc::new(RwLock::new(config)), Rc::new(colors))?;
     app.run().await?;
 
     Ok(())

@@ -13,6 +13,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::{Add, Div};
 use std::rc::Rc;
+use std::sync::mpsc::Sender;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
@@ -84,7 +85,7 @@ pub struct CollectionViewer<'cv> {
     colors: &'cv hac_colors::Colors,
     config: &'cv hac_config::Config,
     layout: ExplorerLayout,
-    global_command_sender: Option<UnboundedSender<Command>>,
+    global_command_sender: Option<Sender<Command>>,
     collection_sync_timer: std::time::Instant,
     collection_store: Rc<RefCell<CollectionStore>>,
 
@@ -108,15 +109,9 @@ impl<'cv> CollectionViewer<'cv> {
 
         let sidebar = sidebar::Sidebar::new(colors, collection_store.clone());
 
-        let request_editor =
-            RequestEditor::new(colors, config, collection_store.clone(), layout.req_editor);
+        let request_editor = RequestEditor::new(colors, config, collection_store.clone(), layout.req_editor);
 
-        let response_viewer = ResponseViewer::new(
-            colors,
-            collection_store.clone(),
-            None,
-            layout.response_preview,
-        );
+        let response_viewer = ResponseViewer::new(colors, collection_store.clone(), None, layout.response_preview);
 
         let request_uri = RequestUri::new(colors, collection_store.clone(), layout.req_uri);
 
@@ -152,11 +147,7 @@ impl<'cv> CollectionViewer<'cv> {
             None,
             self.layout.response_preview,
         );
-        self.request_uri = RequestUri::new(
-            self.colors,
-            self.collection_store.clone(),
-            self.layout.req_uri,
-        );
+        self.request_uri = RequestUri::new(self.colors, self.collection_store.clone(), self.layout.req_uri);
     }
 
     fn focus_next(&mut self) {
@@ -233,15 +224,13 @@ impl<'cv> CollectionViewer<'cv> {
                             *inner = request.clone();
                         }
                     }
-                    RequestKind::Nested(dir) => {
-                        dir.requests.write().unwrap().iter_mut().for_each(|other| {
-                            if let RequestKind::Single(inner) = other {
-                                if request.read().unwrap().id.eq(&inner.read().unwrap().id) {
-                                    *inner = request.clone();
-                                }
+                    RequestKind::Nested(dir) => dir.requests.write().unwrap().iter_mut().for_each(|other| {
+                        if let RequestKind::Single(inner) = other {
+                            if request.read().unwrap().id.eq(&inner.read().unwrap().id) {
+                                *inner = request.clone();
                             }
-                        })
-                    }
+                        }
+                    }),
                 });
         }
 
@@ -288,8 +277,7 @@ impl Renderable for CollectionViewer<'_> {
         self.drain_responses_channel();
 
         self.sidebar.draw(frame, self.layout.sidebar)?;
-        self.response_viewer
-            .draw(frame, self.layout.response_preview)?;
+        self.response_viewer.draw(frame, self.layout.response_preview)?;
         self.request_editor.draw(frame, self.layout.req_editor)?;
         self.request_uri.draw(frame, self.layout.req_uri)?;
 
@@ -345,12 +333,7 @@ impl Renderable for CollectionViewer<'_> {
             .as_ref()
             .is_some_and(|pane| pane.eq(&PaneFocus::ReqUri))
         {
-            if let Some(request) = self
-                .collection_store
-                .borrow()
-                .get_selected_request()
-                .as_ref()
-            {
+            if let Some(request) = self.collection_store.borrow().get_selected_request().as_ref() {
                 frame.set_cursor(
                     self.layout
                         .req_uri
@@ -365,16 +348,15 @@ impl Renderable for CollectionViewer<'_> {
         Ok(())
     }
 
-    fn handle_tick(&mut self) -> anyhow::Result<()> {
+    fn tick(&mut self) -> anyhow::Result<()> {
         if self.collection_sync_timer.elapsed().as_secs().ge(&5) {
             self.sync_collection_changes();
         }
         Ok(())
     }
 
-    fn register_command_handler(&mut self, sender: UnboundedSender<Command>) -> anyhow::Result<()> {
+    fn register_command_handler(&mut self, sender: Sender<Command>) {
         self.global_command_sender = Some(sender);
-        Ok(())
     }
 
     fn resize(&mut self, new_size: Rect) {
@@ -396,10 +378,8 @@ impl Eventful for CollectionViewer<'_> {
                 modifiers: KeyModifiers::CONTROL,
                 ..
             },
-        ) = (
-            self.collection_store.borrow().get_selected_pane(),
-            key_event,
-        ) {
+        ) = (self.collection_store.borrow().get_selected_pane(), key_event)
+        {
             return Ok(Some(Command::Quit));
         }
 
@@ -474,11 +454,7 @@ impl Eventful for CollectionViewer<'_> {
                 PaneFocus::ReqUri => match self.request_uri.handle_key_event(key_event)? {
                     Some(RequestUriEvent::Quit) => return Ok(Some(Command::Quit)),
                     Some(RequestUriEvent::SendRequest) => hac_core::net::handle_request(
-                        self.collection_store
-                            .borrow()
-                            .get_selected_request()
-                            .as_ref()
-                            .unwrap(),
+                        self.collection_store.borrow().get_selected_request().as_ref().unwrap(),
                         self.request_tx.clone(),
                     ),
                     Some(RequestUriEvent::RemoveSelection) => self.update_selection(None),

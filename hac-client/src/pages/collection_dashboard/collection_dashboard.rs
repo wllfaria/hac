@@ -8,8 +8,12 @@ use crate::pages::confirm_popup::ConfirmPopup;
 use crate::pages::error_popup::ErrorPopup;
 use crate::pages::overlay::{draw_overlay, make_overlay};
 use crate::pages::{Eventful, Renderable};
+use crate::router::{EventfulRenderable, Navigate};
 
+use std::fmt::Debug;
+use std::hash::Hash;
 use std::ops::{Add, Div, Not, Sub};
+use std::sync::mpsc::Sender;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::{Alignment, Constraint, Direction, Flex, Layout, Rect};
@@ -17,7 +21,6 @@ use ratatui::style::{Style, Stylize};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, StatefulWidget, Widget, Wrap};
 use ratatui::Frame;
-use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Debug, PartialEq)]
 struct DashboardLayout {
@@ -56,20 +59,23 @@ impl SortingKind {
     }
 }
 
+#[derive(Debug)]
 pub struct CollectionDashboard<'a> {
-    colors: &'a hac_colors::Colors,
+    colors: hac_colors::Colors,
     collections: Vec<CollectionMeta>,
     sorting_kind: SortingKind,
     selected: usize,
     scroll: usize,
+    navigator: Option<Sender<Navigate>>,
 
     layout: DashboardLayout,
     form_state: FormState,
     filter: String,
     pane_focus: PaneFocus,
-    pub command_sender: Option<UnboundedSender<Command>>,
+    pub command_sender: Option<Sender<Command>>,
     error_message: String,
     dry_run: bool,
+    _a: std::marker::PhantomData<&'a ()>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -85,18 +91,14 @@ enum PaneFocus {
 impl<'a> CollectionDashboard<'a> {
     const LIST_ITEM_HEIGHT: u16 = 3;
 
-    pub fn new(
-        size: Rect,
-        colors: &'a hac_colors::Colors,
-        collections: Vec<CollectionMeta>,
-        dry_run: bool,
-    ) -> anyhow::Result<Self> {
-        Ok(CollectionDashboard {
+    pub fn new(size: Rect, colors: hac_colors::Colors, collections: Vec<CollectionMeta>, dry_run: bool) -> Self {
+        CollectionDashboard {
             collections,
             colors,
             selected: 0,
             scroll: 0,
             sorting_kind: SortingKind::default(),
+            navigator: None,
 
             form_state: FormState::default(),
             layout: build_layout(size),
@@ -105,7 +107,8 @@ impl<'a> CollectionDashboard<'a> {
             error_message: String::default(),
             pane_focus: PaneFocus::List,
             dry_run,
-        })
+            _a: std::marker::PhantomData,
+        }
     }
 
     fn sort_list(&mut self) {
@@ -657,9 +660,8 @@ impl Renderable for CollectionDashboard<'_> {
         Ok(())
     }
 
-    fn register_command_handler(&mut self, sender: UnboundedSender<Command>) -> anyhow::Result<()> {
+    fn register_command_handler(&mut self, sender: Sender<Command>) {
         self.command_sender = Some(sender.clone());
-        Ok(())
     }
 
     fn resize(&mut self, new_size: Rect) {

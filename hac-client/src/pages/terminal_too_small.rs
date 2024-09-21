@@ -10,17 +10,17 @@ use ratatui::Frame;
 /// `screen_manager` when the terminal gets smaller than a certain threshold,
 /// this page will display over everything and will automatically be hidden
 /// when the terminal gets bigger than said threshold
-pub struct TerminalTooSmall<'tts> {
-    colors: &'tts hac_colors::Colors,
+pub struct TerminalTooSmall {
+    colors: hac_colors::Colors,
 }
 
-impl<'a> TerminalTooSmall<'a> {
-    pub fn new(colors: &'a hac_colors::Colors) -> Self {
+impl TerminalTooSmall {
+    pub fn new(colors: hac_colors::Colors) -> Self {
         TerminalTooSmall { colors }
     }
 }
 
-impl Renderable for TerminalTooSmall<'_> {
+impl Renderable for TerminalTooSmall {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         let layout = build_layout(size);
 

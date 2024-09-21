@@ -1,20 +1,28 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::fmt::Debug;
+use std::hash::Hash;
+use std::rc::Rc;
+use std::sync::mpsc::channel;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::Sender;
+
 use hac_core::command::Command;
 use hac_loader::collection_loader::CollectionMeta;
+use ratatui::layout::Rect;
+use ratatui::Frame;
 
 use crate::event_pool::Event;
 use crate::pages::collection_dashboard::CollectionDashboard;
 use crate::pages::collection_viewer::collection_store::CollectionStore;
 use crate::pages::collection_viewer::CollectionViewer;
 use crate::pages::terminal_too_small::TerminalTooSmall;
-use crate::pages::{Eventful, Renderable};
-
-use std::{cell::RefCell, rc::Rc};
-
-use ratatui::{layout::Rect, Frame};
-use tokio::sync::mpsc::UnboundedSender;
+use crate::pages::Eventful;
+use crate::pages::Renderable;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Screens {
+pub enum Routes {
+    CollectionList,
     CollectionDashboard,
     CollectionViewer,
     TerminalTooSmall,
@@ -22,63 +30,31 @@ pub enum Screens {
 
 /// ScreenManager is responsible for redirecting the user to the screen it should
 /// be seeing at any point by the application, it is the entity behind navigation
-pub struct ScreenManager<'sm> {
-    terminal_too_small: TerminalTooSmall<'sm>,
-    collection_list: CollectionDashboard<'sm>,
-    /// CollectionViewer is a option as we need a selected collection in order to build
-    /// all the components inside
-    collection_viewer: Option<CollectionViewer<'sm>>,
-
-    curr_screen: Screens,
-    /// we keep track of the previous screen, as when the terminal_too_small screen
-    /// is shown, we know where to redirect the user back
-    prev_screen: Screens,
-
-    size: Rect,
-    colors: &'sm hac_colors::Colors,
-    config: &'sm hac_config::Config,
-    dry_run: bool,
-
-    collection_store: Rc<RefCell<CollectionStore>>,
-
-    // we hold a copy of the sender so we can pass it to the editor when we first
-    // build one
-    sender: Option<UnboundedSender<Command>>,
+pub struct Router {
+    active_route: Routes,
+    prev_route: Routes,
+    sender: Option<Sender<Command>>,
 }
 
-impl<'sm> ScreenManager<'sm> {
-    pub fn new(
-        size: Rect,
-        colors: &'sm hac_colors::Colors,
-        collections: Vec<CollectionMeta>,
-        config: &'sm hac_config::Config,
-        dry_run: bool,
-    ) -> anyhow::Result<Self> {
+impl Router {
+    pub fn new(collection_list: Vec<CollectionMeta>, size: Rect) -> anyhow::Result<Self> {
         Ok(Self {
-            curr_screen: Screens::CollectionDashboard,
-            prev_screen: Screens::CollectionDashboard,
-            collection_viewer: None,
-            terminal_too_small: TerminalTooSmall::new(colors),
-            collection_list: CollectionDashboard::new(size, colors, collections, dry_run)?,
-            collection_store: Rc::new(RefCell::new(CollectionStore::default())),
-            size,
-            colors,
-            config,
+            active_route: Routes::CollectionDashboard,
+            prev_route: Routes::CollectionDashboard,
             sender: None,
-            dry_run,
         })
     }
 
     fn restore_screen(&mut self) {
-        std::mem::swap(&mut self.curr_screen, &mut self.prev_screen);
+        std::mem::swap(&mut self.active_route, &mut self.prev_route);
     }
 
-    fn switch_screen(&mut self, screen: Screens) {
-        if self.curr_screen == screen {
+    fn switch_screen(&mut self, screen: Routes) {
+        if self.active_route == screen {
             return;
         }
-        std::mem::swap(&mut self.curr_screen, &mut self.prev_screen);
-        self.curr_screen = screen;
+        std::mem::swap(&mut self.active_route, &mut self.prev_route);
+        self.active_route = screen;
     }
 
     // events can generate commands, which are sent back to the top level event loop through this
@@ -88,25 +64,21 @@ impl<'sm> ScreenManager<'sm> {
         match command {
             Command::SelectCollection(collection) | Command::CreateCollection(collection) => {
                 tracing::debug!("changing to api explorer: {}", collection.info.name);
-                self.switch_screen(Screens::CollectionViewer);
-                self.collection_store.borrow_mut().set_state(collection);
-                self.collection_viewer = Some(CollectionViewer::new(
-                    self.size,
-                    self.collection_store.clone(),
-                    self.colors,
-                    self.config,
-                    self.dry_run,
-                ));
-                self.collection_viewer
-                    .as_mut()
-                    .unwrap()
-                    .register_command_handler(
-                        self.sender
-                            .as_ref()
-                            .expect("attempted to register the sender on collection_viewer but it was None")
-                            .clone(),
-                    )
-                    .ok();
+                self.switch_screen(Routes::CollectionViewer);
+                // self.collection_store.borrow_mut().set_state(collection);
+                // self.collection_viewer = Some(CollectionViewer::new(
+                //     self.size,
+                //     self.collection_store.clone(),
+                //     self.colors,
+                //     self.config,
+                //     self.dry_run,
+                // ));
+                // self.collection_viewer.as_mut().unwrap().register_command_handler(
+                //     self.sender
+                //         .as_ref()
+                //         .expect("attempted to register the sender on collection_viewer but it was None")
+                //         .clone(),
+                // )
             }
             Command::Error(msg) => {
                 //self.collection_list.display_error(msg);
@@ -116,217 +88,68 @@ impl<'sm> ScreenManager<'sm> {
     }
 }
 
-impl Renderable for ScreenManager<'_> {
+impl Renderable for Router {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         match (size.width < 75, size.height < 22) {
-            (true, _) => self.switch_screen(Screens::TerminalTooSmall),
-            (_, true) => self.switch_screen(Screens::TerminalTooSmall),
-            (false, false) if self.curr_screen.eq(&Screens::TerminalTooSmall) => self.restore_screen(),
+            (true, _) => self.switch_screen(Routes::TerminalTooSmall),
+            (_, true) => self.switch_screen(Routes::TerminalTooSmall),
+            (false, false) if self.active_route.eq(&Routes::TerminalTooSmall) => self.restore_screen(),
             _ => {}
         }
 
-        match &self.curr_screen {
-            Screens::CollectionViewer => self
-                .collection_viewer
-                .as_mut()
-                .expect("should never be able to switch to editor screen without having a collection")
-                .draw(frame, frame.size())?,
-            Screens::CollectionDashboard => self.collection_list.draw(frame, frame.size())?,
-            Screens::TerminalTooSmall => self.terminal_too_small.draw(frame, frame.size())?,
-        };
+        // match &self.active_route {
+        //     // Routes::CollectionViewer => self
+        //     //     .collection_viewer
+        //     //     .as_mut()
+        //     //     .expect("should never be able to switch to editor screen without having a collection")
+        //     //     .draw(frame, frame.size())?,
+        //     Routes::CollectionDashboard => (), // self.collection_list.draw(frame, frame.size())?),
+        //     // Routes::TerminalTooSmall => self.terminal_too_small.draw(frame, frame.size())?,
+        // };
 
         Ok(())
     }
 
-    fn register_command_handler(&mut self, sender: UnboundedSender<Command>) -> anyhow::Result<()> {
-        self.sender = Some(sender.clone());
-        self.collection_list.register_command_handler(sender.clone())?;
-        Ok(())
+    fn register_command_handler(&mut self, sender: Sender<Command>) {
+        // self.sender = Some(sender.clone());
+        // self.collection_list.register_command_handler(sender.clone())?;
     }
 
     fn resize(&mut self, new_size: Rect) {
-        self.size = new_size;
-        self.collection_list.resize(new_size);
+        // self.collection_list.resize(new_size);
 
-        if let Some(e) = self.collection_viewer.as_mut() {
-            e.resize(new_size)
-        }
+        // if let Some(e) = self.collection_viewer.as_mut() {
+        //     e.resize(new_size)
+        // }
     }
 
-    fn handle_tick(&mut self) -> anyhow::Result<()> {
+    fn tick(&mut self) -> anyhow::Result<()> {
         // currently, only the editor cares about the ticks, used to determine
         // when to sync changes in disk
-        if let Screens::CollectionViewer = &self.curr_screen {
-            self.collection_viewer
-                .as_mut()
-                .expect("we are displaying the editor without having one")
-                .handle_tick()?
-        };
+        // if let Routes::CollectionViewer = &self.active_route {
+        // self.collection_viewer
+        //     .as_mut()
+        //     .expect("we are displaying the editor without having one")
+        //     .handle_tick()?
+        // };
 
         Ok(())
     }
 }
 
-impl Eventful for ScreenManager<'_> {
+impl Eventful for Router {
     type Result = Command;
 
     fn handle_event(&mut self, event: Option<Event>) -> anyhow::Result<Option<Command>> {
-        match self.curr_screen {
-            Screens::CollectionViewer => self
-                .collection_viewer
-                .as_mut()
-                .expect("should never be able to switch to editor screen without having a collection")
-                .handle_event(event),
-            Screens::CollectionDashboard => self.collection_list.handle_event(event),
-            Screens::TerminalTooSmall => Ok(None),
-        }
+        // match self.active_route {
+        //     Routes::CollectionViewer => self
+        //         .collection_viewer
+        //         .as_mut()
+        //         .expect("should never be able to switch to editor screen without having a collection")
+        //         .handle_event(event),
+        //     Routes::CollectionDashboard => Ok(None), //self.collection_list.handle_event(event),
+        //     Routes::TerminalTooSmall => Ok(None),
+        // }
+        Ok(None)
     }
 }
-
-//#[cfg(test)]
-//mod tests {
-//    use super::*;
-//    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-//    use hac_core::collection::{self, types::*};
-//    use ratatui::{backend::TestBackend, Terminal};
-//    use std::{
-//        fs::{create_dir, File},
-//        io::Write,
-//    };
-//    use tempfile::{tempdir, TempDir};
-//
-//    fn setup_temp_collections(amount: usize) -> (TempDir, String) {
-//        let tmp_data_dir = tempdir().expect("Failed to create temp data dir");
-//
-//        let tmp_dir = tmp_data_dir.path().join("collections");
-//        create_dir(&tmp_dir).expect("Failed to create collections directory");
-//
-//        for i in 0..amount {
-//            let file_path = tmp_dir.join(format!("test_collection_{}.json", i));
-//            let mut tmp_file = File::create(&file_path).expect("Failed to create file");
-//
-//            write!(
-//            tmp_file,
-//            r#"{{"info": {{ "name": "test_collection_{}", "description": "test_description_{}" }}}}"#,
-//            i, i
-//        ).expect("Failed to write to file");
-//
-//            tmp_file.flush().expect("Failed to flush file");
-//        }
-//
-//        (tmp_data_dir, tmp_dir.to_string_lossy().to_string())
-//    }
-//
-//    #[test]
-//    fn test_show_terminal_too_small_screen() {
-//        let small_in_width = Rect::new(0, 0, 79, 22);
-//        let small_in_height = Rect::new(0, 0, 100, 19);
-//        let colors = hac_colors::Colors::default();
-//        let (_guard, path) = setup_temp_collections(10);
-//        let collections = collection::get_collections(path).unwrap();
-//        let config = hac_config::load_config();
-//        let mut sm =
-//            ScreenManager::new(small_in_width, &colors, collections, &config, false).unwrap();
-//        let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
-//
-//        sm.draw(&mut terminal.get_frame(), small_in_width).unwrap();
-//        assert_eq!(sm.curr_screen, Screens::TerminalTooSmall);
-//
-//        sm.draw(&mut terminal.get_frame(), small_in_height).unwrap();
-//        assert_eq!(sm.curr_screen, Screens::TerminalTooSmall);
-//    }
-//
-//    #[test]
-//    fn test_restore_screeen() {
-//        let small = Rect::new(0, 0, 79, 22);
-//        let enough = Rect::new(0, 0, 80, 22);
-//        let colors = hac_colors::Colors::default();
-//        let (_guard, path) = setup_temp_collections(10);
-//        let collections = collection::get_collections(path).unwrap();
-//        let config = hac_config::load_config();
-//        let mut sm = ScreenManager::new(small, &colors, collections, &config, false).unwrap();
-//        let mut terminal = Terminal::new(TestBackend::new(80, 22)).unwrap();
-//
-//        terminal.resize(small).unwrap();
-//        sm.draw(&mut terminal.get_frame(), small).unwrap();
-//        assert_eq!(sm.curr_screen, Screens::TerminalTooSmall);
-//        assert_eq!(sm.prev_screen, Screens::CollectionDashboard);
-//
-//        terminal.resize(enough).unwrap();
-//        sm.draw(&mut terminal.get_frame(), enough).unwrap();
-//        assert_eq!(sm.curr_screen, Screens::CollectionDashboard);
-//        assert_eq!(sm.prev_screen, Screens::TerminalTooSmall);
-//    }
-//
-//    #[test]
-//    fn test_resizing() {
-//        let initial = Rect::new(0, 0, 80, 22);
-//        let expected = Rect::new(0, 0, 100, 22);
-//        let colors = hac_colors::Colors::default();
-//        let (_guard, path) = setup_temp_collections(10);
-//        let collection = collection::get_collections(path).unwrap();
-//        let config = hac_config::load_config();
-//        let mut sm = ScreenManager::new(initial, &colors, collection, &config, false).unwrap();
-//
-//        sm.resize(expected);
-//
-//        assert_eq!(sm.size, expected);
-//    }
-//
-//    #[test]
-//    fn test_switch_to_explorer_on_select() {
-//        let initial = Rect::new(0, 0, 80, 22);
-//        let colors = hac_colors::Colors::default();
-//        let collection = Collection {
-//            info: Info {
-//                name: String::from("any_name"),
-//                description: None,
-//            },
-//            path: "any_path".into(),
-//            requests: None,
-//        };
-//        let command = Command::SelectCollection(collection.clone());
-//        let (_guard, path) = setup_temp_collections(10);
-//        let collection = collection::get_collections(path).unwrap();
-//        let config = hac_config::load_config();
-//        let (tx, _) = tokio::sync::mpsc::unbounded_channel::<Command>();
-//        let mut sm = ScreenManager::new(initial, &colors, collection, &config, false).unwrap();
-//        _ = sm.register_command_handler(tx.clone());
-//        assert_eq!(sm.curr_screen, Screens::CollectionDashboard);
-//
-//        sm.handle_command(command);
-//        assert_eq!(sm.curr_screen, Screens::CollectionViewer);
-//    }
-//
-//    #[test]
-//    fn test_register_command_sender_for_dashboard() {
-//        let initial = Rect::new(0, 0, 80, 22);
-//        let colors = hac_colors::Colors::default();
-//        let (_guard, path) = setup_temp_collections(10);
-//        let collections = collection::get_collections(path).unwrap();
-//        let config = hac_config::load_config();
-//        let mut sm = ScreenManager::new(initial, &colors, collections, &config, false).unwrap();
-//
-//        let (tx, _) = tokio::sync::mpsc::unbounded_channel::<Command>();
-//
-//        sm.register_command_handler(tx.clone()).unwrap();
-//
-//        assert!(sm.collection_list.command_sender.is_some());
-//    }
-//
-//    #[test]
-//    fn test_quit_event() {
-//        let initial = Rect::new(0, 0, 80, 22);
-//        let colors = hac_colors::Colors::default();
-//        let (_guard, path) = setup_temp_collections(10);
-//        let collections = collection::get_collections(path).unwrap();
-//        let config = hac_config::load_config();
-//        let mut sm = ScreenManager::new(initial, &colors, collections, &config, false).unwrap();
-//
-//        let event = Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
-//
-//        let command = sm.handle_event(Some(event)).unwrap();
-//
-//        assert!(command.is_some());
-//    }
-//}
