@@ -1,4 +1,10 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::{Arc, RwLock};
+
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_core::collection::types::*;
+use rand::Rng;
 
 use super::directory_form::{DirectoryForm, DirectoryFormCreate, DirectoryFormEvent};
 use crate::ascii::LOGO_ASCII;
@@ -6,25 +12,15 @@ use crate::pages::collection_viewer::collection_store::CollectionStore;
 use crate::pages::collection_viewer::sidebar::DirectoryFormTrait;
 use crate::pages::Eventful;
 
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::sync::{Arc, RwLock};
-
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use rand::Rng;
-
 impl<'df> DirectoryForm<'df, DirectoryFormCreate> {
     pub fn new(
         colors: &'df hac_colors::Colors,
         collection_store: Rc<RefCell<CollectionStore>>,
     ) -> DirectoryForm<'df, DirectoryFormCreate> {
-        let logo_idx = rand::thread_rng().gen_range(0..LOGO_ASCII.len());
-
         DirectoryForm {
             colors,
             collection_store,
             dir_name: String::default(),
-            logo_idx,
             marker: std::marker::PhantomData,
             directory: None,
         }
@@ -54,9 +50,7 @@ impl Eventful for DirectoryForm<'_, DirectoryFormCreate> {
                     .expect("tried to create a request without a collection");
 
                 let mut collection = collection.borrow_mut();
-                let requests = collection
-                    .requests
-                    .get_or_insert(Arc::new(RwLock::new(vec![])));
+                let requests = collection.requests.get_or_insert(Arc::new(RwLock::new(vec![])));
                 let mut requests = requests.write().unwrap();
 
                 if self.dir_name.is_empty() {

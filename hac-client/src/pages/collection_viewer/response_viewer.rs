@@ -1,28 +1,28 @@
-use hac_core::net::request_manager::Response;
-use hac_core::syntax::highlighter::HIGHLIGHTER;
-
-use crate::ascii::{BIG_ERROR_ARTS, LOGO_ASCII, SMALL_ERROR_ARTS};
-use crate::pages::collection_viewer::collection_viewer::PaneFocus;
-use crate::pages::under_construction::UnderConstruction;
-use crate::pages::{spinner::Spinner, Eventful, Renderable};
-use crate::utils::build_syntax_highlighted_lines;
-
 use std::cell::RefCell;
 use std::iter;
 use std::ops::{Add, Sub};
 use std::rc::Rc;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use hac_core::net::request_manager::Response;
+use hac_core::syntax::highlighter::HIGHLIGHTER;
 use rand::Rng;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Scrollbar};
-use ratatui::widgets::{ScrollbarOrientation, ScrollbarState, Tabs};
+use ratatui::widgets::{
+    Block, Borders, Clear, Padding, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Tabs,
+};
 use ratatui::Frame;
 use tree_sitter::Tree;
 
 use super::collection_store::CollectionStore;
+use crate::ascii::{BIG_ERROR_ART, LOGO_ASCII, SMALL_ERROR_ART};
+use crate::pages::collection_viewer::collection_viewer::PaneFocus;
+use crate::pages::spinner::Spinner;
+use crate::pages::under_construction::UnderConstruction;
+use crate::pages::{Eventful, Renderable};
+use crate::utils::build_syntax_highlighted_lines;
 
 #[derive(Debug)]
 pub enum ResponseViewerEvent {
@@ -148,12 +148,7 @@ impl<'a> ResponseViewer<'a> {
     pub fn update(&mut self, response: Option<Rc<RefCell<Response>>>) {
         let body_str = response
             .as_ref()
-            .and_then(|res| {
-                res.borrow()
-                    .pretty_body
-                    .as_ref()
-                    .map(|body| body.to_string())
-            })
+            .and_then(|res| res.borrow().pretty_body.as_ref().map(|body| body.to_string()))
             .unwrap_or_default();
 
         if body_str.len().gt(&0) {
@@ -173,24 +168,19 @@ impl<'a> ResponseViewer<'a> {
                 .unwrap_or(String::default());
 
             self.error_lines = Some(
-                get_error_ascii_art(
-                    self.preview_layout.content_pane.width,
-                    &mut rand::thread_rng(),
-                )
-                .iter()
-                .map(|line| Line::from(line.to_string()).centered())
-                .chain(vec!["".into()])
-                .chain(
-                    cause
-                        .chars()
-                        .collect::<Vec<_>>()
-                        .chunks(self.layout.content_pane.width.sub(3).into())
-                        .map(|chunk| {
-                            Line::from(chunk.iter().collect::<String>().fg(self.colors.normal.red))
-                        })
-                        .collect::<Vec<_>>(),
-                )
-                .collect::<Vec<Line>>(),
+                get_error_ascii_art(self.preview_layout.content_pane.width)
+                    .iter()
+                    .map(|line| Line::from(line.to_string()).centered())
+                    .chain(vec!["".into()])
+                    .chain(
+                        cause
+                            .chars()
+                            .collect::<Vec<_>>()
+                            .chunks(self.layout.content_pane.width.sub(3).into())
+                            .map(|chunk| Line::from(chunk.iter().collect::<String>().fg(self.colors.normal.red)))
+                            .collect::<Vec<_>>(),
+                    )
+                    .collect::<Vec<Line>>(),
             )
         };
 
@@ -249,10 +239,7 @@ impl<'a> ResponseViewer<'a> {
             .into_centered_line();
 
         frame.render_widget(Clear, request_pane);
-        frame.render_widget(
-            Block::default().bg(self.colors.primary.background),
-            request_pane,
-        );
+        frame.render_widget(Block::default().bg(self.colors.primary.background), request_pane);
         frame.render_widget(spinner, size);
     }
 
@@ -261,10 +248,7 @@ impl<'a> ResponseViewer<'a> {
             let request_pane = self.preview_layout.content_pane;
 
             frame.render_widget(Clear, request_pane);
-            frame.render_widget(
-                Block::default().bg(self.colors.primary.background),
-                request_pane,
-            );
+            frame.render_widget(Block::default().bg(self.colors.primary.background), request_pane);
 
             let center = request_pane
                 .y
@@ -288,10 +272,7 @@ impl<'a> ResponseViewer<'a> {
     fn draw_waiting_for_request(&self, frame: &mut Frame) {
         let request_pane = self.preview_layout.content_pane;
         frame.render_widget(Clear, request_pane);
-        frame.render_widget(
-            Block::default().bg(self.colors.primary.background),
-            request_pane,
-        );
+        frame.render_widget(Block::default().bg(self.colors.primary.background), request_pane);
 
         let mut empty_message = self.empty_lines.clone();
 
@@ -318,19 +299,13 @@ impl<'a> ResponseViewer<'a> {
         );
 
         frame.render_widget(
-            Paragraph::new(empty_message)
-                .fg(self.colors.normal.red)
-                .centered(),
+            Paragraph::new(empty_message).fg(self.colors.normal.red).centered(),
             size,
         )
     }
 
     fn draw_current_tab(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
-        if self
-            .response
-            .as_ref()
-            .is_some_and(|res| res.borrow().is_error)
-        {
+        if self.response.as_ref().is_some_and(|res| res.borrow().is_error) {
             self.draw_network_error(frame);
         };
 
@@ -338,11 +313,7 @@ impl<'a> ResponseViewer<'a> {
             self.draw_waiting_for_request(frame);
         }
 
-        if self
-            .response
-            .as_ref()
-            .is_some_and(|res| !res.borrow().is_error)
-        {
+        if self.response.as_ref().is_some_and(|res| !res.borrow().is_error) {
             match self.active_tab {
                 ResViewerTabs::Preview => self.draw_pretty_response(frame, size),
                 ResViewerTabs::Raw => self.draw_raw_response(frame, size),
@@ -363,10 +334,8 @@ impl<'a> ResponseViewer<'a> {
             if let Some(headers) = response.borrow().headers.as_ref() {
                 let mut longest_line: usize = 0;
 
-                let mut lines: Vec<Line> = vec![
-                    Line::from("Headers".fg(self.colors.normal.red).bold()),
-                    Line::from(""),
-                ];
+                let mut lines: Vec<Line> =
+                    vec![Line::from("Headers".fg(self.colors.normal.red).bold()), Line::from("")];
 
                 for (name, value) in headers {
                     if let Ok(value) = value.to_str() {
@@ -382,10 +351,7 @@ impl<'a> ResponseViewer<'a> {
                                 .yellow(),
                         ));
                         lines.push(Line::from(
-                            value
-                                .chars()
-                                .skip(self.headers_scroll_x)
-                                .collect::<String>(),
+                            value.chars().skip(self.headers_scroll_x).collect::<String>(),
                         ));
                         lines.push(Line::from(""));
                     }
@@ -403,21 +369,14 @@ impl<'a> ResponseViewer<'a> {
                     self.headers_scroll_x = longest_line.saturating_sub(1);
                 }
 
-                let [headers_pane, x_scrollbar_pane] =
-                    build_horizontal_scrollbar(self.preview_layout.content_pane);
-                self.draw_scrollbar(
-                    lines.len(),
-                    self.headers_scroll_y,
-                    frame,
-                    self.preview_layout.scrollbar,
-                );
+                let [headers_pane, x_scrollbar_pane] = build_horizontal_scrollbar(self.preview_layout.content_pane);
+                self.draw_scrollbar(lines.len(), self.headers_scroll_y, frame, self.preview_layout.scrollbar);
 
-                let lines_to_show =
-                    if longest_line > self.preview_layout.content_pane.width as usize {
-                        headers_pane.height
-                    } else {
-                        self.preview_layout.content_pane.height
-                    };
+                let lines_to_show = if longest_line > self.preview_layout.content_pane.width as usize {
+                    headers_pane.height
+                } else {
+                    self.preview_layout.content_pane.height
+                };
 
                 let lines = lines
                     .into_iter()
@@ -428,18 +387,10 @@ impl<'a> ResponseViewer<'a> {
 
                 let block = Block::default().padding(Padding::left(1));
                 if longest_line > self.preview_layout.content_pane.width as usize {
-                    self.draw_horizontal_scrollbar(
-                        longest_line,
-                        self.headers_scroll_x,
-                        frame,
-                        x_scrollbar_pane,
-                    );
+                    self.draw_horizontal_scrollbar(longest_line, self.headers_scroll_x, frame, x_scrollbar_pane);
                     frame.render_widget(Paragraph::new(lines).block(block), headers_pane)
                 } else {
-                    frame.render_widget(
-                        Paragraph::new(lines).block(block),
-                        self.preview_layout.content_pane,
-                    );
+                    frame.render_widget(Paragraph::new(lines).block(block), self.preview_layout.content_pane);
                 }
             }
         }
@@ -467,12 +418,7 @@ impl<'a> ResponseViewer<'a> {
                 self.raw_scroll = lines.len().saturating_sub(1);
             }
 
-            self.draw_scrollbar(
-                lines.len(),
-                self.raw_scroll,
-                frame,
-                self.preview_layout.scrollbar,
-            );
+            self.draw_scrollbar(lines.len(), self.raw_scroll, frame, self.preview_layout.scrollbar);
 
             let lines_in_view = lines
                 .into_iter()
@@ -486,13 +432,7 @@ impl<'a> ResponseViewer<'a> {
         }
     }
 
-    fn draw_scrollbar(
-        &self,
-        total_lines: usize,
-        current_scroll: usize,
-        frame: &mut Frame,
-        size: Rect,
-    ) {
+    fn draw_scrollbar(&self, total_lines: usize, current_scroll: usize, frame: &mut Frame, size: Rect) {
         let mut scrollbar_state = ScrollbarState::new(total_lines).position(current_scroll);
 
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
@@ -503,13 +443,7 @@ impl<'a> ResponseViewer<'a> {
         frame.render_stateful_widget(scrollbar, size, &mut scrollbar_state);
     }
 
-    fn draw_horizontal_scrollbar(
-        &self,
-        total_columns: usize,
-        current_scroll: usize,
-        frame: &mut Frame,
-        size: Rect,
-    ) {
+    fn draw_horizontal_scrollbar(&self, total_columns: usize, current_scroll: usize, frame: &mut Frame, size: Rect) {
         let mut scrollbar_state = ScrollbarState::new(total_columns).position(current_scroll);
 
         let scrollbar = Scrollbar::new(ScrollbarOrientation::HorizontalBottom)
@@ -526,18 +460,10 @@ impl<'a> ResponseViewer<'a> {
                 self.pretty_scroll = self.lines.len().saturating_sub(1);
             }
 
-            self.draw_scrollbar(
-                self.lines.len(),
-                self.raw_scroll,
-                frame,
-                self.preview_layout.scrollbar,
-            );
+            self.draw_scrollbar(self.lines.len(), self.raw_scroll, frame, self.preview_layout.scrollbar);
 
-            let lines = if self.lines.len().gt(&0) {
-                self.lines.clone()
-            } else {
-                vec![Line::from("No body").centered()]
-            };
+            let lines =
+                if self.lines.len().gt(&0) { self.lines.clone() } else { vec![Line::from("No body").centered()] };
 
             let lines_in_view = lines
                 .into_iter()
@@ -581,8 +507,7 @@ impl<'a> ResponseViewer<'a> {
                 status,
                 " ".into(),
                 "Time: ".fg(self.colors.bright.black),
-                format!("{}ms", response.borrow().duration.as_millis())
-                    .fg(self.colors.normal.green),
+                format!("{}ms", response.borrow().duration.as_millis()).fg(self.colors.normal.green),
                 " ".into(),
             ];
 
@@ -650,9 +575,7 @@ impl<'a> Eventful for ResponseViewer<'a> {
             KeyCode::Char('k') => match self.active_tab {
                 ResViewerTabs::Preview => self.pretty_scroll = self.pretty_scroll.saturating_sub(1),
                 ResViewerTabs::Raw => self.raw_scroll = self.raw_scroll.saturating_sub(1),
-                ResViewerTabs::Headers => {
-                    self.headers_scroll_y = self.headers_scroll_y.saturating_sub(1)
-                }
+                ResViewerTabs::Headers => self.headers_scroll_y = self.headers_scroll_y.saturating_sub(1),
                 ResViewerTabs::Cookies => {}
             },
             KeyCode::Char('l') => {
@@ -695,11 +618,7 @@ fn build_layout(size: Rect) -> ResViewerLayout {
 fn build_horizontal_scrollbar(size: Rect) -> [Rect; 2] {
     let [request_pane, _, scrollbar_pane] = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Fill(1),
-            Constraint::Length(1),
-            Constraint::Length(1),
-        ])
+        .constraints([Constraint::Fill(1), Constraint::Length(1), Constraint::Length(1)])
         .areas(size);
 
     [request_pane, scrollbar_pane]
@@ -708,11 +627,7 @@ fn build_horizontal_scrollbar(size: Rect) -> [Rect; 2] {
 fn build_preview_layout(size: Rect) -> PreviewLayout {
     let [content_pane, _, scrollbar] = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Fill(1),
-            Constraint::Length(1),
-            Constraint::Length(1),
-        ])
+        .constraints([Constraint::Fill(1), Constraint::Length(1), Constraint::Length(1)])
         .areas(size);
 
     PreviewLayout {
@@ -721,28 +636,15 @@ fn build_preview_layout(size: Rect) -> PreviewLayout {
     }
 }
 
-fn get_error_ascii_art<R>(width: u16, rng: &mut R) -> &'static [&'static str]
-where
-    R: Rng,
-{
+fn get_error_ascii_art(width: u16) -> &'static [&'static str] {
     match width.gt(&60) {
-        false => {
-            let index = rng.gen_range(0..SMALL_ERROR_ARTS.len());
-            SMALL_ERROR_ARTS[index]
-        }
-        true => {
-            let full_range_arts = BIG_ERROR_ARTS
-                .iter()
-                .chain(SMALL_ERROR_ARTS)
-                .collect::<Vec<_>>();
-            let index = rng.gen_range(0..full_range_arts.len());
-            full_range_arts[index]
-        }
+        false => SMALL_ERROR_ART,
+        true => BIG_ERROR_ART,
     }
 }
 
 fn make_empty_ascii_art(colors: &hac_colors::Colors) -> Vec<Line<'static>> {
-    LOGO_ASCII[0]
+    LOGO_ASCII
         .iter()
         .map(|line| line.to_string().into())
         .chain(vec![
@@ -755,41 +657,4 @@ fn make_empty_ascii_art(colors: &hac_colors::Colors) -> Vec<Line<'static>> {
                 .into(),
         ])
         .collect::<Vec<_>>()
-}
-
-#[cfg(test)]
-mod tests {
-    use rand::{rngs::StdRng, SeedableRng};
-
-    use super::*;
-    #[test]
-    fn test_ascii_with_size() {
-        let seed = [0u8; 32];
-        let mut rng = StdRng::from_seed(seed);
-
-        let too_small = 59;
-        let art = get_error_ascii_art(too_small, &mut rng);
-
-        let expected = [
-            r#"  ____  ____ ____ ___   ____ "#,
-            r#" / _  )/ ___) ___) _ \ / ___)"#,
-            r#"( (/ /| |  | |  | |_| | |    "#,
-            r#" \____)_|  |_|   \___/|_|    "#,
-        ];
-
-        assert_eq!(art, expected);
-
-        let expected = [
-            r#"     dBBBP dBBBBBb  dBBBBBb    dBBBBP dBBBBBb"#,
-            r#"               dBP      dBP   dBP.BP      dBP"#,
-            r#"   dBBP    dBBBBK   dBBBBK   dBP.BP   dBBBBK "#,
-            r#"  dBP     dBP  BB  dBP  BB  dBP.BP   dBP  BB "#,
-            r#" dBBBBP  dBP  dB' dBP  dB' dBBBBP   dBP  dB' "#,
-        ];
-
-        let big_enough = 100;
-        let art = get_error_ascii_art(big_enough, &mut rng);
-
-        assert_eq!(art, expected);
-    }
 }

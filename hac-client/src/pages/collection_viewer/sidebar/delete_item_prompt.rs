@@ -1,8 +1,3 @@
-use crate::ascii::LOGO_ASCII;
-use crate::pages::collection_viewer::collection_store::CollectionStore;
-use crate::pages::overlay::make_overlay;
-use crate::pages::{Eventful, Renderable};
-
 use std::cell::RefCell;
 use std::ops::{Add, Div, Mul, Sub};
 use std::rc::Rc;
@@ -14,6 +9,11 @@ use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
+
+use crate::ascii::LOGO_ASCII;
+use crate::pages::collection_viewer::collection_store::CollectionStore;
+use crate::pages::overlay::make_overlay_old;
+use crate::pages::{Eventful, Renderable};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeleteItemPromptEvent {
@@ -29,10 +29,7 @@ pub struct DeleteItemPrompt<'dip> {
 }
 
 impl<'dip> DeleteItemPrompt<'dip> {
-    pub fn new(
-        colors: &'dip hac_colors::Colors,
-        collection_store: Rc<RefCell<CollectionStore>>,
-    ) -> Self {
+    pub fn new(colors: &'dip hac_colors::Colors, collection_store: Rc<RefCell<CollectionStore>>) -> Self {
         let logo_idx = rand::thread_rng().gen_range(0..LOGO_ASCII.len());
         DeleteItemPrompt {
             colors,
@@ -44,7 +41,7 @@ impl<'dip> DeleteItemPrompt<'dip> {
 
 impl Renderable for DeleteItemPrompt<'_> {
     fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
-        make_overlay(self.colors, self.colors.normal.black, 0.1, frame);
+        make_overlay_old(self.colors, self.colors.normal.black, 0.1, frame);
 
         let store = self.collection_store.borrow();
         let Some(hovered_id) = store.get_hovered_request().as_ref().cloned() else {
@@ -66,38 +63,26 @@ impl Renderable for DeleteItemPrompt<'_> {
 
         let mut lines = if is_dir {
             vec![
-                Line::from(
-                    "Are you sure you want to delete the directory?".fg(self.colors.normal.red),
-                )
-                .centered(),
-                Line::from("This will delete all the requests inside".fg(self.colors.normal.red))
-                    .centered(),
+                Line::from("Are you sure you want to delete the directory?".fg(self.colors.normal.red)).centered(),
+                Line::from("This will delete all the requests inside".fg(self.colors.normal.red)).centered(),
                 Line::from(""),
             ]
         } else {
             vec![
-                Line::from(
-                    "Are you sure you want to delete the request?".fg(self.colors.normal.red),
-                )
-                .centered(),
+                Line::from("Are you sure you want to delete the request?".fg(self.colors.normal.red)).centered(),
                 Line::from(""),
             ]
         };
 
-        lines.push(
-            Line::from("[Confirm: Enter] [Cancel: Esc]".fg(self.colors.bright.black)).centered(),
-        );
+        lines.push(Line::from("[Confirm: Enter] [Cancel: Esc]".fg(self.colors.bright.black)).centered());
 
-        let logo = LOGO_ASCII[self.logo_idx];
+        let logo = LOGO_ASCII;
         let logo_size = logo.len() as u16;
         let size = frame.size();
 
         let size = Rect::new(
             size.width.div(2).sub(25),
-            size.height
-                .div(2)
-                .saturating_sub(logo_size.div(2))
-                .saturating_sub(3),
+            size.height.div(2).saturating_sub(logo_size.div(2)).saturating_sub(3),
             50,
             logo_size.add(7),
         );

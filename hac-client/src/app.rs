@@ -1,7 +1,6 @@
 use std::io::Stdout;
 use std::rc::Rc;
-use std::sync::mpsc::Receiver;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::RwLock;
 
 use hac_colors::Colors;
@@ -11,14 +10,11 @@ use hac_loader::collection_loader::CollectionMeta;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
-use crate::event_pool::Event;
-use crate::event_pool::EventPool;
+use crate::event_pool::{Event, EventPool};
 use crate::pages::collection_list::make_collection_list_router;
-use crate::pages::Eventful;
-use crate::pages::Renderable;
+use crate::pages::{Eventful, Renderable};
 use crate::router::Router;
-use crate::HacColors;
-use crate::HacConfig;
+use crate::{HacColors, HacConfig};
 
 #[derive(Default, Hash, Debug, PartialEq, Eq, Copy, Clone)]
 pub enum AppRoutes {
@@ -54,7 +50,7 @@ impl App {
         let (command_sender, command_receiver) = std::sync::mpsc::channel();
         let size = terminal.size()?;
 
-        let mut router = Router::new(command_sender.clone());
+        let mut router = Router::new(command_sender.clone(), colors.clone());
 
         let mut collection_list_router = make_collection_list_router(
             command_sender.clone(),

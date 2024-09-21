@@ -9,8 +9,7 @@ use hac_loader::collection_loader::CollectionMeta;
 use ratatui::layout::Rect;
 
 use crate::router::Router;
-use crate::HacColors;
-use crate::HacConfig;
+use crate::{HacColors, HacConfig};
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy, Default)]
 pub enum Routes {
@@ -35,11 +34,11 @@ pub fn make_collection_list_router(
     config: HacConfig,
     colors: HacColors,
 ) -> Router {
-    let mut router = Router::new(command_sender);
+    let mut router = Router::new(command_sender, colors.clone());
     let collection_list = CollectionList::new(collections, size, config.clone(), colors.clone());
     let create_collection = CreateCollection::new(size, config.clone(), colors.clone());
 
     router.add_route(Routes::ListCollections.into(), Box::new(collection_list));
-    router.add_route(Routes::CreateCollection.into(), Box::new(create_collection));
+    router.add_dialog(Routes::CreateCollection.into(), Box::new(create_collection));
     router
 }

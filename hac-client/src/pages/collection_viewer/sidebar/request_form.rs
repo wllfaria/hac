@@ -1,22 +1,21 @@
-use hac_core::collection::types::{Request, RequestMethod};
-
-use crate::ascii::LOGO_ASCII;
-use crate::pages::collection_viewer::collection_store::CollectionStore;
-use crate::pages::collection_viewer::sidebar::select_request_parent::SelectRequestParent;
-use crate::pages::input::Input;
-use crate::pages::overlay::make_overlay;
-use crate::pages::Renderable;
-
 use std::cell::RefCell;
 use std::ops::{Add, Div, Sub};
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 
+use hac_core::collection::types::{Request, RequestMethod};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
+
+use crate::ascii::LOGO_ASCII;
+use crate::pages::collection_viewer::collection_store::CollectionStore;
+use crate::pages::collection_viewer::sidebar::select_request_parent::SelectRequestParent;
+use crate::pages::input::Input;
+use crate::pages::overlay::make_overlay_old;
+use crate::pages::Renderable;
 
 #[derive(Debug)]
 pub enum RequestFormEvent {
@@ -60,9 +59,6 @@ pub struct RequestForm<'rf, State = RequestFormCreate> {
     pub colors: &'rf hac_colors::Colors,
     pub collection_store: Rc<RefCell<CollectionStore>>,
 
-    /// when we construct this component, we randomly chose one of our available
-    /// logo arts to display, for a little fun touch
-    pub logo_idx: usize,
     /// the name of the current request being edited or created
     pub request_name: String,
     /// which method the request should have when finishing edition or creation
@@ -102,9 +98,9 @@ impl<'rf, State> RequestForm<'rf, State> {
 
 impl<'rf, State> Renderable for RequestForm<'rf, State> {
     fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
-        make_overlay(self.colors, self.colors.normal.black, 0.1, frame);
+        make_overlay_old(self.colors, self.colors.normal.black, 0.1, frame);
 
-        let mut logo = LOGO_ASCII[self.logo_idx];
+        let mut logo = LOGO_ASCII;
         let mut logo_size = logo.len() as u16;
         // adding size of the form + spacing + hint
         let total_size = logo_size.add(11).add(2);
@@ -112,10 +108,7 @@ impl<'rf, State> Renderable for RequestForm<'rf, State> {
         let size = frame.size();
         let mut size = Rect::new(
             size.width.div(2).sub(32),
-            size.height
-                .div(2)
-                .saturating_sub(logo_size.div(2))
-                .saturating_sub(6),
+            size.height.div(2).saturating_sub(logo_size.div(2)).saturating_sub(6),
             65,
             logo_size.add(12),
         );
@@ -139,8 +132,7 @@ impl<'rf, State> Renderable for RequestForm<'rf, State> {
 
         let mut name_input = Input::new(self.colors, "Name".into());
         let method_title = Paragraph::new("Method".fg(self.colors.normal.white));
-        let hint =
-            "[Confirm: Enter] [Cancel: Esc] [Switch: Tab] [Select: Space] [Remove Parent: <C-p>]";
+        let hint = "[Confirm: Enter] [Cancel: Esc] [Switch: Tab] [Select: Space] [Remove Parent: <C-p>]";
         let hint_size = hint.len() as u16;
         let hint = Paragraph::new(hint.fg(self.colors.bright.black)).centered();
 
@@ -199,12 +191,7 @@ impl<'rf, State> Renderable for RequestForm<'rf, State> {
             };
             let method = Paragraph::new(Line::from(vec![
                 format!(" {}", idx.add(1)).fg(self.colors.bright.black),
-                format!(
-                    " {}{}",
-                    method,
-                    " ".repeat(10.sub(method.to_string().len()))
-                )
-                .fg(self.colors.normal.white),
+                format!(" {}{}", method, " ".repeat(10.sub(method.to_string().len()))).fg(self.colors.normal.white),
             ]))
             .block(Block::default().borders(Borders::ALL).fg(border_color));
             frame.render_widget(method, methods_items[idx]);
@@ -218,10 +205,8 @@ impl<'rf, State> Renderable for RequestForm<'rf, State> {
             .no_available_parent_timer
             .is_some_and(|timer| timer.elapsed().as_secs().le(&3))
         {
-            let warning = Paragraph::new(
-                "No available directory to select as a parent".fg(self.colors.normal.red),
-            )
-            .centered();
+            let warning =
+                Paragraph::new("No available directory to select as a parent".fg(self.colors.normal.red)).centered();
             frame.render_widget(warning, hint_size);
         } else {
             frame.render_widget(hint, hint_size);
@@ -236,10 +221,7 @@ impl<'rf, State> Renderable for RequestForm<'rf, State> {
 
         if self.focused_field.eq(&FormField::Name) {
             frame.set_cursor(
-                name_size
-                    .x
-                    .add(self.request_name.chars().count() as u16)
-                    .add(1),
+                name_size.x.add(self.request_name.chars().count() as u16).add(1),
                 name_size.y.add(1),
             );
         }

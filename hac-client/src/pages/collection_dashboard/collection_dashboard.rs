@@ -1,26 +1,25 @@
-use hac_core::command::Command;
-use hac_loader::collection_loader::{CollectionMeta, ReadableByteSize};
-use hac_store::collection::Collection;
-
-use crate::pages::collection_dashboard::collection_list::{CollectionList, CollectionListState};
-use crate::pages::collection_dashboard::new_collection_form::{FormFocus, FormState, NewCollectionForm};
-use crate::pages::confirm_popup::ConfirmPopup;
-use crate::pages::error_popup::ErrorPopup;
-use crate::pages::overlay::{draw_overlay, make_overlay};
-use crate::pages::{Eventful, Renderable};
-use crate::router::{EventfulRenderable, Navigate};
-
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::ops::{Add, Div, Not, Sub};
 use std::sync::mpsc::Sender;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use hac_core::command::Command;
+use hac_loader::collection_loader::{CollectionMeta, ReadableByteSize};
+use hac_store::collection::Collection;
 use ratatui::layout::{Alignment, Constraint, Direction, Flex, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, StatefulWidget, Widget, Wrap};
 use ratatui::Frame;
+
+use crate::pages::collection_dashboard::collection_list::{CollectionList, CollectionListState};
+use crate::pages::collection_dashboard::new_collection_form::{FormFocus, FormState, NewCollectionForm};
+use crate::pages::confirm_popup::ConfirmPopup;
+use crate::pages::error_popup::ErrorPopup;
+use crate::pages::overlay::{draw_overlay_old, make_overlay_old};
+use crate::pages::{Eventful, Renderable};
+use crate::router::{EventfulRenderable, Navigate};
 
 #[derive(Debug, PartialEq)]
 struct DashboardLayout {

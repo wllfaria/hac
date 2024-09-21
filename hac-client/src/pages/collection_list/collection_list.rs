@@ -1,42 +1,22 @@
 use std::fmt::Debug;
-use std::sync::mpsc::channel;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{channel, Sender};
 
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_core::command::Command;
-use hac_loader::collection_loader::CollectionMeta;
-use hac_loader::collection_loader::ReadableByteSize;
-use ratatui::layout::Alignment;
-use ratatui::layout::Constraint;
-use ratatui::layout::Direction;
-use ratatui::layout::Flex;
-use ratatui::layout::Layout;
-use ratatui::layout::Rect;
-use ratatui::style::Style;
-use ratatui::style::Stylize;
+use hac_loader::collection_loader::{CollectionMeta, ReadableByteSize};
+use ratatui::layout::{Alignment, Constraint, Direction, Flex, Layout, Rect};
+use ratatui::style::{Style, Stylize};
 use ratatui::text::Line;
-use ratatui::widgets::Block;
-use ratatui::widgets::BorderType;
-use ratatui::widgets::Borders;
-use ratatui::widgets::Clear;
-use ratatui::widgets::Padding;
-use ratatui::widgets::Paragraph;
-use ratatui::widgets::StatefulWidget;
-use ratatui::widgets::Widget;
-use ratatui::widgets::Wrap;
+use ratatui::widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, StatefulWidget, Widget, Wrap};
 use ratatui::Frame;
 
 use crate::app::AppRoutes;
+use crate::components::list_itemm::ListItem;
 use crate::pages::collection_list::Routes;
-use crate::pages::overlay::draw_overlay;
-use crate::pages::overlay::make_overlay;
-use crate::pages::Eventful;
-use crate::pages::Renderable;
+use crate::pages::overlay::{draw_overlay_old, make_overlay_old};
+use crate::pages::{Eventful, Renderable};
 use crate::router::Navigate;
-use crate::HacColors;
-use crate::HacConfig;
+use crate::{HacColors, HacConfig};
 
 #[derive(Debug, PartialEq)]
 struct DashboardLayout {
@@ -152,35 +132,23 @@ impl CollectionList {
             .enumerate()
         {
             let selected = i == self.selected;
+            let modified = item.modified();
+            let size = item.size().readable_byte_size();
+            let description = format!("{modified} - {size}");
 
-            let item = match selected {
-                true => Paragraph::new(vec![
-                    Line::from(item.name().to_string().fg(self.colors.bright.red)),
-                    Line::from(vec![
-                        item.modified().to_string().fg(self.colors.bright.black),
-                        " - ".fg(self.colors.bright.black),
-                        item.size().readable_byte_size().fg(self.colors.bright.black),
-                    ]),
-                ])
-                .block(
-                    Block::new()
-                        .borders(Borders::LEFT)
-                        .fg(self.colors.bright.red)
-                        .padding(Padding::left(1)),
-                ),
-                false => Paragraph::new(vec![
-                    Line::from(item.name().to_string().fg(self.colors.normal.white)),
-                    Line::from(vec![
-                        item.modified().to_string().fg(self.colors.bright.black),
-                        " - ".fg(self.colors.bright.black),
-                        item.size().readable_byte_size().fg(self.colors.bright.black),
-                    ]),
-                ])
-                .block(Block::new().padding(Padding::left(2))),
+            let item = if selected {
+                ListItem::new(item.name(), Some(&description), self.colors.clone())
+                    .title_style(Style::new().fg(self.colors.normal.red))
+                    .desc_style(Style::new().fg(self.colors.bright.black))
+                    .select()
+            } else {
+                ListItem::new(item.name(), Some(&description), self.colors.clone())
+                    .title_style(Style::new().fg(self.colors.normal.white))
+                    .desc_style(Style::new().fg(self.colors.bright.black))
             };
-
             let size = Rect::new(layout.x, layout.y + (*idx as u16 * 3), layout.width, 2);
             frame.render_widget(item, size);
+
             *idx += 1;
         }
 
@@ -189,7 +157,7 @@ impl CollectionList {
 
     fn draw_hint_text(&self, frame: &mut Frame) {
         let hint = vec![
-            "j/k} ↑/↓".fg(self.colors.normal.green),
+            "j/k ↑/↓".fg(self.colors.normal.green),
             " - choose • ".fg(self.colors.bright.black),
             "n".fg(self.colors.normal.green),
             " - new • ".fg(self.colors.bright.black),
@@ -286,7 +254,7 @@ impl Eventful for CollectionList {
                 assert!(self.collections.len() > self.selected);
                 let path = self.collections[self.selected].path().clone();
                 self.navigator
-                    .send(Navigate::Up(
+                    .send(Navigate::Leave(
                         AppRoutes::CollectionViewerRouter.into(),
                         Some(Box::new(path)),
                     ))

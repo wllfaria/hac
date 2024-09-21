@@ -1,8 +1,3 @@
-use crate::ascii::LOGO_ASCII;
-use crate::pages::collection_viewer::collection_store::CollectionStore;
-use crate::pages::overlay::make_overlay;
-use crate::pages::{Eventful, Renderable};
-
 use std::cell::RefCell;
 use std::ops::{Add, Div, Mul, Sub};
 use std::rc::Rc;
@@ -14,6 +9,11 @@ use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
+
+use crate::ascii::LOGO_ASCII;
+use crate::pages::collection_viewer::collection_store::CollectionStore;
+use crate::pages::overlay::make_overlay_old;
+use crate::pages::{Eventful, Renderable};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SelectRequestParentEvent {
@@ -30,20 +30,15 @@ pub struct SelectRequestParent<'srp> {
     colors: &'srp hac_colors::Colors,
     collection_store: Rc<RefCell<CollectionStore>>,
     selected_dir: usize,
-    logo_idx: usize,
     scroll: usize,
 }
 
 impl<'srp> SelectRequestParent<'srp> {
-    pub fn new(
-        colors: &'srp hac_colors::Colors,
-        collection_store: Rc<RefCell<CollectionStore>>,
-    ) -> Self {
+    pub fn new(colors: &'srp hac_colors::Colors, collection_store: Rc<RefCell<CollectionStore>>) -> Self {
         SelectRequestParent {
             colors,
             collection_store,
             selected_dir: 0,
-            logo_idx: rand::thread_rng().gen_range(0..LOGO_ASCII.len()),
             scroll: 0,
         }
     }
@@ -51,7 +46,7 @@ impl<'srp> SelectRequestParent<'srp> {
 
 impl Renderable for SelectRequestParent<'_> {
     fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
-        make_overlay(self.colors, self.colors.normal.black, 0.1, frame);
+        make_overlay_old(self.colors, self.colors.normal.black, 0.1, frame);
 
         let store = self.collection_store.borrow();
         let collection = store
@@ -68,7 +63,7 @@ impl Renderable for SelectRequestParent<'_> {
                 .for_each(|dir| directories.push(dir.get_name()));
         };
 
-        let mut logo = LOGO_ASCII[self.logo_idx];
+        let mut logo = LOGO_ASCII;
         let size = frame.size();
         let mut logo_size = logo.len() as u16;
 
@@ -78,12 +73,7 @@ impl Renderable for SelectRequestParent<'_> {
             logo_size = 0;
         }
 
-        let size = Rect::new(
-            size.width.div(2).saturating_sub(25),
-            size.y.add(4),
-            50,
-            size.height,
-        );
+        let size = Rect::new(size.width.div(2).saturating_sub(25), size.y.add(4), 50, size.height);
 
         if !logo.is_empty() {
             let logo_size = Rect::new(size.x, size.y, size.width, logo_size);
@@ -110,17 +100,8 @@ impl Renderable for SelectRequestParent<'_> {
             .skip(self.scroll)
             .take(amount_on_view.into())
         {
-            let foreground = if self.selected_dir.eq(&idx) {
-                self.colors.normal.red
-            } else {
-                self.colors.normal.white
-            };
-            let dir_size = Rect::new(
-                size.x,
-                size.y.add(dirs_start_y).add(idx.mul(2) as u16),
-                size.width,
-                2,
-            );
+            let foreground = if self.selected_dir.eq(&idx) { self.colors.normal.red } else { self.colors.normal.white };
+            let dir_size = Rect::new(size.x, size.y.add(dirs_start_y).add(idx.mul(2) as u16), size.width, 2);
             let dir = Paragraph::new(dir.fg(foreground));
             frame.render_widget(dir, dir_size);
         }
