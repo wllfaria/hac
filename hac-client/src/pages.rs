@@ -1,5 +1,5 @@
 pub mod collection_list;
-pub mod collection_viewer;
+//pub mod collection_viewer;
 pub mod input;
 pub mod overlay;
 mod spinner;
