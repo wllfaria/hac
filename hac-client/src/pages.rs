@@ -1,8 +1,5 @@
-pub mod collection_dashboard;
 pub mod collection_list;
 pub mod collection_viewer;
-pub mod confirm_popup;
-pub mod error_popup;
 pub mod input;
 pub mod overlay;
 mod spinner;
@@ -16,16 +13,18 @@ use crossterm::event::KeyEvent;
 use hac_core::command::Command;
 use ratatui::{layout::Rect, Frame};
 
-/// A `Page` is anything that is a top level page and can be drawn to the screen
+/// A `Renderable` is anything that is a top level page and can be drawn to the screen
 pub trait Renderable {
     #[allow(unused_variables)]
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         Ok(())
     }
 
+    /// when navigating to a new route, you might need to pass in some data, here you do it
     #[allow(unused_variables)]
     fn update(&mut self, data: Option<Box<dyn std::any::Any>>) {}
 
+    /// each route can, (and must) have a navigator, this is how you attach one
     #[allow(unused_variables)]
     fn attach_navigator(&mut self, navigator: std::sync::mpsc::Sender<crate::router::Navigate>) {}
 

@@ -13,3 +13,4 @@ anyhow.workspace = true
 tracing.workspace = true
 dirs = "5.0.1"
 chrono = "0.4.38"
+notify = "6.1.1"

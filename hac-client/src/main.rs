@@ -49,9 +49,10 @@ async fn main() -> anyhow::Result<()> {
     let collections = hac_loader::collection_loader::collections_metadata()?;
 
     let colors = hac_colors::Colors::default();
-    let config = hac_config::load_config();
+    let mut config = hac_config::load_config();
+    config.dry_run = dry_run;
 
-    let mut app = app::App::new(collections, Rc::new(RwLock::new(config)), Rc::new(colors))?;
+    let mut app = app::App::new(collections, Rc::new(RefCell::new(config)), Rc::new(colors))?;
     app.run().await?;
 
     Ok(())

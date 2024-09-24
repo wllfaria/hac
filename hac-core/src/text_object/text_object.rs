@@ -1,10 +1,11 @@
-use crate::{syntax::highlighter::Highlighter, text_object::cursor::Cursor};
-
 use std::collections::HashMap;
 use std::ops::{Add, Sub};
 
 use ropey::Rope;
 use tree_sitter::Tree;
+
+use crate::syntax::highlighter::Highlighter;
+use crate::text_object::cursor::Cursor;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum LineBreak {
@@ -46,7 +47,7 @@ impl<State> Default for TextObject<State> {
     fn default() -> Self {
         let content = String::default();
 
-        TextObject {
+        Self {
             content: Rope::from_str(&content),
             state: std::marker::PhantomData,
             line_break: LineBreak::Lf,
@@ -87,8 +88,7 @@ impl TextObject<Write> {
     pub fn insert_newline(&mut self, cursor: &Cursor) {
         let line = self.content.line_to_char(cursor.row());
         let col_offset = line + cursor.col();
-        self.content
-            .insert(col_offset, &self.line_break.to_string());
+        self.content.insert(col_offset, &self.line_break.to_string());
     }
 
     pub fn erase_backwards_up_to_line_start(&mut self, cursor: &Cursor) {
@@ -97,17 +97,13 @@ impl TextObject<Write> {
         }
         let line = self.content.line_to_char(cursor.row());
         let col_offset = line + cursor.col();
-        self.content
-            .try_remove(col_offset.saturating_sub(1)..col_offset)
-            .ok();
+        self.content.try_remove(col_offset.saturating_sub(1)..col_offset).ok();
     }
 
     pub fn erase_previous_char(&mut self, cursor: &Cursor) {
         let line = self.content.line_to_char(cursor.row());
         let col_offset = line + cursor.col();
-        self.content
-            .try_remove(col_offset.saturating_sub(1)..col_offset)
-            .ok();
+        self.content.try_remove(col_offset.saturating_sub(1)..col_offset).ok();
     }
 
     pub fn erase_current_char(&mut self, cursor: &Cursor) {
@@ -140,9 +136,12 @@ impl TextObject<Write> {
         let line = self.content.line_to_char(cursor.row());
         let next_line = self.content.line_to_char(cursor.row().add(1));
         let col_offset = line + cursor.col();
-        self.content
-            .try_remove(col_offset..next_line.saturating_sub(1))
-            .ok();
+        self.content.try_remove(col_offset..next_line.saturating_sub(1)).ok();
+    }
+
+    pub fn clear_line(&mut self, cursor: &Cursor) {
+        let line = self.content.line_to_char(cursor.row());
+        self.content.try_remove(line..line + cursor.col()).ok();
     }
 
     pub fn find_char_after_whitespace(&self, cursor: &Cursor) -> (usize, usize) {
@@ -198,11 +197,7 @@ impl TextObject<Write> {
 
         if let Some(initial_char) = self.content.get_char(start_idx) {
             for char in self.content.chars_at(start_idx) {
-                match (
-                    initial_char.is_alphanumeric(),
-                    char.is_alphanumeric(),
-                    found_newline,
-                ) {
+                match (initial_char.is_alphanumeric(), char.is_alphanumeric(), found_newline) {
                     (_, _, true) if !char.is_whitespace() => break,
                     (false, true, _) => break,
                     (true, false, _) => break,
@@ -232,11 +227,7 @@ impl TextObject<Write> {
             for _ in (0..start_idx.saturating_sub(1)).rev() {
                 let char = self.content.char(end_idx);
 
-                match (
-                    initial_char.is_alphanumeric(),
-                    char.is_alphanumeric(),
-                    found_newline,
-                ) {
+                match (initial_char.is_alphanumeric(), char.is_alphanumeric(), found_newline) {
                     (_, _, true) if !self.line_break.to_string().contains(char) => break,
                     (false, true, _) => break,
                     (true, false, _) => break,
@@ -392,20 +383,12 @@ impl TextObject<Write> {
                 _ => {}
             }
 
-            let range = if look_forward {
-                start_idx.add(1)..self.content.len_chars()
-            } else {
-                0..start_idx
-            };
+            let range = if look_forward { start_idx.add(1)..self.content.len_chars() } else { 0..start_idx };
 
             for i in range {
                 let char = self
                     .content
-                    .get_char(if look_forward {
-                        i
-                    } else {
-                        start_idx - walked - 1
-                    })
+                    .get_char(if look_forward { i } else { start_idx - walked - 1 })
                     .unwrap_or_default();
 
                 if token_to_search.eq(&char::default()) {
@@ -419,8 +402,7 @@ impl TextObject<Write> {
                 char.eq(combinations.get(&token_to_search).unwrap())
                     .then(|| curr_open = curr_open.add(1));
 
-                char.eq(&token_to_search)
-                    .then(|| curr_open = curr_open.sub(1));
+                char.eq(&token_to_search).then(|| curr_open = curr_open.sub(1));
 
                 walked = walked.add(1);
 

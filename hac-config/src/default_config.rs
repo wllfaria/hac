@@ -1,4 +1,6 @@
 pub static DEFAULT_CONFIG: &str = r##"
+dry_run = false
+
 [editor_keys.normal]
 "u" = "Undo"
 "n" = "FindNext"

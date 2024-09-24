@@ -97,12 +97,11 @@ impl Widget for Input<'_> {
             .border_style(self.border_style)
             .style(self.label_style);
 
-        let value = self.value.as_ref().map(|v| v.to_string()).unwrap_or(String::default());
+        let value = self.value.as_ref().map(|v| v.to_string()).unwrap_or_default();
         let size = Rect::new(area.x, area.y, area.width, 3);
         let fill = size.width as usize - value.len();
-        let value = format!("{}{}", value.to_string(), " ".repeat(fill));
+        let value = format!("{}{}", value, " ".repeat(fill));
         let value = Line::from(value).style(self.value_style);
         Paragraph::new(value).block(block).render(size, buf);
-        return;
     }
 }

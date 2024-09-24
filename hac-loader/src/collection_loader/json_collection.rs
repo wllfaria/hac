@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Default)]
-struct JsonInfo {
-    name: String,
-    path: std::path::PathBuf,
+pub struct JsonInfo {
+    pub name: String,
+    pub path: std::path::PathBuf,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -12,6 +12,19 @@ pub struct JsonCollection {
     pub requests: Vec<ReqKind>,
     #[serde(skip)]
     pub file_info: JsonInfo,
+}
+
+impl JsonCollection {
+    pub fn new(name: String, description: String, file_name: String, path: &std::path::PathBuf) -> Self {
+        Self {
+            info: JsonCollectionInfo { name, description },
+            file_info: JsonInfo {
+                name: file_name,
+                path: path.clone(),
+            },
+            requests: Default::default(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

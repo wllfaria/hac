@@ -3,11 +3,9 @@ use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use hac_core::collection::types::*;
-use rand::Rng;
+use hac_store::collection::{Folder, ReqTree};
 
 use super::directory_form::{DirectoryForm, DirectoryFormCreate, DirectoryFormEvent};
-use crate::ascii::LOGO_ASCII;
 use crate::pages::collection_viewer::collection_store::CollectionStore;
 use crate::pages::collection_viewer::sidebar::DirectoryFormTrait;
 use crate::pages::Eventful;
@@ -57,10 +55,9 @@ impl Eventful for DirectoryForm<'_, DirectoryFormCreate> {
                     self.dir_name = "unnamed directory".into();
                 }
 
-                requests.push(RequestKind::Nested(Directory {
-                    id: uuid::Uuid::new_v4().to_string(),
+                requests.push(ReqTree::Folder(Folder {
                     name: self.dir_name.clone(),
-                    requests: Arc::new(RwLock::new(vec![])),
+                    requests: vec![],
                 }));
 
                 drop(store);

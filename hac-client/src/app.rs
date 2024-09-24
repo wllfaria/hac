@@ -1,10 +1,6 @@
 use std::io::Stdout;
-use std::rc::Rc;
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::RwLock;
 
-use hac_colors::Colors;
-use hac_config::Config;
 use hac_core::command::Command;
 use hac_loader::collection_loader::CollectionMeta;
 use ratatui::backend::CrosstermBackend;
@@ -23,11 +19,11 @@ pub enum AppRoutes {
     CollectionViewerRouter,
 }
 
-impl Into<u8> for AppRoutes {
-    fn into(self) -> u8 {
-        match self {
-            Self::CollectionListRouter => 0,
-            Self::CollectionViewerRouter => 1,
+impl From<AppRoutes> for u8 {
+    fn from(val: AppRoutes) -> Self {
+        match val {
+            AppRoutes::CollectionListRouter => 0,
+            AppRoutes::CollectionViewerRouter => 1,
         }
     }
 }
@@ -39,9 +35,6 @@ pub struct App {
     command_receiver: Receiver<Command>,
     command_sender: Sender<Command>,
     router: Router,
-
-    config: Rc<RwLock<Config>>,
-    colors: Rc<Colors>,
 }
 
 impl App {
@@ -69,9 +62,6 @@ impl App {
             command_receiver,
             command_sender,
             terminal,
-
-            config,
-            colors,
         })
     }
 
@@ -92,7 +82,7 @@ impl App {
                 }
             }
 
-            if let Some(event) = self.event_pool.next().await {
+            if let Some(event) = self.event_pool.next() {
                 match event {
                     Event::Tick => self.router.tick()?,
                     Event::Resize(new_size) => self.router.resize(new_size),

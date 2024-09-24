@@ -1,4 +1,4 @@
-use crate::collection::Collection;
+use hac_store::collection::Collection;
 
 #[derive(Debug)]
 pub enum Command {

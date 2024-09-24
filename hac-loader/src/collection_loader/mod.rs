@@ -5,7 +5,14 @@ use chrono::{Datelike, Timelike};
 use hac_config::config::CollectionExtensions;
 use hac_store::collection::Collection;
 use json_loader::JsonLoader;
+use notify::{RecursiveMode, Watcher};
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
+
+static HAS_CHANGES: AtomicBool = AtomicBool::new(false);
+static HAS_WATCHER: AtomicBool = AtomicBool::new(false);
 
 pub trait IntoCollection {
     fn into_collection(self) -> hac_store::collection::Collection;
@@ -32,6 +39,103 @@ pub fn load_collection<F: AsRef<std::path::Path>>(
     }
 }
 
+fn sanitize_filename(name: &str) -> String {
+    // TODO: find a better way to do this
+    let forbidden_chars = ['/', '\\', '?', '%', '*', ':', '|', '"', '<', '>', '.'];
+    name.chars()
+        .map(|c| if forbidden_chars.contains(&c) { '_' } else { c })
+        .collect()
+}
+
+fn create_persistent_colletion(name: String) -> anyhow::Result<()> {
+    let file_name = format!("{}.json", sanitize_filename(&name));
+    let path = super::collections_dir().join(&file_name);
+    tracing::debug!("{path:?}");
+    let collection = json_collection::JsonCollection::new(name, Default::default(), file_name, &path);
+    std::fs::write(&path, serde_json::to_string_pretty(&collection)?)?;
+    Ok(())
+}
+
+pub fn has_changes() -> bool {
+    HAS_CHANGES.load(Ordering::Relaxed)
+}
+
+fn set_watcher() -> anyhow::Result<()> {
+    if HAS_WATCHER.load(Ordering::Relaxed) {
+        return Ok(());
+    }
+
+    std::thread::spawn(move || {
+        let mut watcher = notify::recommended_watcher(|res| match res {
+            Ok(_) => HAS_CHANGES.store(true, Ordering::Relaxed),
+            Err(_) => todo!(),
+        })
+        .expect("failed to set watcher");
+        let collections_dir = super::collections_dir();
+        watcher
+            .watch(&collections_dir, RecursiveMode::NonRecursive)
+            .expect("failed to watch collections dir");
+
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+    });
+
+    Ok(())
+}
+
+fn create_virtual_collection(
+    name: String,
+    mut collections: Vec<CollectionMeta>,
+) -> anyhow::Result<Vec<CollectionMeta>> {
+    let file_name = format!("{}.json", sanitize_filename(&name));
+    let size = name.len();
+    let metadata = CollectionMeta::new(name, file_name.into(), size as u64);
+    collections.push(metadata);
+    Ok(collections)
+}
+
+pub fn create_collection(
+    name: String,
+    collections: Vec<CollectionMeta>,
+    config: &Rc<RefCell<hac_config::Config>>,
+) -> anyhow::Result<Vec<CollectionMeta>> {
+    match config.borrow().dry_run {
+        false => {
+            create_persistent_colletion(name)?;
+            collections_metadata()
+        }
+        true => create_virtual_collection(name, collections),
+    }
+}
+
+fn delete_persistent_collection(file_name: String, collections: Vec<CollectionMeta>) -> anyhow::Result<()> {
+    let path = collections
+        .iter()
+        .find(|c| c.path().to_string_lossy().contains(&file_name))
+        .expect("attempted to delete non-existing collection")
+        .path();
+    std::fs::remove_file(path)?;
+    Ok(())
+}
+
+pub fn delete_collection(
+    file_name: String,
+    mut collections: Vec<CollectionMeta>,
+    config: &Rc<RefCell<hac_config::Config>>,
+) -> anyhow::Result<Vec<CollectionMeta>> {
+    match config.borrow().dry_run {
+        false => {
+            delete_persistent_collection(file_name, collections)?;
+            collections_metadata()
+        }
+        true => {
+            collections.retain(|c| !c.path().to_string_lossy().contains(&file_name));
+            Ok(collections)
+        }
+    }
+}
+
 // TODO: i probably want to introduce some metadata storage, or caching to know
 // total requests, total saved responses, and other infos without having to read
 // the entire collection.
@@ -51,6 +155,18 @@ pub struct CollectionModifiedMeta {
     hour: u32,
     minutes: u32,
     system_time: SystemTime,
+}
+
+impl CollectionModifiedMeta {
+    pub fn new() -> Self {
+        std::time::SystemTime::now().into()
+    }
+}
+
+impl Default for CollectionModifiedMeta {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PartialOrd for CollectionModifiedMeta {
@@ -76,6 +192,15 @@ impl std::fmt::Display for CollectionModifiedMeta {
 }
 
 impl CollectionMeta {
+    pub fn new(name: String, path: std::path::PathBuf, size: u64) -> Self {
+        Self {
+            name,
+            path,
+            size,
+            modified: CollectionModifiedMeta::new(),
+        }
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -119,32 +244,35 @@ impl ReadableByteSize for u64 {
     }
 }
 
-fn format_modified_date(modified_time: SystemTime) -> anyhow::Result<CollectionModifiedMeta> {
-    let datetime = chrono::DateTime::<chrono::Utc>::from(modified_time);
-    let year = datetime.year();
-    let month = datetime.day();
-    let day = datetime.month();
-    let hour = datetime.hour();
-    let minutes = datetime.minute();
-    Ok(CollectionModifiedMeta {
-        year,
-        month,
-        day,
-        hour,
-        minutes,
-        system_time: modified_time,
-    })
+impl From<SystemTime> for CollectionModifiedMeta {
+    fn from(value: SystemTime) -> Self {
+        let datetime = chrono::DateTime::<chrono::Utc>::from(value);
+        let year = datetime.year();
+        let month = datetime.day();
+        let day = datetime.month();
+        let hour = datetime.hour();
+        let minutes = datetime.minute();
+
+        CollectionModifiedMeta {
+            year,
+            month,
+            day,
+            hour,
+            minutes,
+            system_time: value,
+        }
+    }
 }
 
 pub fn collections_metadata() -> anyhow::Result<Vec<CollectionMeta>> {
+    set_watcher()?;
     let entries = std::fs::read_dir(super::collections_dir())?.flatten();
-
     let mut collections = vec![];
     for entry in entries {
         let name = entry.file_name().to_string_lossy().to_string();
         let path = entry.path();
         let metadata = entry.metadata()?;
-        let modified = format_modified_date(metadata.modified()?)?;
+        let modified = metadata.modified()?.into();
         let size = metadata.len();
         collections.push(CollectionMeta {
             name,
@@ -153,6 +281,8 @@ pub fn collections_metadata() -> anyhow::Result<Vec<CollectionMeta>> {
             size,
         });
     }
+
+    HAS_CHANGES.store(false, Ordering::Relaxed);
 
     Ok(collections)
 }

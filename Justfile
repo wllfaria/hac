@@ -20,7 +20,7 @@ build-time:
     cargo +nightly build -Z timings
 
 fmt:
-    cargo fmt --check
+    cargo +nightly fmt --check
 
 lint:
     cargo clippy -- -D warnings
@@ -130,4 +130,3 @@ cross:
     ### x86
     just binary hac.exe x86_64-pc-windows-gnu
     just binary_static hac.exe x86_64-pc-windows-gnu
-

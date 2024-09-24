@@ -60,6 +60,7 @@ pub struct Config {
     pub editor_keys: Keys,
     #[serde(default)]
     pub collection_ext: CollectionExtensions,
+    pub dry_run: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

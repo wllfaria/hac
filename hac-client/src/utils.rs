@@ -21,10 +21,7 @@ pub fn build_syntax_highlighted_lines(
 
     // `HIGHLIGHTER` returns a vector of `ColorInfo`, which contains information about
     // which kind of token that is, and the style to apply to it
-    let mut highlights = HIGHLIGHTER
-        .read()
-        .unwrap()
-        .apply(content, tree, &colors.tokens);
+    let mut highlights = HIGHLIGHTER.read().unwrap().apply(content, tree, &colors.tokens);
 
     // these are helper variables to collect each line into styled spans based on the
     // token it contains

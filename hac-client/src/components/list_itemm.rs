@@ -86,7 +86,7 @@ impl Widget for ListItem<'_> {
                 .border_style(
                     Style::default()
                         .bg(self.colors.primary.background)
-                        .fg(self.colors.normal.white),
+                        .fg(self.colors.bright.red),
                 )
                 .style(self.title_style);
         }

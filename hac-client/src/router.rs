@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::mpsc::{Receiver, Sender};
 
@@ -139,17 +139,14 @@ impl Router {
                 // pop the dialog if we are currently displaying one
                 self.dialogs.contains_key(&curr).then(|| self.dialog_stack.pop());
 
-                let route;
-                if self.dialogs.contains_key(&prev) {
-                    route = self
-                        .get_active_dialog()
-                        .expect("previous route is a dialog, but its not on the stack");
+                let route = if self.dialogs.contains_key(&prev) {
+                    self.get_active_dialog()
+                        .expect("previous route is a dialog, but its not on the stack")
                 } else {
-                    route = self
-                        .routes
+                    self.routes
                         .get_mut(&prev)
-                        .expect("previous route is not registered... how?");
-                }
+                        .expect("previous route is not registered... how?")
+                };
 
                 route.update(data);
             }
@@ -171,13 +168,12 @@ impl Router {
 impl Renderable for Router {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         if frame.size().height < MIN_HEIGHT || frame.size().width < MIN_WIDTH {
-            self.too_small.draw(frame, size);
+            self.too_small.draw(frame, size)?;
             return Ok(());
         }
 
-        match self.navigate_receiver.try_recv() {
-            Ok(navigation) => self.navigate(navigation),
-            _ => {}
+        if let Ok(navigation) = self.navigate_receiver.try_recv() {
+            self.navigate(navigation)
         }
 
         let route = self.get_active_route();
@@ -185,6 +181,17 @@ impl Renderable for Router {
 
         if let Some(dialog) = self.get_active_dialog() {
             dialog.draw(frame, size)?;
+        }
+
+        Ok(())
+    }
+
+    fn tick(&mut self) -> anyhow::Result<()> {
+        let route = self.get_active_route();
+        route.tick()?;
+
+        if let Some(dialog) = self.get_active_dialog() {
+            dialog.tick()?;
         }
 
         Ok(())
