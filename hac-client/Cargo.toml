@@ -47,7 +47,3 @@ name = "hac"
 test = false
 bench = false
 path = "src/main.rs"
-
-[[bench]]
-name = "collection_viewer_bench"
-harness = false

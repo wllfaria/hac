@@ -23,6 +23,9 @@ impl TerminalTooSmall {
 }
 
 impl Renderable for TerminalTooSmall {
+    type Input = ();
+    type Output = ();
+
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         let layout = build_layout(size);
 
@@ -54,6 +57,10 @@ impl Renderable for TerminalTooSmall {
     // we purposefully don't do nothing here, as this page automatically adapts to the
     // size of the window when rendering
     fn resize(&mut self, _new_size: Rect) {}
+
+    fn data(&self) -> Self::Output {
+        todo!()
+    }
 }
 
 fn build_layout(size: Rect) -> Rect {

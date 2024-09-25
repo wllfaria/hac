@@ -1,17 +1,17 @@
+use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::mpsc::{Receiver, Sender};
 
+use crossterm::event::KeyEvent;
 use hac_core::command::Command;
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
+use crate::event_pool::Event;
 use crate::pages::terminal_too_small::TerminalTooSmall;
 use crate::pages::{Eventful, Renderable};
 use crate::{HacColors, MIN_HEIGHT, MIN_WIDTH};
-
-pub trait EventfulRenderable: Renderable + Eventful + Debug {}
-impl<K> EventfulRenderable for K where K: Renderable + Eventful + Debug {}
 
 type Key = u8;
 
@@ -23,21 +23,93 @@ pub enum Navigate {
     /// Change the current route to a new route, or open a dialog if the key matches a
     /// dialog rather than a route
     /// Navigating to a route from a dialog will close that dialog
-    To(Key, Option<Box<dyn std::any::Any>>),
+    To(Key),
     /// Routes can only communicate with the router that owns the route, therefore,
     /// if a route in a nested router needs to navigate to an entirely different router
     /// the `Leave` variant is responsible for that. It will direct the navigation event
     /// to the parent router of the current active router.
-    Leave(Key, Option<Box<dyn std::any::Any>>),
+    Leave(),
     /// Go back in the navigation history, this completely wipes the current router history,
     /// and close every dialog thats visible
-    Back(Option<Box<dyn std::any::Any>>),
+    Back(),
+}
+
+pub trait AnyCommand {}
+impl AnyCommand for Command {}
+
+pub trait AnyRenderable: Debug {
+    type Ev: AnyCommand;
+
+    fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()>;
+
+    fn data(&self) -> Box<dyn Any>;
+
+    fn update(&mut self, input: Box<dyn Any>);
+
+    fn attach_navigator(&mut self, navigator: std::sync::mpsc::Sender<crate::router::Navigate>);
+
+    fn resize(&mut self, new_size: Rect);
+
+    fn register_command_handler(&mut self, sender: Sender<Command>);
+
+    fn handle_command(&mut self, command: Command) -> anyhow::Result<()>;
+
+    fn tick(&mut self) -> anyhow::Result<()>;
+
+    fn handle_event(&mut self, event: Option<Event>) -> anyhow::Result<Option<Self::Ev>>;
+
+    fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Ev>>;
+}
+
+impl<K: AnyCommand, T: Renderable + Eventful<Result = K> + Debug> AnyRenderable for T {
+    type Ev = K;
+
+    fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
+        <Self as Renderable>::draw(self, frame, size)
+    }
+
+    fn data(&self) -> Box<dyn Any> {
+        Box::new(<Self as Renderable>::data(self))
+    }
+
+    fn update(&mut self, input: Box<dyn Any>) {
+        let input = input.downcast::<T::Input>().expect("wrong data passed to route");
+        <Self as Renderable>::update(self, *input);
+    }
+
+    fn attach_navigator(&mut self, navigator: std::sync::mpsc::Sender<crate::router::Navigate>) {
+        <Self as Renderable>::attach_navigator(self, navigator);
+    }
+
+    fn resize(&mut self, new_size: Rect) {
+        <Self as Renderable>::resize(self, new_size);
+    }
+
+    fn register_command_handler(&mut self, sender: Sender<Command>) {
+        <Self as Renderable>::register_command_handler(self, sender);
+    }
+
+    fn handle_command(&mut self, command: Command) -> anyhow::Result<()> {
+        <Self as Renderable>::handle_command(self, command)
+    }
+
+    fn tick(&mut self) -> anyhow::Result<()> {
+        <Self as Renderable>::tick(self)
+    }
+
+    fn handle_event(&mut self, event: Option<Event>) -> anyhow::Result<Option<Self::Ev>> {
+        <Self as Eventful>::handle_event(self, event)
+    }
+
+    fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Ev>> {
+        <Self as Eventful>::handle_key_event(self, key_event)
+    }
 }
 
 #[derive(Debug)]
 pub struct Router {
-    routes: HashMap<Key, Box<dyn EventfulRenderable<Result = Command>>>,
-    dialogs: HashMap<Key, Box<dyn EventfulRenderable<Result = Command>>>,
+    routes: HashMap<Key, Box<dyn AnyRenderable<Ev = Command>>>,
+    dialogs: HashMap<Key, Box<dyn AnyRenderable<Ev = Command>>>,
     dialog_stack: Vec<Key>,
     active_route: Key,
     history: Vec<Key>,
@@ -69,13 +141,13 @@ impl Router {
         self.navigate_sender.clone()
     }
 
-    pub fn add_route(&mut self, key: Key, mut route: Box<dyn EventfulRenderable<Result = Command>>) {
+    pub fn add_route(&mut self, key: Key, mut route: Box<dyn AnyRenderable<Ev = Command>>) {
         route.attach_navigator(self.navigate_sender.clone());
         route.register_command_handler(self.command_sender.clone());
         self.routes.insert(key, route);
     }
 
-    pub fn add_dialog(&mut self, key: Key, mut dialog: Box<dyn EventfulRenderable<Result = Command>>) {
+    pub fn add_dialog(&mut self, key: Key, mut dialog: Box<dyn AnyRenderable<Ev = Command>>) {
         dialog.attach_navigator(self.navigate_sender.clone());
         dialog.register_command_handler(self.command_sender.clone());
         self.dialogs.insert(key, dialog);
@@ -91,13 +163,13 @@ impl Router {
         self.parent_navigator = Some(navigator);
     }
 
-    fn get_active_route(&mut self) -> &mut Box<dyn EventfulRenderable<Result = Command>> {
+    fn get_active_route(&mut self) -> &mut Box<dyn AnyRenderable<Ev = Command>> {
         self.routes
             .get_mut(&self.active_route)
             .expect("active route doesn't exist on router")
     }
 
-    fn get_active_dialog(&mut self) -> Option<&mut Box<dyn EventfulRenderable<Result = Command>>> {
+    fn get_active_dialog(&mut self) -> Option<&mut Box<dyn AnyRenderable<Ev = Command>>> {
         let key = self.dialog_stack.last()?;
         Some(
             self.dialogs
@@ -108,15 +180,20 @@ impl Router {
 
     fn navigate(&mut self, navigation: Navigate) {
         match navigation {
-            Navigate::To(route, data) => {
+            Navigate::To(route) => {
+                let curr_route = if self.get_active_dialog().is_some() {
+                    // SAFETY: we just checked if its some
+                    self.get_active_dialog().unwrap()
+                } else {
+                    self.get_active_route()
+                };
+                let data = curr_route.data();
                 if self.routes.contains_key(&route) {
-                    // if navigating to a route, we clear the dialogs.
                     self.dialog_stack.clear();
-
                     self.active_route = route;
                     self.history.push(route);
                     let route = self.get_active_route();
-                    route.update(data);
+                    route.update(data)
                 } else if self.dialogs.contains_key(&route) {
                     self.dialog_stack.push(route);
                     let dialog = self
@@ -127,48 +204,48 @@ impl Router {
                     panic!("tried to navigate to an unknown route");
                 }
             }
-            Navigate::Back(data) => {
-                if self.history.len() <= 1 {
-                    return;
-                }
-
-                // SAFETY: we just checked if these exists
-                let curr = self.history.pop().unwrap();
-                let prev = *self.history.last().unwrap();
-
-                // pop the dialog if we are currently displaying one
-                self.dialogs.contains_key(&curr).then(|| self.dialog_stack.pop());
-
-                let route = if self.dialogs.contains_key(&prev) {
-                    self.get_active_dialog()
-                        .expect("previous route is a dialog, but its not on the stack")
-                } else {
-                    self.routes
-                        .get_mut(&prev)
-                        .expect("previous route is not registered... how?")
-                };
-
-                route.update(data);
-            }
-            Navigate::Leave(route, data) if self.parent_navigator.is_some() => {
-                self.history.clear();
-                self.dialog_stack.clear();
-
-                self.parent_navigator
-                    .as_mut()
-                    .unwrap()
-                    .send(Navigate::To(route, data))
-                    .expect("failed to send navigation command");
-            }
-            Navigate::Leave(_, _) => panic!("theres no parent navigator"),
+            Navigate::Back() => todo!(),
+            //if self.history.len() <= 1 {
+            //    return;
+            //}
+            //
+            //// SAFETY: we just checked if these exists
+            //let curr = self.history.pop().unwrap();
+            //let prev = *self.history.last().unwrap();
+            //
+            //// pop the dialog if we are currently displaying one
+            //self.dialogs.contains_key(&curr).then(|| self.dialog_stack.pop());
+            //
+            //let route = if self.dialogs.contains_key(&prev) {
+            //    self.get_active_dialog()
+            //        .expect("previous route is a dialog, but its not on the stack")
+            //} else {
+            //    self.routes
+            //        .get_mut(&prev)
+            //        .expect("previous route is not registered... how?")
+            //};
+            //
+            //route.update(data);
+            Navigate::Leave() => todo!(),
+            //self.history.clear();
+            //self.dialog_stack.clear();
+            //
+            //self.parent_navigator
+            //    .as_mut()
+            //    .unwrap()
+            //    .send(Navigate::To(route, data))
+            //    .expect("failed to send navigation command");
         }
     }
 }
 
 impl Renderable for Router {
+    type Input = ();
+    type Output = ();
+
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         if frame.size().height < MIN_HEIGHT || frame.size().width < MIN_WIDTH {
-            self.too_small.draw(frame, size)?;
+            Renderable::draw(&mut self.too_small, frame, size)?;
             return Ok(());
         }
 
@@ -205,6 +282,8 @@ impl Renderable for Router {
             dialog.resize(new_size);
         }
     }
+
+    fn data(&self) -> Self::Input {}
 }
 
 impl Eventful for Router {

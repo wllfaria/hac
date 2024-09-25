@@ -1,9 +1,13 @@
-use crate::ascii::UNDER_CONSTRUCTION;
-use crate::pages::Renderable;
-
 use std::ops::{Add, Sub};
 
-use ratatui::{layout::Rect, style::Stylize, text::Line, widgets::Paragraph, Frame};
+use ratatui::layout::Rect;
+use ratatui::style::Stylize;
+use ratatui::text::Line;
+use ratatui::widgets::Paragraph;
+use ratatui::Frame;
+
+use crate::ascii::UNDER_CONSTRUCTION;
+use crate::pages::Renderable;
 
 pub struct UnderConstruction<'uc> {
     colors: &'uc hac_colors::colors::Colors,
@@ -16,6 +20,9 @@ impl<'uc> UnderConstruction<'uc> {
 }
 
 impl Renderable for UnderConstruction<'_> {
+    type Input = ();
+    type Output = ();
+
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         let icon_lines = UNDER_CONSTRUCTION
             .iter()
@@ -48,5 +55,9 @@ impl Renderable for UnderConstruction<'_> {
         // frame.render_widget(Paragraph::new(message).centered(), message_size);
 
         Ok(())
+    }
+
+    fn data(&self) -> Self::Output {
+        todo!()
     }
 }

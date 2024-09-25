@@ -3,6 +3,7 @@ mod create_collection;
 use std::fmt::Debug;
 use std::sync::mpsc::{channel, Sender};
 
+use create_collection::CreateCollection;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_core::command::Command;
 use hac_loader::collection_loader::{CollectionMeta, ReadableByteSize};
@@ -15,10 +16,7 @@ use ratatui::Frame;
 use crate::app::AppRoutes;
 use crate::components::list_itemm::ListItem;
 use crate::pages::{Eventful, Renderable};
-use crate::router::Navigate;
-use create_collection::CreateCollection;
-
-use crate::router::Router;
+use crate::router::{Navigate, Router};
 use crate::{HacColors, HacConfig};
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy, Default)]
@@ -257,6 +255,18 @@ impl CollectionList {
 }
 
 impl Renderable for CollectionList {
+    type Input = (String, Vec<CollectionMeta>);
+    type Output = (String, Vec<CollectionMeta>);
+
+    fn data(&self) -> Self::Input {
+        if self.collections.is_empty() {
+            (String::default(), self.collections.clone())
+        } else {
+            let name = self.collections[self.selected].name().to_string();
+            (name, self.collections.clone())
+        }
+    }
+
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         self.draw_background(size, frame);
         self.draw_title(frame)?;
@@ -287,23 +297,23 @@ impl Renderable for CollectionList {
         self.layout = build_layout(new_size, self.extended_hint);
     }
 
-    fn update(&mut self, data: Option<Box<dyn std::any::Any>>) {
-        if let Some(data) = data {
-            let data = data
-                .downcast::<(Option<String>, Vec<CollectionMeta>)>()
-                .expect("wrong kind of data provided to CollectionList");
-            self.collections = data.1;
-            self.sort_list();
-
-            if let Some(name) = data.0 {
-                let selected_idx = self
-                    .collections
-                    .iter()
-                    .position(|c| c.name() == name)
-                    .expect("received invalid name after creation");
-                self.selected = selected_idx;
-            }
-        }
+    fn update(&mut self, _data: Self::Input) {
+        //if let Some(data) = data {
+        //    let data = data
+        //        .downcast::<(Option<String>, Vec<CollectionMeta>)>()
+        //        .expect("wrong kind of data provided to CollectionList");
+        //    self.collections = data.1;
+        //    self.sort_list();
+        //
+        //    if let Some(name) = data.0 {
+        //        let selected_idx = self
+        //            .collections
+        //            .iter()
+        //            .position(|c| c.name() == name)
+        //            .expect("received invalid name after creation");
+        //        self.selected = selected_idx;
+        //    }
+        //}
     }
 }
 
@@ -371,10 +381,7 @@ impl Eventful for CollectionList {
             KeyCode::Char('n') => {
                 let collections = self.collections.clone();
                 self.navigator
-                    .send(Navigate::To(
-                        Routes::CreateCollection.into(),
-                        Some(Box::new((String::default(), collections))),
-                    ))
+                    .send(Navigate::To(Routes::CreateCollection.into()))
                     .expect("failed to send navigation message");
             }
             KeyCode::Char('e') => {
@@ -383,7 +390,7 @@ impl Eventful for CollectionList {
                 }
                 let name = self.collections[self.selected].name().to_string();
                 self.navigator
-                    .send(Navigate::To(Routes::CreateCollection.into(), Some(Box::new(name))))
+                    .send(Navigate::To(Routes::CreateCollection.into()))
                     .expect("failed to send navigation message");
             }
             KeyCode::Enter => {
@@ -391,12 +398,9 @@ impl Eventful for CollectionList {
                     return Ok(None);
                 }
                 assert!(self.collections.len() > self.selected);
-                let path = self.collections[self.selected].path().clone();
+                //let path = self.collections[self.selected].path().clone();
                 self.navigator
-                    .send(Navigate::Leave(
-                        AppRoutes::CollectionViewerRouter.into(),
-                        Some(Box::new(path)),
-                    ))
+                    .send(Navigate::Leave())
                     .expect("failed to send navigation message");
             }
             _ => {}

@@ -8,13 +8,18 @@ mod under_construction;
 
 use std::sync::mpsc::Sender;
 
-use crate::event_pool::Event;
 use crossterm::event::KeyEvent;
 use hac_core::command::Command;
-use ratatui::{layout::Rect, Frame};
+use ratatui::layout::Rect;
+use ratatui::Frame;
+
+use crate::event_pool::Event;
 
 /// A `Renderable` is anything that is a top level page and can be drawn to the screen
 pub trait Renderable {
+    type Input: 'static;
+    type Output: 'static;
+
     #[allow(unused_variables)]
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         Ok(())
@@ -22,7 +27,9 @@ pub trait Renderable {
 
     /// when navigating to a new route, you might need to pass in some data, here you do it
     #[allow(unused_variables)]
-    fn update(&mut self, data: Option<Box<dyn std::any::Any>>) {}
+    fn update(&mut self, data: Self::Input) {}
+
+    fn data(&self) -> Self::Output;
 
     /// each route can, (and must) have a navigator, this is how you attach one
     #[allow(unused_variables)]
@@ -53,7 +60,7 @@ pub trait Renderable {
 /// An `Eventful` page is a page that can handle key events, and mouse events
 /// when support for them gets added.
 pub trait Eventful {
-    type Result: std::any::Any;
+    type Result;
 
     /// the top level event loop doesnt differentiate between kinds of events, so this is what
     /// delegate each kind of events to the responsible function

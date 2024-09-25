@@ -72,6 +72,11 @@ impl CreateCollection {
 }
 
 impl Renderable for CreateCollection {
+    type Input = ();
+    type Output = ();
+
+    fn data(&self) -> Self::Output {}
+
     fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
         make_overlay(self.colors.clone(), self.colors.normal.black, 0.2, frame);
 
@@ -107,17 +112,17 @@ impl Renderable for CreateCollection {
         Ok(())
     }
 
-    fn update(&mut self, data: Option<Box<dyn std::any::Any>>) {
-        if let Some(data) = data {
-            let data = data
-                .downcast::<(String, Vec<CollectionMeta>)>()
-                .expect("wrong kind of data sent to CreateCollection");
-            let name = data.0;
-            let collections = data.1;
-            self.collections = collections;
-            self.name = TextObject::from(&name).with_write();
-            self.name_cursor.move_to_col(name.len());
-        }
+    fn update(&mut self, data: Self::Input) {
+        //if let Some(data) = data {
+        //    let data = data
+        //        .downcast::<(String, Vec<CollectionMeta>)>()
+        //        .expect("wrong kind of data sent to CreateCollection");
+        //    let name = data.0;
+        //    let collections = data.1;
+        //    self.collections = collections;
+        //    self.name = TextObject::from(&name).with_write();
+        //    self.name_cursor.move_to_col(name.len());
+        //}
     }
 
     fn resize(&mut self, new_size: Rect) {
@@ -147,16 +152,13 @@ impl Eventful for CreateCollection {
                 )?;
                 let name = self.name.to_string();
                 self.navigator
-                    .send(Navigate::To(
-                        Routes::ListCollections.into(),
-                        Some(Box::new((Some(name), collections))),
-                    ))
+                    .send(Navigate::To(Routes::ListCollections.into()))
                     .expect("failed to send navigate message");
             }
             KeyCode::Esc => {
                 self.reset();
                 self.navigator
-                    .send(Navigate::To(Routes::ListCollections.into(), None))
+                    .send(Navigate::To(Routes::ListCollections.into()))
                     .expect("failed to send navigate message");
             }
             KeyCode::Char('b') if matches!(key_event.modifiers, KeyModifiers::CONTROL) => {
