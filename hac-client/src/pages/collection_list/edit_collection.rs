@@ -18,10 +18,11 @@ use crate::router::{Navigate, RouterMessage};
 use crate::{HacColors, HacConfig};
 
 #[derive(Debug)]
-pub struct CreateCollection {
+pub struct EditCollection {
     name: TextObject<Write>,
     desc: TextObject<Write>,
     collections: Vec<CollectionMeta>,
+    collection_idx: usize,
     size: Rect,
     colors: HacColors,
     cursor: Cursor,
@@ -31,7 +32,7 @@ pub struct CreateCollection {
     messager: Sender<RouterMessage>,
 }
 
-impl CreateCollection {
+impl EditCollection {
     pub fn new(size: Rect, config: HacConfig, colors: HacColors) -> Self {
         Self {
             config,
@@ -42,6 +43,7 @@ impl CreateCollection {
             desc: TextObject::<Write>::default(),
             cursor: Cursor::default(),
             collections: Default::default(),
+            collection_idx: 0,
             navigator: channel().0,
             messager: channel().0,
         }
@@ -54,7 +56,7 @@ impl CreateCollection {
     }
 }
 
-impl Renderable for CreateCollection {
+impl Renderable for EditCollection {
     type Input = CollectionListData;
     type Output = (String, Vec<CollectionMeta>);
 
@@ -66,13 +68,15 @@ impl Renderable for CreateCollection {
         make_overlay(self.colors.clone(), self.colors.normal.black, 0.2, frame);
         draw_form_layout(self.layout, self.name.to_string(), &self.colors, frame);
         set_form_cursor(self.layout, &self.cursor, frame);
-
         Ok(())
     }
 
     fn update(&mut self, data: Self::Input) {
-        if let CollectionListData::CreateCollection(data) = data {
+        if let CollectionListData::EditCollection(idx, data) = data {
             self.collections = data;
+            self.collection_idx = idx;
+            self.name = TextObject::from(self.collections[idx].name()).with_write();
+            self.cursor.move_to_col(self.name.line_len(0) + 1);
         }
     }
 
@@ -87,7 +91,7 @@ impl Renderable for CreateCollection {
     }
 }
 
-impl Eventful for CreateCollection {
+impl Eventful for EditCollection {
     type Result = Command;
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
@@ -97,13 +101,8 @@ impl Eventful for CreateCollection {
 
         match handle_form_key_event(key_event, &mut self.name, &mut self.cursor)? {
             Some(FormEvent::Confirm) => {
-                self.collections = hac_loader::collection_loader::create_collection(
-                    self.name.to_string(),
-                    self.collections.clone(),
-                    &self.config,
-                )?;
                 self.navigator
-                    .send(Navigate::Back(Routes::ListCollections.into()))
+                    .send(Navigate::To(Routes::ListCollections.into()))
                     .expect("failed to send navigate message");
             }
             Some(FormEvent::Cancel) => {

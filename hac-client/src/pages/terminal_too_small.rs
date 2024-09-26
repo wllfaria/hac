@@ -58,9 +58,7 @@ impl Renderable for TerminalTooSmall {
     // size of the window when rendering
     fn resize(&mut self, _new_size: Rect) {}
 
-    fn data(&self) -> Self::Output {
-        todo!()
-    }
+    fn data(&self, _requester: u8) -> Self::Output {}
 }
 
 fn build_layout(size: Rect) -> Rect {

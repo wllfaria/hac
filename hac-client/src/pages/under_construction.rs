@@ -57,7 +57,5 @@ impl Renderable for UnderConstruction<'_> {
         Ok(())
     }
 
-    fn data(&self) -> Self::Output {
-        todo!()
-    }
+    fn data(&self, _requester: u8) -> Self::Output {}
 }

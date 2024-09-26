@@ -1,10 +1,13 @@
 mod create_collection;
+mod edit_collection;
+mod form_shared;
 
 use std::fmt::Debug;
 use std::sync::mpsc::{channel, Sender};
 
 use create_collection::CreateCollection;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use edit_collection::EditCollection;
 use hac_core::command::Command;
 use hac_loader::collection_loader::{CollectionMeta, ReadableByteSize};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
@@ -13,10 +16,9 @@ use ratatui::text::Line;
 use ratatui::widgets::{Block, Clear, Paragraph};
 use ratatui::Frame;
 
-use crate::app::AppRoutes;
 use crate::components::list_itemm::ListItem;
 use crate::pages::{Eventful, Renderable};
-use crate::router::{Navigate, Router};
+use crate::router::{Navigate, Router, RouterMessage};
 use crate::{HacColors, HacConfig};
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy, Default)]
@@ -24,6 +26,18 @@ pub enum Routes {
     #[default]
     ListCollections,
     CreateCollection,
+    EditCollection,
+}
+
+impl From<u8> for Routes {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => Routes::ListCollections,
+            1 => Routes::CreateCollection,
+            2 => Routes::EditCollection,
+            _ => panic!("invalid route number"),
+        }
+    }
 }
 
 impl From<Routes> for u8 {
@@ -31,6 +45,7 @@ impl From<Routes> for u8 {
         match val {
             Routes::ListCollections => 0,
             Routes::CreateCollection => 1,
+            Routes::EditCollection => 2,
         }
     }
 }
@@ -43,11 +58,8 @@ pub fn make_collection_list_router(
     colors: HacColors,
 ) -> Router {
     let mut router = Router::new(command_sender, colors.clone());
-    let collection_list = CollectionList::new(collections, size, colors.clone());
-    let create_collection = CreateCollection::new(size, config.clone(), colors.clone());
-
+    let collection_list = CollectionList::new(collections, size, config, colors.clone());
     router.add_route(Routes::ListCollections.into(), Box::new(collection_list));
-    router.add_dialog(Routes::CreateCollection.into(), Box::new(create_collection));
     router
 }
 
@@ -91,8 +103,10 @@ pub struct CollectionList {
     sorting_kind: SortingKind,
     collections: Vec<CollectionMeta>,
     selected: usize,
+    config: HacConfig,
     scroll: usize,
     navigator: Sender<Navigate>,
+    messager: Sender<RouterMessage>,
     layout: DashboardLayout,
     pub command_sender: Option<Sender<Command>>,
     extended_hint: bool,
@@ -101,20 +115,22 @@ pub struct CollectionList {
 impl CollectionList {
     const LIST_ITEM_HEIGHT: u16 = 3;
 
-    pub fn new(collections: Vec<CollectionMeta>, size: Rect, colors: HacColors) -> Self {
-        let (dummy, _) = channel();
-        Self {
+    pub fn new(collections: Vec<CollectionMeta>, size: Rect, config: HacConfig, colors: HacColors) -> Self {
+        let mut list = Self {
             colors,
-
+            config,
             selected: 0,
             scroll: 0,
             sorting_kind: SortingKind::default(),
-            navigator: dummy,
+            navigator: channel().0,
+            messager: channel().0,
             collections,
             layout: build_layout(size, false),
             command_sender: None,
             extended_hint: false,
-        }
+        };
+        list.sort_list();
+        list
     }
 
     fn sort_list(&mut self) {
@@ -254,23 +270,27 @@ impl CollectionList {
     }
 }
 
+#[derive(Debug)]
+pub enum CollectionListData {
+    CreateCollection(Vec<CollectionMeta>),
+    EditCollection(usize, Vec<CollectionMeta>),
+}
+
 impl Renderable for CollectionList {
     type Input = (String, Vec<CollectionMeta>);
-    type Output = (String, Vec<CollectionMeta>);
+    type Output = CollectionListData;
 
-    fn data(&self) -> Self::Input {
-        if self.collections.is_empty() {
-            (String::default(), self.collections.clone())
-        } else {
-            let name = self.collections[self.selected].name().to_string();
-            (name, self.collections.clone())
+    fn data(&self, requester: u8) -> Self::Output {
+        match Routes::from(requester) {
+            Routes::CreateCollection => CollectionListData::CreateCollection(self.collections.clone()),
+            Routes::ListCollections => CollectionListData::CreateCollection(self.collections.clone()),
+            Routes::EditCollection => CollectionListData::EditCollection(self.selected, self.collections.clone()),
         }
     }
 
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         self.draw_background(size, frame);
         self.draw_title(frame)?;
-
         self.draw_collection_list(frame)?;
         self.draw_hint_text(frame);
 
@@ -285,8 +305,9 @@ impl Renderable for CollectionList {
         Ok(())
     }
 
-    fn attach_navigator(&mut self, navigator: std::sync::mpsc::Sender<crate::router::Navigate>) {
+    fn attach_navigator(&mut self, navigator: Sender<Navigate>, messager: Sender<RouterMessage>) {
         self.navigator = navigator;
+        self.messager = messager;
     }
 
     fn register_command_handler(&mut self, sender: Sender<Command>) {
@@ -297,23 +318,14 @@ impl Renderable for CollectionList {
         self.layout = build_layout(new_size, self.extended_hint);
     }
 
-    fn update(&mut self, _data: Self::Input) {
-        //if let Some(data) = data {
-        //    let data = data
-        //        .downcast::<(Option<String>, Vec<CollectionMeta>)>()
-        //        .expect("wrong kind of data provided to CollectionList");
-        //    self.collections = data.1;
-        //    self.sort_list();
-        //
-        //    if let Some(name) = data.0 {
-        //        let selected_idx = self
-        //            .collections
-        //            .iter()
-        //            .position(|c| c.name() == name)
-        //            .expect("received invalid name after creation");
-        //        self.selected = selected_idx;
-        //    }
-        //}
+    fn update(&mut self, data: Self::Input) {
+        self.collections = data.1;
+        self.sort_list();
+        self.selected = self
+            .collections
+            .iter()
+            .position(|col| col.path().to_string_lossy().contains(&data.0))
+            .expect("collection to select doesn't exist");
     }
 }
 
@@ -379,18 +391,20 @@ impl Eventful for CollectionList {
                 self.sort_list();
             }
             KeyCode::Char('n') => {
-                let collections = self.collections.clone();
+                let create_form =
+                    CreateCollection::new(self.layout.total_size, self.config.clone(), self.colors.clone());
+                let message = RouterMessage::AddDialog(Routes::CreateCollection.into(), Box::new(create_form));
+                self.messager.send(message).expect("failed to create new route");
                 self.navigator
                     .send(Navigate::To(Routes::CreateCollection.into()))
                     .expect("failed to send navigation message");
             }
             KeyCode::Char('e') => {
-                if self.collections.is_empty() {
-                    return Ok(None);
-                }
-                let name = self.collections[self.selected].name().to_string();
+                let edit_form = EditCollection::new(self.layout.total_size, self.config.clone(), self.colors.clone());
+                let message = RouterMessage::AddDialog(Routes::EditCollection.into(), Box::new(edit_form));
+                self.messager.send(message).expect("failed to create new route");
                 self.navigator
-                    .send(Navigate::To(Routes::CreateCollection.into()))
+                    .send(Navigate::To(Routes::EditCollection.into()))
                     .expect("failed to send navigation message");
             }
             KeyCode::Enter => {
@@ -398,7 +412,6 @@ impl Eventful for CollectionList {
                     return Ok(None);
                 }
                 assert!(self.collections.len() > self.selected);
-                //let path = self.collections[self.selected].path().clone();
                 self.navigator
                     .send(Navigate::Leave())
                     .expect("failed to send navigation message");

@@ -1,15 +1,16 @@
 mod json_collection;
 mod json_loader;
 
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::SystemTime;
+
 use chrono::{Datelike, Timelike};
 use hac_config::config::CollectionExtensions;
 use hac_store::collection::Collection;
 use json_loader::JsonLoader;
 use notify::{RecursiveMode, Watcher};
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::SystemTime;
 
 static HAS_CHANGES: AtomicBool = AtomicBool::new(false);
 static HAS_WATCHER: AtomicBool = AtomicBool::new(false);
