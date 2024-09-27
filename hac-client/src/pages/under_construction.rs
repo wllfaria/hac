@@ -7,7 +7,7 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 use crate::ascii::UNDER_CONSTRUCTION;
-use crate::pages::Renderable;
+use crate::renderable::Renderable;
 
 pub struct UnderConstruction<'uc> {
     colors: &'uc hac_colors::colors::Colors,

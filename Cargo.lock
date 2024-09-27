@@ -647,7 +647,6 @@ name = "hac-loader"
 version = "0.2.0"
 dependencies = [
  "anyhow",
- "chrono",
  "dirs",
  "hac-config",
  "hac-store",
@@ -661,6 +660,7 @@ dependencies = [
 name = "hac-store"
 version = "0.2.0"
 dependencies = [
+ "chrono",
  "serde",
 ]
 

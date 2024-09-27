@@ -3,7 +3,7 @@ pub type Key = usize;
 #[derive(Debug)]
 pub enum Entry<T> {
     Full(T),
-    Free(Option<usize>),
+    Free(Option<Key>),
 }
 
 impl<T> Entry<T> {
@@ -12,7 +12,7 @@ impl<T> Entry<T> {
         std::mem::swap(self, &mut Self::full(val))
     }
 
-    pub fn free(idx: Option<usize>) -> Self {
+    pub fn free(idx: Option<Key>) -> Self {
         Self::Free(idx)
     }
 
@@ -24,11 +24,11 @@ impl<T> Entry<T> {
 #[derive(Debug, Default)]
 pub struct Slab<T> {
     inner: Vec<Entry<T>>,
-    next_idx: Option<usize>,
+    next_idx: Option<Key>,
 }
 
 impl<T> Slab<T> {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             inner: vec![],
             next_idx: None,
@@ -111,8 +111,8 @@ impl<T> Slab<T> {
 }
 
 impl<T> IntoIterator for Slab<T> {
-    type Item = T;
     type IntoIter = std::vec::IntoIter<T>;
+    type Item = T;
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner

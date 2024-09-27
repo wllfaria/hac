@@ -1,11 +1,10 @@
+use hac_store::collection::{BodyKind, Collection, CollectionInfo, Folder, HeaderEntry, KeyKind, ReqMethod, Request};
+use hac_store::slab::{Key, Slab};
+
 use super::json_collection::{
     JsonBodyKind, JsonCollection, JsonCollectionInfo, JsonFolder, JsonHeaderEntry, JsonReqMethod, JsonRequest, ReqKind,
 };
-use super::IntoCollection;
-use hac_store::{
-    collection::{BodyKind, Collection, CollectionInfo, Folder, HeaderEntry, KeyKind, ReqMethod, Request},
-    slab::{Key, Slab},
-};
+use super::{IntoCollection, Result};
 
 pub struct JsonLoader(JsonCollection);
 
@@ -16,7 +15,7 @@ impl IntoCollection for JsonLoader {
 }
 
 impl JsonLoader {
-    pub fn parse(content: &str) -> anyhow::Result<Self> {
+    pub fn parse(content: &str) -> Result<Self> {
         match serde_json::from_str(content) {
             Ok(collection) => Ok(Self(collection)),
             Err(e) => todo!("{e:?}"),

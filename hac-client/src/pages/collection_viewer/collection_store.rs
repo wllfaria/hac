@@ -1,13 +1,9 @@
-use hac_core::collection::types::{Request, RequestKind};
-use hac_core::collection::Collection;
-
-use crate::pages::collection_viewer::collection_viewer::CollectionViewerOverlay;
-use crate::pages::collection_viewer::collection_viewer::PaneFocus;
-
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
+
+use crate::pages::collection_viewer::collection_viewer::{CollectionViewerOverlay, PaneFocus};
 
 #[derive(Debug)]
 pub struct CollectionState {
@@ -73,9 +69,7 @@ impl CollectionStore {
     pub fn dispatch(&mut self, action: CollectionStoreAction) {
         if let Some(ref state) = self.state {
             match action {
-                CollectionStoreAction::SetSelectedRequest(maybe_req) => {
-                    state.borrow_mut().selected_request = maybe_req
-                }
+                CollectionStoreAction::SetSelectedRequest(maybe_req) => state.borrow_mut().selected_request = maybe_req,
                 CollectionStoreAction::SetHoveredRequest(maybe_req_id) => {
                     state.borrow_mut().hovered_request = maybe_req_id
                 }
@@ -98,12 +92,8 @@ impl CollectionStore {
                     let entry = dirs.entry(dir_id).or_insert(false);
                     *entry = !*entry;
                 }
-                CollectionStoreAction::SetFocusedPane(pane) => {
-                    state.borrow_mut().focused_pane = pane
-                }
-                CollectionStoreAction::SetSelectedPane(pane) => {
-                    state.borrow_mut().selected_pane = pane
-                }
+                CollectionStoreAction::SetFocusedPane(pane) => state.borrow_mut().focused_pane = pane,
+                CollectionStoreAction::SetSelectedPane(pane) => state.borrow_mut().selected_pane = pane,
                 CollectionStoreAction::SetPendingRequest(is_pending) => {
                     state.borrow_mut().has_pending_request = is_pending;
                 }
@@ -138,15 +128,11 @@ impl CollectionStore {
     }
 
     pub fn get_collection(&self) -> Option<Rc<RefCell<Collection>>> {
-        self.state
-            .as_ref()
-            .map(|state| state.borrow().collection.clone())
+        self.state.as_ref().map(|state| state.borrow().collection.clone())
     }
 
     pub fn get_dirs_expanded(&mut self) -> Option<Rc<RefCell<HashMap<String, bool>>>> {
-        self.state
-            .as_mut()
-            .map(|state| state.borrow().dirs_expanded.clone())
+        self.state.as_mut().map(|state| state.borrow().dirs_expanded.clone())
     }
 
     pub fn push_overlay(&mut self, overlay: CollectionViewerOverlay) {
@@ -182,15 +168,9 @@ impl CollectionStore {
     }
 
     pub fn get_requests(&self) -> Option<Arc<RwLock<Vec<RequestKind>>>> {
-        self.state.as_ref().and_then(|state| {
-            state
-                .borrow()
-                .collection
-                .borrow()
-                .requests
-                .as_ref()
-                .cloned()
-        })
+        self.state
+            .as_ref()
+            .and_then(|state| state.borrow().collection.borrow().requests.as_ref().cloned())
     }
 
     pub fn has_pending_request(&self) -> bool {
@@ -218,9 +198,7 @@ impl CollectionStore {
                 &self.get_dirs_expanded().unwrap().borrow(),
                 &id,
             ) {
-                self.dispatch(CollectionStoreAction::SetHoveredRequest(Some(
-                    next.get_id(),
-                )));
+                self.dispatch(CollectionStoreAction::SetHoveredRequest(Some(next.get_id())));
             };
         }
     }
@@ -242,9 +220,7 @@ impl CollectionStore {
                 &self.get_dirs_expanded().unwrap().borrow(),
                 &id,
             ) {
-                self.dispatch(CollectionStoreAction::SetHoveredRequest(Some(
-                    next.get_id(),
-                )));
+                self.dispatch(CollectionStoreAction::SetHoveredRequest(Some(next.get_id())));
             };
         };
     }
@@ -343,29 +319,17 @@ fn traverse(
     false
 }
 
-fn get_request_by_id(
-    tree: &[RequestKind],
-    dirs_expanded: &HashMap<String, bool>,
-    id: &str,
-) -> RequestKind {
+fn get_request_by_id(tree: &[RequestKind], dirs_expanded: &HashMap<String, bool>, id: &str) -> RequestKind {
     let mut found = false;
     let mut path = vec![];
 
     for node in tree {
-        if traverse(
-            &mut found,
-            &VisitNode::Curr,
-            dirs_expanded,
-            node,
-            id,
-            &mut path,
-        ) {
+        if traverse(&mut found, &VisitNode::Curr, dirs_expanded, node, id, &mut path) {
             break;
         }
     }
 
-    path.pop()
-        .expect("attempting to find an unexisting request")
+    path.pop().expect("attempting to find an unexisting request")
 }
 
 fn find_next_entry(
@@ -388,9 +352,11 @@ fn find_next_entry(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use hac_core::collection::types::{Directory, Request, RequestMethod};
     use std::collections::HashMap;
+
+    use hac_core::collection::types::{Directory, Request, RequestMethod};
+
+    use super::*;
 
     fn create_root_one() -> RequestKind {
         RequestKind::Single(Arc::new(RwLock::new(Request {

@@ -3,6 +3,7 @@ mod ascii;
 mod components;
 pub mod event_pool;
 pub mod pages;
+mod renderable;
 mod router;
 pub mod utils;
 

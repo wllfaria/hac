@@ -29,14 +29,13 @@ async fn main() -> anyhow::Result<()> {
     let guard = setup_tracing()?;
     hac_loader::get_or_create_data_dir();
     hac_loader::get_or_create_collections_dir();
-
-    let collections = hac_loader::collection_loader::collections_metadata()?;
+    hac_loader::collection_loader::get_collections_metadata()?;
 
     let colors = hac_colors::Colors::default();
     let mut config = hac_config::load_config();
     config.dry_run = dry_run;
 
-    let mut app = app::App::new(collections, Rc::new(RefCell::new(config)), Rc::new(colors))?;
+    let mut app = app::App::new(Rc::new(RefCell::new(config)), Rc::new(colors))?;
     app.run().await?;
 
     _ = guard;

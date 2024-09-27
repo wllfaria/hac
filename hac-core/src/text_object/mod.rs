@@ -1,3 +1,5 @@
+pub mod cursor;
+
 use std::collections::HashMap;
 use std::ops::{Add, Sub};
 
@@ -55,8 +57,14 @@ impl<State> Default for TextObject<State> {
     }
 }
 
+impl<T: AsRef<str>> From<T> for TextObject<Readonly> {
+    fn from(value: T) -> Self {
+        Self::new(value.as_ref())
+    }
+}
+
 impl TextObject<Readonly> {
-    pub fn from(content: &str) -> TextObject<Readonly> {
+    pub fn new(content: &str) -> TextObject<Readonly> {
         let content = Rope::from_str(content);
         let line_break = match content.line(0).to_string().contains("\r\n") {
             true => LineBreak::Crlf,

@@ -4,7 +4,6 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_core::command::Command;
 use hac_core::text_object::cursor::Cursor;
 use hac_core::text_object::{TextObject, Write};
-use hac_loader::collection_loader::CollectionMeta;
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
@@ -13,15 +12,13 @@ use super::form_shared::{
 };
 use super::{CollectionListData, Routes};
 use crate::pages::overlay::make_overlay;
-use crate::pages::{Eventful, Renderable};
+use crate::renderable::{Eventful, Renderable};
 use crate::router::{Navigate, RouterMessage};
 use crate::{HacColors, HacConfig};
 
 #[derive(Debug)]
 pub struct EditCollection {
     name: TextObject<Write>,
-    desc: TextObject<Write>,
-    collections: Vec<CollectionMeta>,
     collection_idx: usize,
     size: Rect,
     colors: HacColors,
@@ -39,27 +36,20 @@ impl EditCollection {
             size,
             layout: build_form_layout(size),
             name: TextObject::<Write>::default(),
-            desc: TextObject::<Write>::default(),
             cursor: Cursor::default(),
-            collections: Default::default(),
             collection_idx: 0,
             messager: channel().0,
         }
-    }
-
-    fn reset(&mut self) {
-        self.name = Default::default();
-        self.desc = Default::default();
-        self.cursor = Default::default();
     }
 }
 
 impl Renderable for EditCollection {
     type Input = CollectionListData;
-    type Output = (String, Vec<CollectionMeta>);
+    type Output = String;
 
     fn data(&self, _requester: u8) -> Self::Output {
-        (self.name.to_string(), self.collections.clone())
+        tracing::debug!("{:?}", self.name);
+        self.name.to_string()
     }
 
     fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
@@ -70,11 +60,12 @@ impl Renderable for EditCollection {
     }
 
     fn update(&mut self, data: Self::Input) {
-        if let CollectionListData::EditCollection(idx, data) = data {
+        if let CollectionListData::EditCollection(idx) = data {
             tracing::debug!("new update {data:?}");
-            self.collections = data;
             self.collection_idx = idx;
-            self.name = TextObject::from(self.collections[idx].name()).with_write();
+            self.name =
+                hac_store::collection_meta::get_collection_meta(idx, |meta| TextObject::from(meta.name()).with_write());
+            tracing::debug!("{:?}", self.name);
             self.cursor.move_to_col(self.name.line_len(0) + 1);
         }
     }
@@ -99,9 +90,8 @@ impl Eventful for EditCollection {
 
         match handle_form_key_event(key_event, &mut self.name, &mut self.cursor)? {
             Some(FormEvent::Confirm) => {
-                self.collections = hac_loader::collection_loader::edit_collection(
+                hac_loader::collection_loader::edit_collection(
                     self.name.to_string(),
-                    self.collections.clone(),
                     self.collection_idx,
                     &self.config,
                 )?;
@@ -113,7 +103,6 @@ impl Eventful for EditCollection {
                     .expect("failed to send router message");
             }
             Some(FormEvent::Cancel) => {
-                self.reset();
                 self.messager
                     .send(RouterMessage::Navigate(Navigate::Back))
                     .expect("failed to send navigate message");

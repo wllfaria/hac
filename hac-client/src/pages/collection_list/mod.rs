@@ -11,7 +11,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use delete_collection::DeleteCollection;
 use edit_collection::EditCollection;
 use hac_core::command::Command;
-use hac_loader::collection_loader::{CollectionMeta, ReadableByteSize};
+use hac_store::collection_meta::{CollectionMeta, CollectionMetaSorting, ReadableByteSize};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::Line;
@@ -19,7 +19,7 @@ use ratatui::widgets::{Block, Clear, Paragraph};
 use ratatui::Frame;
 
 use crate::components::list_itemm::ListItem;
-use crate::pages::{Eventful, Renderable};
+use crate::renderable::{Eventful, Renderable};
 use crate::router::{Navigate, Router, RouterMessage};
 use crate::{HacColors, HacConfig};
 
@@ -70,13 +70,12 @@ impl From<Routes> for u8 {
 
 pub fn make_collection_list_router(
     command_sender: Sender<Command>,
-    collections: Vec<CollectionMeta>,
     size: Rect,
     config: HacConfig,
     colors: HacColors,
 ) -> Router {
     let mut router = Router::new(command_sender, colors.clone());
-    let collection_list = CollectionList::new(collections, size, config, colors.clone());
+    let collection_list = CollectionList::new(size, config, colors.clone());
     router.add_route(Routes::ListCollections.into(), Box::new(collection_list));
     router
 }
@@ -89,37 +88,10 @@ struct DashboardLayout {
     total_size: Rect,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-enum SortingKind {
-    #[default]
-    Recent,
-    Name,
-    Size,
-}
-
-impl SortingKind {
-    pub fn next(&self) -> Self {
-        match self {
-            SortingKind::Recent => SortingKind::Name,
-            SortingKind::Name => SortingKind::Size,
-            SortingKind::Size => SortingKind::Recent,
-        }
-    }
-
-    pub fn prev(&self) -> Self {
-        match self {
-            SortingKind::Recent => SortingKind::Size,
-            SortingKind::Name => SortingKind::Recent,
-            SortingKind::Size => SortingKind::Name,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct CollectionList {
     colors: HacColors,
-    sorting_kind: SortingKind,
-    collections: Vec<CollectionMeta>,
+    sorting_kind: CollectionMetaSorting,
     selected: usize,
     config: HacConfig,
     scroll: usize,
@@ -132,15 +104,14 @@ pub struct CollectionList {
 impl CollectionList {
     const LIST_ITEM_HEIGHT: u16 = 3;
 
-    pub fn new(collections: Vec<CollectionMeta>, size: Rect, config: HacConfig, colors: HacColors) -> Self {
+    pub fn new(size: Rect, config: HacConfig, colors: HacColors) -> Self {
         let mut list = Self {
             colors,
             config,
             selected: 0,
             scroll: 0,
-            sorting_kind: SortingKind::default(),
+            sorting_kind: CollectionMetaSorting::default(),
             messager: channel().0,
-            collections,
             layout: build_layout(size, false),
             command_sender: None,
             extended_hint: false,
@@ -150,15 +121,11 @@ impl CollectionList {
     }
 
     fn sort_list(&mut self) {
-        match self.sorting_kind {
-            SortingKind::Name => self.collections.sort_by(|a, b| a.name().cmp(b.name())),
-            SortingKind::Recent => self.collections.sort_by(|a, b| b.modified().cmp(a.modified())),
-            SortingKind::Size => self.collections.sort_by_key(|a| std::cmp::Reverse(a.size())),
-        }
+        hac_store::collection_meta::sort_collection_meta(self.sorting_kind);
     }
 
     fn draw_title(&self, frame: &mut Frame) -> anyhow::Result<()> {
-        let selected_style = |kind: SortingKind| {
+        let selected_style = |kind: CollectionMetaSorting| {
             if kind == self.sorting_kind {
                 self.colors.bright.blue
             } else {
@@ -168,11 +135,11 @@ impl CollectionList {
 
         let title = " HAC ".bg(self.colors.normal.red).fg(self.colors.normal.white);
         let sorting = vec![
-            "Most recent".fg(selected_style(SortingKind::Recent)),
+            "Most recent".fg(selected_style(CollectionMetaSorting::Recent)),
             " ❘ ".fg(self.colors.bright.black),
-            "By name".fg(selected_style(SortingKind::Name)),
+            "By name".fg(selected_style(CollectionMetaSorting::Name)),
             " ❘ ".fg(self.colors.bright.black),
-            "By size".fg(selected_style(SortingKind::Size)),
+            "By size".fg(selected_style(CollectionMetaSorting::Size)),
         ];
 
         let lines = vec![Line::from(title), "".into(), Line::from(sorting)];
@@ -189,34 +156,37 @@ impl CollectionList {
         let layout = self.layout.collections_pane;
         let max_items = self.max_items_onscreen();
 
-        for (ref mut idx, (i, item)) in self
-            .collections
-            .iter()
-            .enumerate()
-            .skip(self.scroll)
-            .take(max_items)
-            .enumerate()
-        {
-            let selected = i == self.selected;
-            let modified = item.modified();
-            let size = item.size().readable_byte_size();
-            let description = format!("{modified} - {size}");
+        let drawer = |collections_meta: &[CollectionMeta]| {
+            for (ref mut idx, (i, item)) in collections_meta
+                .iter()
+                .enumerate()
+                .skip(self.scroll)
+                .take(max_items)
+                .enumerate()
+            {
+                let selected = i == self.selected;
+                let modified = item.modified();
+                let size = item.size().readable_byte_size();
+                let description = format!("{modified} - {size}");
 
-            let item = if selected {
-                ListItem::new(item.name(), Some(&description), self.colors.clone())
-                    .title_style(Style::new().fg(self.colors.normal.red))
-                    .desc_style(Style::new().fg(self.colors.bright.black))
-                    .select()
-            } else {
-                ListItem::new(item.name(), Some(&description), self.colors.clone())
-                    .title_style(Style::new().fg(self.colors.normal.white))
-                    .desc_style(Style::new().fg(self.colors.bright.black))
-            };
-            let size = Rect::new(layout.x, layout.y + (*idx as u16 * 3), layout.width, 2);
-            frame.render_widget(item, size);
+                let item = if selected {
+                    ListItem::new(item.name(), Some(&description), self.colors.clone())
+                        .title_style(Style::new().fg(self.colors.normal.red))
+                        .desc_style(Style::new().fg(self.colors.bright.black))
+                        .select()
+                } else {
+                    ListItem::new(item.name(), Some(&description), self.colors.clone())
+                        .title_style(Style::new().fg(self.colors.normal.white))
+                        .desc_style(Style::new().fg(self.colors.bright.black))
+                };
+                let size = Rect::new(layout.x, layout.y + (*idx as u16 * 3), layout.width, 2);
+                frame.render_widget(item, size);
 
-            *idx += 1;
-        }
+                *idx += 1;
+            }
+        };
+
+        hac_store::collection_meta::collections_meta(drawer);
 
         Ok(())
     }
@@ -288,22 +258,20 @@ impl CollectionList {
 
 #[derive(Debug)]
 pub enum CollectionListData {
-    CreateCollection(Vec<CollectionMeta>),
-    EditCollection(usize, Vec<CollectionMeta>),
-    DeleteCollection(usize, Vec<CollectionMeta>),
+    CreateCollection,
+    EditCollection(usize),
+    DeleteCollection(usize),
 }
 
 impl Renderable for CollectionList {
-    type Input = (String, Vec<CollectionMeta>);
+    type Input = String;
     type Output = CollectionListData;
 
     fn data(&self, requester: u8) -> Self::Output {
         match Routes::try_from(requester) {
-            Ok(Routes::CreateCollection) => CollectionListData::CreateCollection(self.collections.clone()),
-            Ok(Routes::EditCollection) => CollectionListData::EditCollection(self.selected, self.collections.clone()),
-            Ok(Routes::DeleteCollection) => {
-                CollectionListData::DeleteCollection(self.selected, self.collections.clone())
-            }
+            Ok(Routes::CreateCollection) => CollectionListData::CreateCollection,
+            Ok(Routes::EditCollection) => CollectionListData::EditCollection(self.selected),
+            Ok(Routes::DeleteCollection) => CollectionListData::DeleteCollection(self.selected),
             Ok(Routes::ListCollections) => unreachable!(),
             Err(_) => unreachable!(),
         }
@@ -320,7 +288,7 @@ impl Renderable for CollectionList {
 
     fn tick(&mut self) -> anyhow::Result<()> {
         if hac_loader::collection_loader::has_changes() {
-            self.collections = hac_loader::collection_loader::collections_metadata()?;
+            hac_loader::collection_loader::get_collections_metadata()?;
             self.sort_list();
         }
         Ok(())
@@ -339,14 +307,13 @@ impl Renderable for CollectionList {
     }
 
     fn update(&mut self, data: Self::Input) {
-        tracing::debug!("{data:?}");
-        self.collections = data.1;
         self.sort_list();
-        self.selected = self
-            .collections
-            .iter()
-            .position(|col| col.path().to_string_lossy().contains(&data.0))
-            .expect("collection to select doesn't exist");
+        hac_store::collection_meta::collections_meta(|collections_meta| {
+            self.selected = collections_meta
+                .iter()
+                .position(|col| col.path().to_string_lossy().contains(&data))
+                .expect("collection to select doesn't exist");
+        })
     }
 }
 
@@ -363,32 +330,34 @@ impl Eventful for CollectionList {
                 self.extended_hint = !self.extended_hint;
                 self.layout = build_layout(self.layout.total_size, self.extended_hint);
             }
-            KeyCode::Char('j') | KeyCode::Down => {
-                self.selected = usize::min(self.selected + 1, self.collections.len() - 1);
+            KeyCode::Char('j') | KeyCode::Down => hac_store::collection_meta::collections_meta(|collections_meta| {
+                self.selected = usize::min(self.selected + 1, collections_meta.len() - 1);
                 self.maybe_scroll_list();
-            }
+            }),
             KeyCode::Char('k') | KeyCode::Up => {
                 self.selected = self.selected.saturating_sub(1);
                 self.maybe_scroll_list();
             }
-            KeyCode::PageDown => {
+            KeyCode::PageDown => hac_store::collection_meta::collections_meta(|collections_meta| {
                 let half = self.layout.collections_pane.height / 2;
-                self.selected = usize::min(self.selected + half as usize, self.collections.len() - 1);
+                self.selected = usize::min(self.selected + half as usize, collections_meta.len() - 1);
                 self.maybe_scroll_list();
-            }
+            }),
             KeyCode::PageUp => {
                 let half = self.layout.collections_pane.height / 2;
                 self.selected = self.selected.saturating_sub(half.into());
                 self.maybe_scroll_list();
             }
             KeyCode::Char('r') => {
-                self.collections = hac_loader::collection_loader::collections_metadata()?;
+                hac_loader::collection_loader::get_collections_metadata()?;
                 self.sort_list();
             }
             KeyCode::Char('d') if matches!(key_event.modifiers, KeyModifiers::CONTROL) => {
-                let half = self.layout.collections_pane.height / 2;
-                self.selected = usize::min(self.selected + half as usize, self.collections.len() - 1);
-                self.maybe_scroll_list();
+                hac_store::collection_meta::collections_meta(|collections_meta| {
+                    let half = self.layout.collections_pane.height / 2;
+                    self.selected = usize::min(self.selected + half as usize, collections_meta.len() - 1);
+                    self.maybe_scroll_list();
+                });
             }
             KeyCode::Char('d') => {
                 let delete_form =
@@ -403,10 +372,10 @@ impl Eventful for CollectionList {
                 self.selected = 0;
                 self.maybe_scroll_list();
             }
-            KeyCode::Char('G') => {
-                self.selected = self.collections.len() - 1;
+            KeyCode::Char('G') => hac_store::collection_meta::collections_meta(|collections_meta| {
+                self.selected = collections_meta.len() - 1;
                 self.maybe_scroll_list();
-            }
+            }),
             KeyCode::Char('g') => {
                 let half = self.layout.collections_pane.height / 2;
                 self.selected = self.selected.saturating_sub(half.into());
@@ -437,15 +406,15 @@ impl Eventful for CollectionList {
                     .send(RouterMessage::Navigate(Navigate::To(Routes::EditCollection.into())))
                     .expect("failed to send navigation message");
             }
-            KeyCode::Enter => {
-                if self.collections.is_empty() {
-                    return Ok(None);
+            KeyCode::Enter => hac_store::collection_meta::collections_meta(|collections_meta| {
+                if collections_meta.is_empty() {
+                    return;
                 }
-                assert!(self.collections.len() > self.selected);
+                assert!(collections_meta.len() > self.selected);
                 self.messager
-                    .send(RouterMessage::Navigate(Navigate::Leave()))
+                    .send(RouterMessage::Navigate(Navigate::Leave))
                     .expect("failed to send navigation message");
-            }
+            }),
             _ => {}
         }
 

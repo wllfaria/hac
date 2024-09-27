@@ -10,7 +10,7 @@ use ratatui::Frame;
 
 use crate::event_pool::Event;
 use crate::pages::terminal_too_small::TerminalTooSmall;
-use crate::pages::{Eventful, Renderable};
+use crate::renderable::{Eventful, Renderable};
 use crate::{HacColors, MIN_HEIGHT, MIN_WIDTH};
 
 type Key = u8;
@@ -28,7 +28,7 @@ pub enum Navigate {
     /// if a route in a nested router needs to navigate to an entirely different router
     /// the `Leave` variant is responsible for that. It will direct the navigation event
     /// to the parent router of the current active router.
-    Leave(),
+    Leave,
     /// Go back in the navigation history, this completely wipes the current router history,
     /// and close every dialog thats visible
     Back,
@@ -261,7 +261,7 @@ impl Router {
                     (false, true) => panic!("invalid navigation from route to dialog"),
                 }
             }
-            Navigate::Leave() => todo!(),
+            Navigate::Leave => todo!(),
         }
     }
 }

@@ -2,7 +2,7 @@ use std::sync::mpsc::{channel, Sender};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_core::command::Command;
-use hac_loader::collection_loader::CollectionMeta;
+use hac_store::collection_meta::CollectionMeta;
 use ratatui::layout::{Constraint, Flex, Layout, Margin, Rect};
 use ratatui::style::Stylize;
 use ratatui::text::Line;
@@ -12,7 +12,7 @@ use ratatui::Frame;
 use super::{CollectionListData, Routes};
 use crate::ascii::LOGO_ASCII;
 use crate::pages::overlay::make_overlay;
-use crate::pages::{Eventful, Renderable};
+use crate::renderable::{Eventful, Renderable};
 use crate::router::{Navigate, RouterMessage};
 use crate::{HacColors, HacConfig, MIN_HEIGHT, MIN_WIDTH};
 
@@ -29,7 +29,6 @@ pub struct DeleteCollection {
     layout: DeleteCollectionLayout,
     colors: HacColors,
     selected_idx: usize,
-    collections: Vec<CollectionMeta>,
     messager: Sender<RouterMessage>,
     config: HacConfig,
 }
@@ -42,14 +41,13 @@ impl DeleteCollection {
             selected_idx: 0,
             messager: channel().0,
             layout: build_layout(size),
-            collections: Default::default(),
         }
     }
 }
 
 impl Renderable for DeleteCollection {
     type Input = CollectionListData;
-    type Output = (String, Vec<CollectionMeta>);
+    type Output = String;
 
     fn draw(&mut self, frame: &mut Frame, _size: Rect) -> anyhow::Result<()> {
         make_overlay(self.colors.clone(), self.colors.normal.black, 0.15, frame);
@@ -61,39 +59,41 @@ impl Renderable for DeleteCollection {
                 .collect::<Vec<_>>(),
         );
 
-        let name = self.collections[self.selected_idx].name().to_string();
-        let name = format!("are you sure you want to delete {name}?");
-        let name = Paragraph::new(Line::from(name).fg(self.colors.normal.red).centered()).wrap(Wrap { trim: true });
+        let drawer = |meta: &CollectionMeta| {
+            let name = meta.name().to_string();
+            let name = format!("are you sure you want to delete {name}?");
+            let name = Paragraph::new(Line::from(name).fg(self.colors.normal.red).centered()).wrap(Wrap { trim: true });
 
-        let left_button = Paragraph::new(Line::from("[ENTER] CONFIRM").centered())
-            .block(Block::default().borders(Borders::ALL).fg(self.colors.bright.red))
-            .fg(self.colors.normal.black)
-            .bg(self.colors.bright.red)
-            .bold();
+            let left_button = Paragraph::new(Line::from("[ENTER] CONFIRM").centered())
+                .block(Block::default().borders(Borders::ALL).fg(self.colors.bright.red))
+                .fg(self.colors.normal.black)
+                .bg(self.colors.bright.red)
+                .bold();
 
-        let right_button = Paragraph::new(Line::from("[ESC] CANCEL").centered())
-            .block(Block::default().borders(Borders::ALL).fg(self.colors.normal.blue))
-            .fg(self.colors.bright.red)
-            .bg(self.colors.normal.blue)
-            .bold();
+            let right_button = Paragraph::new(Line::from("[ESC] CANCEL").centered())
+                .block(Block::default().borders(Borders::ALL).fg(self.colors.normal.blue))
+                .fg(self.colors.bright.red)
+                .bg(self.colors.normal.blue)
+                .bold();
 
-        frame.render_widget(logo, self.layout.logo);
-        frame.render_widget(name, self.layout.name);
-        frame.render_widget(left_button, self.layout.left_button);
-        frame.render_widget(right_button, self.layout.right_button);
+            frame.render_widget(logo, self.layout.logo);
+            frame.render_widget(name, self.layout.name);
+            frame.render_widget(left_button, self.layout.left_button);
+            frame.render_widget(right_button, self.layout.right_button);
+        };
+
+        hac_store::collection_meta::get_collection_meta(self.selected_idx, drawer);
 
         Ok(())
     }
 
     fn data(&self, _requester: u8) -> Self::Output {
-        let collections = self.collections.clone();
-        let name = collections[self.selected_idx].name().to_string();
-        (name, collections)
+        let name = hac_store::collection_meta::get_collection_meta(self.selected_idx, |meta| meta.name().to_string());
+        name
     }
 
     fn update(&mut self, data: Self::Input) {
-        if let CollectionListData::DeleteCollection(selected_idx, collections) = data {
-            self.collections = collections;
+        if let CollectionListData::DeleteCollection(selected_idx) = data {
             self.selected_idx = selected_idx;
         }
     }
@@ -121,9 +121,9 @@ impl Eventful for DeleteCollection {
                     .expect("failed to send router message");
             }
             KeyCode::Char('o') | KeyCode::Char('y') | KeyCode::Enter => {
-                let name = self.collections[self.selected_idx].name().to_string();
-                self.collections =
-                    hac_loader::collection_loader::delete_collection(name, self.collections.clone(), &self.config)?;
+                let name =
+                    hac_store::collection_meta::get_collection_meta(self.selected_idx, |meta| meta.name().to_string());
+                hac_loader::collection_loader::delete_collection(name, &self.config)?;
                 self.messager
                     .send(RouterMessage::Navigate(Navigate::Back))
                     .expect("failed to send router message");

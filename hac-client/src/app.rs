@@ -2,13 +2,12 @@ use std::io::Stdout;
 use std::sync::mpsc::{Receiver, Sender};
 
 use hac_core::command::Command;
-use hac_loader::collection_loader::CollectionMeta;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
 use crate::event_pool::{Event, EventPool};
 use crate::pages::collection_list::make_collection_list_router;
-use crate::pages::{Eventful, Renderable};
+use crate::renderable::{Eventful, Renderable};
 use crate::router::Router;
 use crate::{HacColors, HacConfig};
 
@@ -38,20 +37,15 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(collections: Vec<CollectionMeta>, config: HacConfig, colors: HacColors) -> anyhow::Result<Self> {
+    pub fn new(config: HacConfig, colors: HacColors) -> anyhow::Result<Self> {
         let terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
         let (command_sender, command_receiver) = std::sync::mpsc::channel();
         let size = terminal.size()?;
 
         let mut router = Router::new(command_sender.clone(), colors.clone());
 
-        let mut collection_list_router = make_collection_list_router(
-            command_sender.clone(),
-            collections.clone(),
-            size,
-            config.clone(),
-            colors.clone(),
-        );
+        let mut collection_list_router =
+            make_collection_list_router(command_sender.clone(), size, config.clone(), colors.clone());
         collection_list_router.attach_parent_navigator(router.message_sender());
         router.add_route(AppRoutes::CollectionListRouter.into(), Box::new(collection_list_router));
 

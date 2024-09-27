@@ -4,7 +4,7 @@ use ratatui::text::Line;
 use ratatui::widgets::{Paragraph, Wrap};
 use ratatui::Frame;
 
-use crate::pages::Renderable;
+use crate::renderable::Renderable;
 use crate::{HacColors, MIN_HEIGHT, MIN_WIDTH};
 
 /// `TerminalTooSmall` as the name suggests is a screen rendered by the

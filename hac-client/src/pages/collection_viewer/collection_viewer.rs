@@ -1,14 +1,3 @@
-use hac_core::collection::types::*;
-use hac_core::command::Command;
-use hac_core::net::request_manager::Response;
-
-use crate::pages::collection_viewer::collection_store::{CollectionStore, CollectionStoreAction};
-use crate::pages::collection_viewer::request_editor::{RequestEditor, RequestEditorEvent};
-use crate::pages::collection_viewer::request_uri::{RequestUri, RequestUriEvent};
-use crate::pages::collection_viewer::response_viewer::{ResponseViewer, ResponseViewerEvent};
-use crate::pages::collection_viewer::sidebar::{self, Sidebar, SidebarEvent};
-use crate::pages::{Eventful, Renderable};
-
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::{Add, Div};
@@ -16,11 +5,20 @@ use std::rc::Rc;
 use std::sync::mpsc::Sender;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use hac_core::command::Command;
+use hac_core::net::request_manager::Response;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Stylize;
 use ratatui::widgets::{Block, Clear};
 use ratatui::Frame;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+
+use crate::pages::collection_viewer::collection_store::{CollectionStore, CollectionStoreAction};
+use crate::pages::collection_viewer::request_editor::{RequestEditor, RequestEditorEvent};
+use crate::pages::collection_viewer::request_uri::{RequestUri, RequestUriEvent};
+use crate::pages::collection_viewer::response_viewer::{ResponseViewer, ResponseViewerEvent};
+use crate::pages::collection_viewer::sidebar::{self, Sidebar, SidebarEvent};
+use crate::pages::{Eventful, Renderable};
 
 #[derive(Debug, PartialEq)]
 pub struct ExplorerLayout {

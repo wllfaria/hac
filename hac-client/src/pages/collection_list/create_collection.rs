@@ -4,7 +4,6 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_core::command::Command;
 use hac_core::text_object::cursor::Cursor;
 use hac_core::text_object::{TextObject, Write};
-use hac_loader::collection_loader::CollectionMeta;
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
@@ -13,7 +12,7 @@ use super::form_shared::{
 };
 use super::{CollectionListData, Routes};
 use crate::pages::overlay::make_overlay;
-use crate::pages::{Eventful, Renderable};
+use crate::renderable::{Eventful, Renderable};
 use crate::router::{Navigate, RouterMessage};
 use crate::{HacColors, HacConfig};
 
@@ -21,7 +20,6 @@ use crate::{HacColors, HacConfig};
 pub struct CreateCollection {
     name: TextObject<Write>,
     desc: TextObject<Write>,
-    collections: Vec<CollectionMeta>,
     size: Rect,
     colors: HacColors,
     cursor: Cursor,
@@ -40,7 +38,6 @@ impl CreateCollection {
             name: TextObject::<Write>::default(),
             desc: TextObject::<Write>::default(),
             cursor: Cursor::default(),
-            collections: Default::default(),
             messager: channel().0,
         }
     }
@@ -54,10 +51,10 @@ impl CreateCollection {
 
 impl Renderable for CreateCollection {
     type Input = CollectionListData;
-    type Output = (String, Vec<CollectionMeta>);
+    type Output = String;
 
     fn data(&self, _requester: u8) -> Self::Output {
-        (self.name.to_string(), self.collections.clone())
+        self.name.to_string()
     }
 
     fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
@@ -68,11 +65,7 @@ impl Renderable for CreateCollection {
         Ok(())
     }
 
-    fn update(&mut self, data: Self::Input) {
-        if let CollectionListData::CreateCollection(data) = data {
-            self.collections = data;
-        }
-    }
+    fn update(&mut self, _data: Self::Input) {}
 
     fn resize(&mut self, new_size: Rect) {
         self.size = new_size;
@@ -94,11 +87,7 @@ impl Eventful for CreateCollection {
 
         match handle_form_key_event(key_event, &mut self.name, &mut self.cursor)? {
             Some(FormEvent::Confirm) => {
-                self.collections = hac_loader::collection_loader::create_collection(
-                    self.name.to_string(),
-                    self.collections.clone(),
-                    &self.config,
-                )?;
+                hac_loader::collection_loader::create_collection(self.name.to_string(), &self.config)?;
                 self.messager
                     .send(RouterMessage::Navigate(Navigate::Back))
                     .expect("failed to send navigate message");

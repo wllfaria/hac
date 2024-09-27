@@ -1,14 +1,16 @@
+mod error;
 mod json_collection;
 mod json_loader;
 
 use std::cell::RefCell;
+use std::fs;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::SystemTime;
 
-use chrono::{Datelike, Timelike};
+use error::{CollectionLoaderError, Result};
 use hac_config::config::CollectionExtensions;
 use hac_store::collection::Collection;
+use hac_store::collection_meta::{CollectionMeta, CollectionModifiedMeta};
 use json_loader::JsonLoader;
 use notify::{RecursiveMode, Watcher};
 
@@ -19,10 +21,10 @@ pub trait IntoCollection {
     fn into_collection(self) -> hac_store::collection::Collection;
 }
 
-pub fn read_collection_file<F, P, T>(file_path: F, parser: P) -> anyhow::Result<Collection>
+pub fn read_collection_file<F, P, T>(file_path: F, parser: P) -> Result<Collection>
 where
     F: AsRef<std::path::Path>,
-    P: FnOnce(&str) -> anyhow::Result<T>,
+    P: FnOnce(&str) -> Result<T>,
     T: IntoCollection,
 {
     match std::fs::read_to_string(file_path.as_ref()) {
@@ -31,10 +33,7 @@ where
     }
 }
 
-pub fn load_collection<F: AsRef<std::path::Path>>(
-    file_path: F,
-    config: &hac_config::Config,
-) -> anyhow::Result<Collection> {
+pub fn load_collection<F: AsRef<std::path::Path>>(file_path: F, config: &hac_config::Config) -> Result<Collection> {
     match config.collection_ext {
         CollectionExtensions::Json => Ok(read_collection_file(file_path, JsonLoader::parse)?),
     }
@@ -48,12 +47,15 @@ fn sanitize_filename(name: &str) -> String {
         .collect()
 }
 
-fn create_persistent_colletion(name: String) -> anyhow::Result<()> {
+fn create_persistent_colletion(name: String) -> Result<()> {
+    // TODO: make this dynamic
     let file_name = format!("{}.json", sanitize_filename(&name));
+    tracing::debug!("creating new collection {file_name} on disk");
     let path = super::collections_dir().join(&file_name);
-    tracing::debug!("{path:?}");
     let collection = json_collection::JsonCollection::new(name, Default::default(), file_name, &path);
-    std::fs::write(&path, serde_json::to_string_pretty(&collection)?)?;
+    let strigified = serde_json::to_string_pretty(&collection).expect("invalid collection format to be stringified");
+    fs::write(&path, &strigified)
+        .map_err(|_| CollectionLoaderError::Create("failed to write collection to disk".into()))?;
     Ok(())
 }
 
@@ -61,259 +63,102 @@ pub fn has_changes() -> bool {
     HAS_CHANGES.load(Ordering::Relaxed)
 }
 
-fn set_watcher() -> anyhow::Result<()> {
+fn set_watcher() {
     if HAS_WATCHER.load(Ordering::Relaxed) {
-        return Ok(());
+        return;
     }
 
-    std::thread::spawn(move || {
-        let mut watcher = notify::recommended_watcher(|res| match res {
-            Ok(_) => HAS_CHANGES.store(true, Ordering::Relaxed),
-            Err(_) => todo!(),
-        })
-        .expect("failed to set watcher");
-        let collections_dir = super::collections_dir();
-        watcher
-            .watch(&collections_dir, RecursiveMode::NonRecursive)
-            .expect("failed to watch collections dir");
-
-        loop {
-            std::thread::sleep(std::time::Duration::from_secs(1));
-        }
-    });
-
-    Ok(())
+    if let Ok(mut watcher) = notify::recommended_watcher(|res| match res {
+        Ok(_) => HAS_CHANGES.store(true, Ordering::Relaxed),
+        Err(_) => tracing::error!("failed to get changes from watcher"),
+    }) {
+        std::thread::spawn(move || {
+            let collections_dir = super::collections_dir();
+            if let Err(e) = watcher.watch(&collections_dir, RecursiveMode::NonRecursive) {
+                tracing::error!("failed to watch collections dir: {}", e);
+                return;
+            }
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+        });
+    };
 }
 
-fn create_virtual_collection(
-    name: String,
-    mut collections: Vec<CollectionMeta>,
-) -> anyhow::Result<Vec<CollectionMeta>> {
+fn create_virtual_collection(name: String) {
     let file_name = format!("{}.json", sanitize_filename(&name));
     let size = name.len();
-    let metadata = CollectionMeta::new(name, file_name.into(), size as u64);
-    collections.push(metadata);
-    Ok(collections)
+    let collection_meta = CollectionMeta::new(name, file_name.into(), size as u64, CollectionModifiedMeta::new());
+    hac_store::collection_meta::push_collection_meta(collection_meta)
 }
 
-pub fn create_collection(
-    name: String,
-    collections: Vec<CollectionMeta>,
-    config: &Rc<RefCell<hac_config::Config>>,
-) -> anyhow::Result<Vec<CollectionMeta>> {
+pub fn create_collection(name: String, config: &Rc<RefCell<hac_config::Config>>) -> Result<()> {
     match config.borrow().dry_run {
-        false => {
-            create_persistent_colletion(name)?;
-            collections_metadata()
-        }
-        true => create_virtual_collection(name, collections),
+        false => create_persistent_colletion(name)?,
+        true => create_virtual_collection(name),
     }
+    Ok(())
 }
 
-fn edit_persistent_collection(entry: &mut CollectionMeta) -> anyhow::Result<()> {
+fn edit_persistent_collection(entry: &mut CollectionMeta) -> Result<()> {
     let original_path = entry.path().clone();
-    let mut new_path = entry.path().clone();
-    new_path.pop();
-    let new_path = new_path.join(entry.name());
-    std::fs::rename(original_path, new_path)?;
+    entry.path_mut().pop();
+    let name = entry.name().to_string();
+    let new_path = entry.path_mut().join(name);
+    std::fs::rename(original_path, new_path)
+        .map_err(|_| CollectionLoaderError::Rename("failed to rename collection".into()))?;
     Ok(())
 }
 
-pub fn edit_collection(
-    name: String,
-    mut collections: Vec<CollectionMeta>,
-    item_idx: usize,
-    config: &Rc<RefCell<hac_config::Config>>,
-) -> anyhow::Result<Vec<CollectionMeta>> {
-    let entry = &mut collections[item_idx];
-    match config.borrow().dry_run {
-        false => {
-            edit_persistent_collection(entry)?;
-            collections_metadata()
+pub fn edit_collection(name: String, item_idx: usize, config: &Rc<RefCell<hac_config::Config>>) -> Result<()> {
+    hac_store::collection_meta::get_collection_meta_mut(item_idx, |entry| -> Result<()> {
+        match config.borrow().dry_run {
+            false => edit_persistent_collection(entry),
+            true => {
+                entry.path_mut().pop();
+                *entry.path_mut() = entry.path().join(&name);
+                *entry.name_mut() = name;
+                Ok(())
+            }
         }
-        true => {
-            entry.path.pop();
-            entry.path = entry.path.join(&name);
-            entry.name = name;
-            Ok(collections)
-        }
-    }
+    })
 }
 
-fn delete_persistent_collection(file_name: String, collections: Vec<CollectionMeta>) -> anyhow::Result<()> {
-    let path = collections
-        .iter()
-        .find(|c| c.path().to_string_lossy().contains(&file_name))
-        .expect("attempted to delete non-existing collection")
-        .path();
-    std::fs::remove_file(path)?;
+fn delete_persistent_collection(file_name: String) -> Result<()> {
+    let collection_meta = hac_store::collection_meta::remove_collection_meta(file_name, |meta| meta);
+    std::fs::remove_file(collection_meta.path())
+        .map_err(|_| CollectionLoaderError::Remove("failed to remove collection".into()))?;
     Ok(())
 }
 
-pub fn delete_collection(
-    file_name: String,
-    mut collections: Vec<CollectionMeta>,
-    config: &Rc<RefCell<hac_config::Config>>,
-) -> anyhow::Result<Vec<CollectionMeta>> {
+pub fn delete_collection(file_name: String, config: &Rc<RefCell<hac_config::Config>>) -> Result<()> {
     match config.borrow().dry_run {
-        false => {
-            delete_persistent_collection(file_name, collections)?;
-            collections_metadata()
-        }
-        true => {
-            collections.retain(|c| !c.path().to_string_lossy().contains(&file_name));
-            Ok(collections)
-        }
+        false => delete_persistent_collection(file_name)?,
+        true => hac_store::collection_meta::remove_collection_meta(file_name, |_| ()),
     }
+    Ok(())
 }
 
-// TODO: i probably want to introduce some metadata storage, or caching to know
-// total requests, total saved responses, and other infos without having to read
-// the entire collection.
-#[derive(Debug, Clone)]
-pub struct CollectionMeta {
-    name: String,
-    path: std::path::PathBuf,
-    size: u64,
-    modified: CollectionModifiedMeta,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CollectionModifiedMeta {
-    year: i32,
-    month: u32,
-    day: u32,
-    hour: u32,
-    minutes: u32,
-    system_time: SystemTime,
-}
-
-impl CollectionModifiedMeta {
-    pub fn new() -> Self {
-        std::time::SystemTime::now().into()
-    }
-}
-
-impl Default for CollectionModifiedMeta {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl PartialOrd for CollectionModifiedMeta {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.system_time.cmp(&other.system_time))
-    }
-}
-
-impl Ord for CollectionModifiedMeta {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.system_time.cmp(&other.system_time)
-    }
-}
-
-impl std::fmt::Display for CollectionModifiedMeta {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}-{}-{} {}:{}",
-            self.year, self.month, self.day, self.hour, self.minutes,
-        )
-    }
-}
-
-impl CollectionMeta {
-    pub fn new(name: String, path: std::path::PathBuf, size: u64) -> Self {
-        Self {
-            name,
-            path,
-            size,
-            modified: CollectionModifiedMeta::new(),
-        }
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn path(&self) -> &std::path::PathBuf {
-        &self.path
-    }
-
-    pub fn modified(&self) -> &CollectionModifiedMeta {
-        &self.modified
-    }
-
-    pub fn size(&self) -> u64 {
-        self.size
-    }
-}
-
-pub trait ReadableByteSize {
-    fn readable_byte_size(&self) -> String;
-}
-
-fn readable_byte_size<N>(val: N) -> String
-where
-    N: Copy + Into<u64>,
-{
-    let units = ["B", "KB", "MB", "GB", "TB", "PB"];
-    let mut size = val.into() as f64;
-    let mut unit_index = 0;
-
-    while size >= 1024.0 && unit_index < units.len() - 1 {
-        size /= 1024.0;
-        unit_index += 1;
-    }
-
-    format!("{:.2}{}", size, units[unit_index])
-}
-
-impl ReadableByteSize for u64 {
-    fn readable_byte_size(&self) -> String {
-        readable_byte_size(*self)
-    }
-}
-
-impl From<SystemTime> for CollectionModifiedMeta {
-    fn from(value: SystemTime) -> Self {
-        let datetime = chrono::DateTime::<chrono::Utc>::from(value);
-        let year = datetime.year();
-        let month = datetime.day();
-        let day = datetime.month();
-        let hour = datetime.hour();
-        let minutes = datetime.minute();
-
-        CollectionModifiedMeta {
-            year,
-            month,
-            day,
-            hour,
-            minutes,
-            system_time: value,
-        }
-    }
-}
-
-pub fn collections_metadata() -> anyhow::Result<Vec<CollectionMeta>> {
-    set_watcher()?;
-    let entries = std::fs::read_dir(super::collections_dir())?.flatten();
+pub fn get_collections_metadata() -> Result<()> {
+    set_watcher();
+    let entries = std::fs::read_dir(super::collections_dir())
+        .map_err(|_| CollectionLoaderError::ReadDir("failed to read collections directory".into()))?
+        .flatten();
     let mut collections = vec![];
     for entry in entries {
         let name = entry.file_name().to_string_lossy().to_string();
         let path = entry.path();
-        let metadata = entry.metadata()?;
-        let modified = metadata.modified()?.into();
+        let metadata = entry
+            .metadata()
+            .map_err(|_| CollectionLoaderError::Read("failed to read collection metadata".into()))?;
+        let modified = metadata
+            .modified()
+            .map_err(|_| CollectionLoaderError::Read("failed to read collection metadata".into()))?
+            .into();
         let size = metadata.len();
-        collections.push(CollectionMeta {
-            name,
-            path,
-            modified,
-            size,
-        });
+        collections.push(CollectionMeta::new(name, path, size, modified));
     }
-
+    hac_store::collection_meta::set_collections_meta(collections);
     HAS_CHANGES.store(false, Ordering::Relaxed);
-
-    Ok(collections)
+    Ok(())
 }
