@@ -1,4 +1,5 @@
 mod create_collection;
+mod delete_collection;
 mod edit_collection;
 mod form_shared;
 
@@ -7,6 +8,7 @@ use std::sync::mpsc::{channel, Sender};
 
 use create_collection::CreateCollection;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use delete_collection::DeleteCollection;
 use edit_collection::EditCollection;
 use hac_core::command::Command;
 use hac_loader::collection_loader::{CollectionMeta, ReadableByteSize};
@@ -27,15 +29,30 @@ pub enum Routes {
     ListCollections,
     CreateCollection,
     EditCollection,
+    DeleteCollection,
 }
 
-impl From<u8> for Routes {
-    fn from(value: u8) -> Self {
+#[derive(Debug)]
+pub struct InvalidRouteNumber(u8);
+
+impl std::error::Error for InvalidRouteNumber {}
+
+impl std::fmt::Display for InvalidRouteNumber {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "number {} is not a valid route number", self.0)
+    }
+}
+
+impl TryFrom<u8> for Routes {
+    type Error = InvalidRouteNumber;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0 => Routes::ListCollections,
-            1 => Routes::CreateCollection,
-            2 => Routes::EditCollection,
-            _ => panic!("invalid route number"),
+            0 => Ok(Routes::ListCollections),
+            1 => Ok(Routes::CreateCollection),
+            2 => Ok(Routes::EditCollection),
+            3 => Ok(Routes::DeleteCollection),
+            _ => Err(InvalidRouteNumber(value)),
         }
     }
 }
@@ -46,6 +63,7 @@ impl From<Routes> for u8 {
             Routes::ListCollections => 0,
             Routes::CreateCollection => 1,
             Routes::EditCollection => 2,
+            Routes::DeleteCollection => 3,
         }
     }
 }
@@ -105,7 +123,6 @@ pub struct CollectionList {
     selected: usize,
     config: HacConfig,
     scroll: usize,
-    navigator: Sender<Navigate>,
     messager: Sender<RouterMessage>,
     layout: DashboardLayout,
     pub command_sender: Option<Sender<Command>>,
@@ -122,7 +139,6 @@ impl CollectionList {
             selected: 0,
             scroll: 0,
             sorting_kind: SortingKind::default(),
-            navigator: channel().0,
             messager: channel().0,
             collections,
             layout: build_layout(size, false),
@@ -274,6 +290,7 @@ impl CollectionList {
 pub enum CollectionListData {
     CreateCollection(Vec<CollectionMeta>),
     EditCollection(usize, Vec<CollectionMeta>),
+    DeleteCollection(usize, Vec<CollectionMeta>),
 }
 
 impl Renderable for CollectionList {
@@ -281,10 +298,14 @@ impl Renderable for CollectionList {
     type Output = CollectionListData;
 
     fn data(&self, requester: u8) -> Self::Output {
-        match Routes::from(requester) {
-            Routes::CreateCollection => CollectionListData::CreateCollection(self.collections.clone()),
-            Routes::ListCollections => CollectionListData::CreateCollection(self.collections.clone()),
-            Routes::EditCollection => CollectionListData::EditCollection(self.selected, self.collections.clone()),
+        match Routes::try_from(requester) {
+            Ok(Routes::CreateCollection) => CollectionListData::CreateCollection(self.collections.clone()),
+            Ok(Routes::EditCollection) => CollectionListData::EditCollection(self.selected, self.collections.clone()),
+            Ok(Routes::DeleteCollection) => {
+                CollectionListData::DeleteCollection(self.selected, self.collections.clone())
+            }
+            Ok(Routes::ListCollections) => unreachable!(),
+            Err(_) => unreachable!(),
         }
     }
 
@@ -305,8 +326,7 @@ impl Renderable for CollectionList {
         Ok(())
     }
 
-    fn attach_navigator(&mut self, navigator: Sender<Navigate>, messager: Sender<RouterMessage>) {
-        self.navigator = navigator;
+    fn attach_navigator(&mut self, messager: Sender<RouterMessage>) {
         self.messager = messager;
     }
 
@@ -319,6 +339,7 @@ impl Renderable for CollectionList {
     }
 
     fn update(&mut self, data: Self::Input) {
+        tracing::debug!("{data:?}");
         self.collections = data.1;
         self.sort_list();
         self.selected = self
@@ -369,6 +390,15 @@ impl Eventful for CollectionList {
                 self.selected = usize::min(self.selected + half as usize, self.collections.len() - 1);
                 self.maybe_scroll_list();
             }
+            KeyCode::Char('d') => {
+                let delete_form =
+                    DeleteCollection::new(self.layout.total_size, self.colors.clone(), self.config.clone());
+                let message = RouterMessage::AddDialog(Routes::DeleteCollection.into(), Box::new(delete_form));
+                self.messager.send(message).expect("failed to create new route");
+                self.messager
+                    .send(RouterMessage::Navigate(Navigate::To(Routes::DeleteCollection.into())))
+                    .expect("failed to send navigation message");
+            }
             KeyCode::Char('u') if matches!(key_event.modifiers, KeyModifiers::CONTROL) => {
                 self.selected = 0;
                 self.maybe_scroll_list();
@@ -395,16 +425,16 @@ impl Eventful for CollectionList {
                     CreateCollection::new(self.layout.total_size, self.config.clone(), self.colors.clone());
                 let message = RouterMessage::AddDialog(Routes::CreateCollection.into(), Box::new(create_form));
                 self.messager.send(message).expect("failed to create new route");
-                self.navigator
-                    .send(Navigate::To(Routes::CreateCollection.into()))
+                self.messager
+                    .send(RouterMessage::Navigate(Navigate::To(Routes::CreateCollection.into())))
                     .expect("failed to send navigation message");
             }
             KeyCode::Char('e') => {
                 let edit_form = EditCollection::new(self.layout.total_size, self.config.clone(), self.colors.clone());
                 let message = RouterMessage::AddDialog(Routes::EditCollection.into(), Box::new(edit_form));
                 self.messager.send(message).expect("failed to create new route");
-                self.navigator
-                    .send(Navigate::To(Routes::EditCollection.into()))
+                self.messager
+                    .send(RouterMessage::Navigate(Navigate::To(Routes::EditCollection.into())))
                     .expect("failed to send navigation message");
             }
             KeyCode::Enter => {
@@ -412,8 +442,8 @@ impl Eventful for CollectionList {
                     return Ok(None);
                 }
                 assert!(self.collections.len() > self.selected);
-                self.navigator
-                    .send(Navigate::Leave())
+                self.messager
+                    .send(RouterMessage::Navigate(Navigate::Leave()))
                     .expect("failed to send navigation message");
             }
             _ => {}

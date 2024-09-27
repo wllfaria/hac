@@ -52,7 +52,7 @@ impl App {
             config.clone(),
             colors.clone(),
         );
-        collection_list_router.attach_parent_navigator(router.navigate_sender());
+        collection_list_router.attach_parent_navigator(router.message_sender());
         router.add_route(AppRoutes::CollectionListRouter.into(), Box::new(collection_list_router));
 
         Ok(Self {
@@ -82,7 +82,7 @@ impl App {
                 }
             }
 
-            if let Some(event) = self.event_pool.next() {
+            if let Some(event) = self.event_pool.next_event() {
                 match event {
                     Event::Tick => self.router.tick()?,
                     Event::Resize(new_size) => self.router.resize(new_size),

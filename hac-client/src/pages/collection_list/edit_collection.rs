@@ -28,7 +28,6 @@ pub struct EditCollection {
     cursor: Cursor,
     config: HacConfig,
     layout: FormLayout,
-    navigator: Sender<Navigate>,
     messager: Sender<RouterMessage>,
 }
 
@@ -44,7 +43,6 @@ impl EditCollection {
             cursor: Cursor::default(),
             collections: Default::default(),
             collection_idx: 0,
-            navigator: channel().0,
             messager: channel().0,
         }
     }
@@ -73,6 +71,7 @@ impl Renderable for EditCollection {
 
     fn update(&mut self, data: Self::Input) {
         if let CollectionListData::EditCollection(idx, data) = data {
+            tracing::debug!("new update {data:?}");
             self.collections = data;
             self.collection_idx = idx;
             self.name = TextObject::from(self.collections[idx].name()).with_write();
@@ -85,8 +84,7 @@ impl Renderable for EditCollection {
         self.layout = build_form_layout(new_size);
     }
 
-    fn attach_navigator(&mut self, navigator: Sender<Navigate>, messager: Sender<RouterMessage>) {
-        self.navigator = navigator;
+    fn attach_navigator(&mut self, messager: Sender<RouterMessage>) {
         self.messager = messager;
     }
 }
@@ -101,15 +99,27 @@ impl Eventful for EditCollection {
 
         match handle_form_key_event(key_event, &mut self.name, &mut self.cursor)? {
             Some(FormEvent::Confirm) => {
-                self.navigator
-                    .send(Navigate::To(Routes::ListCollections.into()))
+                self.collections = hac_loader::collection_loader::edit_collection(
+                    self.name.to_string(),
+                    self.collections.clone(),
+                    self.collection_idx,
+                    &self.config,
+                )?;
+                self.messager
+                    .send(RouterMessage::Navigate(Navigate::Back))
                     .expect("failed to send navigate message");
+                self.messager
+                    .send(RouterMessage::DelDialog(Routes::EditCollection.into()))
+                    .expect("failed to send router message");
             }
             Some(FormEvent::Cancel) => {
                 self.reset();
-                self.navigator
-                    .send(Navigate::To(Routes::ListCollections.into()))
+                self.messager
+                    .send(RouterMessage::Navigate(Navigate::Back))
                     .expect("failed to send navigate message");
+                self.messager
+                    .send(RouterMessage::DelDialog(Routes::EditCollection.into()))
+                    .expect("failed to send router message");
             }
             _ => {}
         }

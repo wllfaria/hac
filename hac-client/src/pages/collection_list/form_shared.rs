@@ -1,7 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_core::text_object::cursor::Cursor;
 use hac_core::text_object::{TextObject, Write};
-use ratatui::layout::{Constraint, Flex, Layout, Rect};
+use ratatui::layout::{Constraint, Flex, Layout, Margin, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
@@ -33,7 +33,7 @@ pub fn build_form_layout(area: Rect) -> FormLayout {
         .flex(Flex::End)
         .areas(form);
 
-    let form = form.inner(&ratatui::layout::Margin::new(2, 0));
+    let form = form.inner(&Margin::new(2, 0));
 
     let [logo, _, name_input, _, hint] = Layout::vertical([
         Constraint::Length(LOGO_ASCII.len() as u16),

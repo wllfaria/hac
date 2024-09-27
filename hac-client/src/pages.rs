@@ -14,7 +14,7 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 
 use crate::event_pool::Event;
-use crate::router::{Navigate, RouterMessage};
+use crate::router::RouterMessage;
 
 /// A `Renderable` is anything that is a top level page and can be drawn to the screen
 pub trait Renderable {
@@ -34,7 +34,7 @@ pub trait Renderable {
 
     /// each route can, (and must) have a navigator, this is how you attach one
     #[allow(unused_variables)]
-    fn attach_navigator(&mut self, navigator: Sender<Navigate>, messager: Sender<RouterMessage>) {}
+    fn attach_navigator(&mut self, messager: Sender<RouterMessage>) {}
 
     /// pages need to adapt to change of sizes on the application, this function is called
     /// by the top level event loop whenever a resize event is produced

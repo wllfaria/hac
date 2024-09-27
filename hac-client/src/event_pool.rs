@@ -1,7 +1,8 @@
+use std::ops::Div;
+
 use crossterm::event::{Event as CrosstermEvent, KeyEventKind};
 use futures::{FutureExt, StreamExt};
 use ratatui::layout::Rect;
-use std::ops::Div;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Event {
@@ -75,7 +76,7 @@ impl EventPool {
     }
 
     #[cfg_attr(test, mutants::skip)]
-    pub fn next(&mut self) -> Option<Event> {
+    pub fn next_event(&mut self) -> Option<Event> {
         self.event_rx.recv().ok()
     }
 }

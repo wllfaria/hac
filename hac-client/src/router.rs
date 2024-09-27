@@ -1,4 +1,4 @@
-use std::any::{Any, TypeId};
+use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::mpsc::{Receiver, Sender};
@@ -31,7 +31,7 @@ pub enum Navigate {
     Leave(),
     /// Go back in the navigation history, this completely wipes the current router history,
     /// and close every dialog thats visible
-    Back(Key),
+    Back,
 }
 
 pub trait AnyCommand {}
@@ -43,7 +43,7 @@ pub trait AnyRenderable: Debug {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()>;
     fn data(&self, requester: Key) -> Box<dyn Any>;
     fn update(&mut self, input: Box<dyn Any>);
-    fn attach_navigator(&mut self, navigator: Sender<Navigate>, messager: Sender<RouterMessage>);
+    fn attach_navigator(&mut self, messager: Sender<RouterMessage>);
     fn resize(&mut self, new_size: Rect);
     fn register_command_handler(&mut self, sender: Sender<Command>);
     fn handle_command(&mut self, command: Command) -> anyhow::Result<()>;
@@ -68,8 +68,8 @@ impl<K: AnyCommand, T: Renderable + Eventful<Result = K> + Debug> AnyRenderable 
         <Self as Renderable>::update(self, *input);
     }
 
-    fn attach_navigator(&mut self, navigator: Sender<Navigate>, messager: Sender<RouterMessage>) {
-        <Self as Renderable>::attach_navigator(self, navigator, messager);
+    fn attach_navigator(&mut self, messager: Sender<RouterMessage>) {
+        <Self as Renderable>::attach_navigator(self, messager);
     }
 
     fn resize(&mut self, new_size: Rect) {
@@ -102,6 +102,8 @@ pub enum RouterMessage {
     AddRoute(Key, Box<dyn AnyRenderable<Ev = Command>>),
     AddDialog(Key, Box<dyn AnyRenderable<Ev = Command>>),
     DelRoute(Key),
+    DelDialog(Key),
+    Navigate(Navigate),
 }
 
 #[derive(Debug)]
@@ -114,15 +116,12 @@ pub struct Router {
     command_sender: Sender<Command>,
     message_receiver: Receiver<RouterMessage>,
     message_sender: Sender<RouterMessage>,
-    navigate_sender: Sender<Navigate>,
-    navigate_receiver: Receiver<Navigate>,
-    parent_navigator: Option<Sender<Navigate>>,
+    parent_messager: Option<Sender<RouterMessage>>,
     too_small: TerminalTooSmall,
 }
 
 impl Router {
     pub fn new(command_sender: Sender<Command>, colors: HacColors) -> Self {
-        let (navigate_sender, navigate_receiver) = std::sync::mpsc::channel();
         let (message_sender, message_receiver) = std::sync::mpsc::channel();
         Self {
             routes: Default::default(),
@@ -133,25 +132,23 @@ impl Router {
             message_receiver,
             message_sender,
             command_sender,
-            navigate_sender,
-            navigate_receiver,
-            parent_navigator: None,
+            parent_messager: None,
             too_small: TerminalTooSmall::new(colors.clone()),
         }
     }
 
-    pub fn navigate_sender(&self) -> Sender<Navigate> {
-        self.navigate_sender.clone()
+    pub fn message_sender(&self) -> Sender<RouterMessage> {
+        self.message_sender.clone()
     }
 
     pub fn add_route(&mut self, key: Key, mut route: Box<dyn AnyRenderable<Ev = Command>>) {
-        route.attach_navigator(self.navigate_sender.clone(), self.message_sender.clone());
+        route.attach_navigator(self.message_sender.clone());
         route.register_command_handler(self.command_sender.clone());
         self.routes.insert(key, route);
     }
 
     pub fn add_dialog(&mut self, key: Key, mut dialog: Box<dyn AnyRenderable<Ev = Command>>) {
-        dialog.attach_navigator(self.navigate_sender.clone(), self.message_sender.clone());
+        dialog.attach_navigator(self.message_sender.clone());
         dialog.register_command_handler(self.command_sender.clone());
         self.dialogs.insert(key, dialog);
     }
@@ -162,8 +159,8 @@ impl Router {
         Ok(())
     }
 
-    pub fn attach_parent_navigator(&mut self, navigator: Sender<Navigate>) {
-        self.parent_navigator = Some(navigator);
+    pub fn attach_parent_navigator(&mut self, messager: Sender<RouterMessage>) {
+        self.parent_messager = Some(messager);
     }
 
     fn get_active_route(&mut self) -> &mut Box<dyn AnyRenderable<Ev = Command>> {
@@ -198,6 +195,8 @@ impl Router {
                     route.update(data)
                 } else if self.dialogs.contains_key(&route) {
                     self.dialog_stack.push(route);
+                    self.history.push(route);
+                    tracing::debug!("navigating to -> {} {}", self.history.len(), self.dialog_stack.len());
                     let dialog = self
                         .get_active_dialog()
                         .expect("attempt to navigate to non registered dialog");
@@ -206,45 +205,63 @@ impl Router {
                     panic!("tried to navigate to an unknown route");
                 }
             }
-            Navigate::Back(route) => {
-                tracing::trace!("navigating back from route: {route}");
+            Navigate::Back => {
                 if self.history.len() <= 1 {
                     return;
                 }
-
-                let curr_route = match self.get_active_dialog() {
-                    Some(dialog) => dialog,
-                    None => self.get_active_route(),
-                };
-                let data = curr_route.data(route);
 
                 // SAFETY: we just checked if these exists
                 let curr = self.history.pop().unwrap();
                 let prev = *self.history.last().unwrap();
 
-                self.dialogs.contains_key(&curr).then(|| self.dialog_stack.pop());
+                // there are only 3 valid scenarios here.
+                // 1. we are currently on a route, navigating to a previous route;
+                // 2. we are currently on a dialog, navigating to a previous route;
+                // 3. we are currently on a dialog, navigating to a previous dialog.
+                //
+                // navigating from a route back to a dialog is invalid as we always close
+                // dialogs when navigating to routes.
 
-                let route = match self.dialogs.contains_key(&prev) {
-                    true => self
-                        .get_active_dialog()
-                        .expect("previous route is a dialog, but its not on the stack"),
-                    false => self
-                        .routes
-                        .get_mut(&prev)
-                        .expect("previous route is not registered... how?"),
-                };
+                let curr_is_dialog = self.dialogs.contains_key(&curr);
+                let prev_is_dialog = self.dialogs.contains_key(&prev);
+                tracing::debug!("im really confused, {} {}", self.history.len(), self.dialog_stack.len());
 
-                route.update(data);
+                match (curr_is_dialog, prev_is_dialog) {
+                    // we are on a route, navigating to a route
+                    (false, false) => {
+                        let curr_route = self.get_active_route();
+                        let data = curr_route.data(prev);
+                        self.active_route = prev;
+                        let new_route = self.get_active_route();
+                        new_route.update(data);
+                    }
+                    // we are on a dialog, navigating to a route
+                    (true, false) => {
+                        let dialog = self
+                            .get_active_dialog()
+                            .expect("invalid navigation from dialog without displaying a dialog");
+                        let data = dialog.data(prev);
+                        self.dialog_stack.pop();
+                        self.active_route = prev;
+                        let new_route = self.get_active_route();
+                        new_route.update(data);
+                    }
+                    // we are on a dialog, navigating to a dialog
+                    (true, true) => {
+                        let curr_dialog = self
+                            .get_active_dialog()
+                            .expect("invalid navigation from dialog without displaying a dialog");
+                        let data = curr_dialog.data(prev);
+                        self.dialog_stack.pop();
+                        let new_dialog = self
+                            .get_active_dialog()
+                            .expect("invalid navigation from dialog to dialog without a previous dialog");
+                        new_dialog.update(data);
+                    }
+                    (false, true) => panic!("invalid navigation from route to dialog"),
+                }
             }
             Navigate::Leave() => todo!(),
-            //self.history.clear();
-            //self.dialog_stack.clear();
-            //
-            //self.parent_navigator
-            //    .as_mut()
-            //    .unwrap()
-            //    .send(Navigate::To(route, data))
-            //    .expect("failed to send navigation command");
         }
     }
 }
@@ -262,13 +279,20 @@ impl Renderable for Router {
         match self.message_receiver.try_recv() {
             Ok(RouterMessage::AddRoute(key, route)) => self.add_route(key, route),
             Ok(RouterMessage::AddDialog(key, route)) => self.add_dialog(key, route),
-            Ok(RouterMessage::DelRoute(key)) => _ = self.routes.remove(&key),
+            Ok(RouterMessage::DelRoute(key)) => {
+                tracing::trace!("dropping route with key: {key}");
+                self.history.retain(|&k| k != key);
+                self.routes.remove(&key);
+            }
+            Ok(RouterMessage::DelDialog(key)) => {
+                tracing::trace!("dropping dialog with key: {key}");
+                self.dialog_stack.retain(|&k| k != key);
+                self.history.retain(|&k| k != key);
+                self.dialogs.remove(&key);
+            }
+            Ok(RouterMessage::Navigate(navigation)) => self.navigate(navigation),
             Err(_) => {}
         };
-
-        if let Ok(navigation) = self.navigate_receiver.try_recv() {
-            self.navigate(navigation)
-        }
 
         let route = self.get_active_route();
         route.draw(frame, size)?;

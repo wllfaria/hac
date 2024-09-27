@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -15,12 +17,15 @@ pub struct JsonCollection {
 }
 
 impl JsonCollection {
-    pub fn new(name: String, description: String, file_name: String, path: &std::path::PathBuf) -> Self {
+    pub fn new<P>(name: String, description: String, file_name: String, path: P) -> Self
+    where
+        P: AsRef<Path>,
+    {
         Self {
             info: JsonCollectionInfo { name, description },
             file_info: JsonInfo {
                 name: file_name,
-                path: path.clone(),
+                path: path.as_ref().to_path_buf(),
             },
             requests: Default::default(),
         }

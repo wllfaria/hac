@@ -110,6 +110,36 @@ pub fn create_collection(
     }
 }
 
+fn edit_persistent_collection(entry: &mut CollectionMeta) -> anyhow::Result<()> {
+    let original_path = entry.path().clone();
+    let mut new_path = entry.path().clone();
+    new_path.pop();
+    let new_path = new_path.join(entry.name());
+    std::fs::rename(original_path, new_path)?;
+    Ok(())
+}
+
+pub fn edit_collection(
+    name: String,
+    mut collections: Vec<CollectionMeta>,
+    item_idx: usize,
+    config: &Rc<RefCell<hac_config::Config>>,
+) -> anyhow::Result<Vec<CollectionMeta>> {
+    let entry = &mut collections[item_idx];
+    match config.borrow().dry_run {
+        false => {
+            edit_persistent_collection(entry)?;
+            collections_metadata()
+        }
+        true => {
+            entry.path.pop();
+            entry.path = entry.path.join(&name);
+            entry.name = name;
+            Ok(collections)
+        }
+    }
+}
+
 fn delete_persistent_collection(file_name: String, collections: Vec<CollectionMeta>) -> anyhow::Result<()> {
     let path = collections
         .iter()

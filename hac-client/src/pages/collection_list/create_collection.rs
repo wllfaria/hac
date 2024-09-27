@@ -27,7 +27,6 @@ pub struct CreateCollection {
     cursor: Cursor,
     config: HacConfig,
     layout: FormLayout,
-    navigator: Sender<Navigate>,
     messager: Sender<RouterMessage>,
 }
 
@@ -42,7 +41,6 @@ impl CreateCollection {
             desc: TextObject::<Write>::default(),
             cursor: Cursor::default(),
             collections: Default::default(),
-            navigator: channel().0,
             messager: channel().0,
         }
     }
@@ -81,8 +79,7 @@ impl Renderable for CreateCollection {
         self.layout = build_form_layout(new_size);
     }
 
-    fn attach_navigator(&mut self, navigator: Sender<Navigate>, messager: Sender<RouterMessage>) {
-        self.navigator = navigator;
+    fn attach_navigator(&mut self, messager: Sender<RouterMessage>) {
         self.messager = messager;
     }
 }
@@ -102,15 +99,21 @@ impl Eventful for CreateCollection {
                     self.collections.clone(),
                     &self.config,
                 )?;
-                self.navigator
-                    .send(Navigate::Back(Routes::ListCollections.into()))
+                self.messager
+                    .send(RouterMessage::Navigate(Navigate::Back))
                     .expect("failed to send navigate message");
+                self.messager
+                    .send(RouterMessage::DelDialog(Routes::CreateCollection.into()))
+                    .expect("failed to send router message");
             }
             Some(FormEvent::Cancel) => {
                 self.reset();
-                self.navigator
-                    .send(Navigate::To(Routes::ListCollections.into()))
+                self.messager
+                    .send(RouterMessage::Navigate(Navigate::Back))
                     .expect("failed to send navigate message");
+                self.messager
+                    .send(RouterMessage::DelDialog(Routes::CreateCollection.into()))
+                    .expect("failed to send router message");
             }
             _ => {}
         }
