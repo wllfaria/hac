@@ -11,18 +11,50 @@ use crate::renderable::{Eventful, Renderable};
 use crate::router::Router;
 use crate::{HacColors, HacConfig};
 
-#[derive(Default, Hash, Debug, PartialEq, Eq, Copy, Clone)]
-pub enum AppRoutes {
-    #[default]
-    CollectionListRouter,
-    CollectionViewerRouter,
+#[derive(Debug)]
+pub struct InvalidRouteNumber(u8);
+
+impl std::error::Error for InvalidRouteNumber {}
+
+impl std::fmt::Display for InvalidRouteNumber {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "number {} is not a valid route number", self.0)
+    }
 }
 
-impl From<AppRoutes> for u8 {
-    fn from(val: AppRoutes) -> Self {
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy, Default)]
+pub enum Routes {
+    #[default]
+    ListCollections,
+    CreateCollection,
+    EditCollection,
+    DeleteCollection,
+    CollectionViewer,
+}
+
+impl TryFrom<u8> for Routes {
+    type Error = InvalidRouteNumber;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Routes::ListCollections),
+            1 => Ok(Routes::CreateCollection),
+            2 => Ok(Routes::EditCollection),
+            3 => Ok(Routes::DeleteCollection),
+            4 => Ok(Routes::CollectionViewer),
+            _ => Err(InvalidRouteNumber(value)),
+        }
+    }
+}
+
+impl From<Routes> for u8 {
+    fn from(val: Routes) -> Self {
         match val {
-            AppRoutes::CollectionListRouter => 0,
-            AppRoutes::CollectionViewerRouter => 1,
+            Routes::ListCollections => 0,
+            Routes::CreateCollection => 1,
+            Routes::EditCollection => 2,
+            Routes::DeleteCollection => 3,
+            Routes::CollectionViewer => 4,
         }
     }
 }
@@ -42,12 +74,10 @@ impl App {
         let (command_sender, command_receiver) = std::sync::mpsc::channel();
         let size = terminal.size()?;
 
-        let mut router = Router::new(command_sender.clone(), colors.clone());
+        let router = Router::new(command_sender.clone(), colors.clone());
 
         let mut collection_list_router =
             make_collection_list_router(command_sender.clone(), size, config.clone(), colors.clone());
-        collection_list_router.attach_parent_navigator(router.message_sender());
-        router.add_route(AppRoutes::CollectionListRouter.into(), Box::new(collection_list_router));
 
         Ok(Self {
             event_pool: EventPool::new(60f64, 30f64),

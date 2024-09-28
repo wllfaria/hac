@@ -18,55 +18,11 @@ use ratatui::text::Line;
 use ratatui::widgets::{Block, Clear, Paragraph};
 use ratatui::Frame;
 
+use crate::app::Routes;
 use crate::components::list_itemm::ListItem;
 use crate::renderable::{Eventful, Renderable};
 use crate::router::{Navigate, Router, RouterMessage};
 use crate::{HacColors, HacConfig};
-
-#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy, Default)]
-pub enum Routes {
-    #[default]
-    ListCollections,
-    CreateCollection,
-    EditCollection,
-    DeleteCollection,
-}
-
-#[derive(Debug)]
-pub struct InvalidRouteNumber(u8);
-
-impl std::error::Error for InvalidRouteNumber {}
-
-impl std::fmt::Display for InvalidRouteNumber {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "number {} is not a valid route number", self.0)
-    }
-}
-
-impl TryFrom<u8> for Routes {
-    type Error = InvalidRouteNumber;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Routes::ListCollections),
-            1 => Ok(Routes::CreateCollection),
-            2 => Ok(Routes::EditCollection),
-            3 => Ok(Routes::DeleteCollection),
-            _ => Err(InvalidRouteNumber(value)),
-        }
-    }
-}
-
-impl From<Routes> for u8 {
-    fn from(val: Routes) -> Self {
-        match val {
-            Routes::ListCollections => 0,
-            Routes::CreateCollection => 1,
-            Routes::EditCollection => 2,
-            Routes::DeleteCollection => 3,
-        }
-    }
-}
 
 pub fn make_collection_list_router(
     command_sender: Sender<Command>,
@@ -272,6 +228,7 @@ impl Renderable for CollectionList {
             Ok(Routes::CreateCollection) => CollectionListData::CreateCollection,
             Ok(Routes::EditCollection) => CollectionListData::EditCollection(self.selected),
             Ok(Routes::DeleteCollection) => CollectionListData::DeleteCollection(self.selected),
+            Ok(Routes::CollectionViewer) => CollectionListData::DeleteCollection(self.selected),
             Ok(Routes::ListCollections) => unreachable!(),
             Err(_) => unreachable!(),
         }
@@ -412,7 +369,9 @@ impl Eventful for CollectionList {
                 }
                 assert!(collections_meta.len() > self.selected);
                 self.messager
-                    .send(RouterMessage::Navigate(Navigate::Leave))
+                    .send(RouterMessage::Navigate(Navigate::Leave(
+                        Routes::CollectionViewer.into(),
+                    )))
                     .expect("failed to send navigation message");
             }),
             _ => {}
