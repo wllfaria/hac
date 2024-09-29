@@ -179,9 +179,9 @@ pub fn sort_collection_meta(sorting_kind: CollectionMetaSorting) {
     })
 }
 
-pub fn collections_meta<F>(f: F)
+pub fn collections_meta<F, R>(f: F) -> R
 where
-    F: FnOnce(&[CollectionMeta]),
+    F: FnOnce(&[CollectionMeta]) -> R,
 {
     HAC_STORE.with_borrow(|store| f(&store.collections_meta))
 }

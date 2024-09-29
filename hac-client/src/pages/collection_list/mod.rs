@@ -20,21 +20,10 @@ use ratatui::Frame;
 
 use crate::app::Routes;
 use crate::components::list_itemm::ListItem;
+use crate::pages::collection_viewer::CollectionViewer;
 use crate::renderable::{Eventful, Renderable};
-use crate::router::{Navigate, Router, RouterMessage};
+use crate::router::{Navigate, RouterMessage};
 use crate::{HacColors, HacConfig};
-
-pub fn make_collection_list_router(
-    command_sender: Sender<Command>,
-    size: Rect,
-    config: HacConfig,
-    colors: HacColors,
-) -> Router {
-    let mut router = Router::new(command_sender, colors.clone());
-    let collection_list = CollectionList::new(size, config, colors.clone());
-    router.add_route(Routes::ListCollections.into(), Box::new(collection_list));
-    router
-}
 
 #[derive(Debug, PartialEq)]
 struct DashboardLayout {
@@ -217,6 +206,7 @@ pub enum CollectionListData {
     CreateCollection,
     EditCollection(usize),
     DeleteCollection(usize),
+    CollectionViewer,
 }
 
 impl Renderable for CollectionList {
@@ -363,17 +353,34 @@ impl Eventful for CollectionList {
                     .send(RouterMessage::Navigate(Navigate::To(Routes::EditCollection.into())))
                     .expect("failed to send navigation message");
             }
-            KeyCode::Enter => hac_store::collection_meta::collections_meta(|collections_meta| {
-                if collections_meta.is_empty() {
-                    return;
-                }
-                assert!(collections_meta.len() > self.selected);
+            KeyCode::Enter => {
+                let Some(path) = hac_store::collection_meta::collections_meta(|collections_meta| {
+                    if collections_meta.is_empty() {
+                        return None;
+                    }
+                    assert!(collections_meta.len() > self.selected);
+                    let selected = &collections_meta[self.selected];
+                    Some(selected.path().clone())
+                }) else {
+                    return Ok(None);
+                };
+                let collection_viewer =
+                    CollectionViewer::new(self.layout.total_size, self.colors.clone(), self.config.clone());
+                let collection = match hac_loader::collection_loader::load_collection(path, &self.config) {
+                    Ok(collection) => collection,
+                    Err(_) => todo!(),
+                };
+                hac_store::collection::set_collection(Some(collection));
                 self.messager
-                    .send(RouterMessage::Navigate(Navigate::Leave(
+                    .send(RouterMessage::AddRoute(
                         Routes::CollectionViewer.into(),
-                    )))
+                        Box::new(collection_viewer),
+                    ))
+                    .expect("failed to send router message");
+                self.messager
+                    .send(RouterMessage::Navigate(Navigate::To(Routes::CollectionViewer.into())))
                     .expect("failed to send navigation message");
-            }),
+            }
             _ => {}
         }
 

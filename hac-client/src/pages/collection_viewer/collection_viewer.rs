@@ -1,18 +1,21 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ops::{Add, Div};
+use std::ops::Div;
 use std::rc::Rc;
 use std::sync::mpsc::Sender;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_core::command::Command;
 use hac_core::net::request_manager::Response;
+use hac_store::slab::Key;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Stylize;
 use ratatui::widgets::{Block, Clear};
 use ratatui::Frame;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
+use super::request_uri::RequestUri;
+use crate::pages::collection_list::CollectionListData;
 //use crate::pages::collection_viewer::collection_store::{CollectionStore, CollectionStoreAction};
 //use crate::pages::collection_viewer::request_editor::{RequestEditor, RequestEditorEvent};
 //use crate::pages::collection_viewer::request_uri::{RequestUri, RequestUriEvent};
@@ -76,9 +79,12 @@ impl PaneFocus {
 
 #[derive(Debug)]
 pub struct CollectionViewer {
+    hovered_request: Key,
+    selected_request: Option<Key>,
+    request_uri: RequestUri,
+
     //response_viewer: ResponseViewer<'cv>,
     //request_editor: RequestEditor<'cv>,
-    //request_uri: RequestUri<'cv>,
     //sidebar: Sidebar<'cv>,
     colors: HacColors,
     config: HacConfig,
@@ -89,12 +95,10 @@ pub struct CollectionViewer {
     responses_map: HashMap<String, Rc<RefCell<Response>>>,
     response_rx: UnboundedReceiver<Response>,
     request_tx: UnboundedSender<Response>,
-
-    dry_run: bool,
 }
 
 impl CollectionViewer {
-    pub fn new(size: Rect, colors: HacColors, config: HacConfig, dry_run: bool) -> Self {
+    pub fn new(size: Rect, colors: HacColors, config: HacConfig) -> Self {
         let layout = build_layout(size);
         let (request_tx, response_rx) = unbounded_channel::<Response>();
 
@@ -103,14 +107,17 @@ impl CollectionViewer {
         //let request_editor = RequestEditor::new(colors, config, collection_store.clone(), layout.req_editor);
         //
         //let response_viewer = ResponseViewer::new(colors, collection_store.clone(), None, layout.response_preview);
-        //
-        //let request_uri = RequestUri::new(colors, collection_store.clone(), layout.req_uri);
+
+        let request_uri = RequestUri::new(colors.clone(), layout.req_uri, Some(0));
 
         CollectionViewer {
+            request_uri,
+            hovered_request: 0,
+            selected_request: Some(0),
+
             //request_editor,
             //response_viewer,
             //sidebar,
-            //request_uri,
             colors,
             layout,
             config,
@@ -119,7 +126,6 @@ impl CollectionViewer {
             responses_map: HashMap::default(),
             response_rx,
             request_tx,
-            dry_run,
         }
     }
 
@@ -257,10 +263,8 @@ impl CollectionViewer {
 }
 
 impl Renderable for CollectionViewer {
-    type Input = ();
+    type Input = CollectionListData;
     type Output = ();
-
-    fn data(&self, requester: u8) -> Self::Output {}
 
     #[tracing::instrument(skip_all)]
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
@@ -270,11 +274,11 @@ impl Renderable for CollectionViewer {
         frame.render_widget(Block::default().bg(self.colors.primary.background), size);
 
         //self.drain_responses_channel();
-        //
+        self.request_uri.draw(frame, self.layout.req_uri)?;
+
         //self.sidebar.draw(frame, self.layout.sidebar)?;
         //self.response_viewer.draw(frame, self.layout.response_preview)?;
         //self.request_editor.draw(frame, self.layout.req_editor)?;
-        //self.request_uri.draw(frame, self.layout.req_uri)?;
 
         //let overlay = self.collection_store.borrow().peek_overlay();
         //match overlay {
@@ -350,6 +354,8 @@ impl Renderable for CollectionViewer {
         Ok(())
     }
 
+    fn data(&self, _requester: u8) -> Self::Output {}
+
     fn register_command_handler(&mut self, sender: Sender<Command>) {
         self.global_command_sender = Some(sender);
     }
@@ -366,6 +372,10 @@ impl Eventful for CollectionViewer {
     type Result = Command;
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
+        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            return Ok(Some(Command::Quit));
+        }
+
         //if let (
         //    None,
         //    KeyEvent {

@@ -6,7 +6,7 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
 use crate::event_pool::{Event, EventPool};
-use crate::pages::collection_list::make_collection_list_router;
+use crate::pages::collection_list::CollectionList;
 use crate::renderable::{Eventful, Renderable};
 use crate::router::Router;
 use crate::{HacColors, HacConfig};
@@ -74,10 +74,9 @@ impl App {
         let (command_sender, command_receiver) = std::sync::mpsc::channel();
         let size = terminal.size()?;
 
-        let router = Router::new(command_sender.clone(), colors.clone());
-
-        let mut collection_list_router =
-            make_collection_list_router(command_sender.clone(), size, config.clone(), colors.clone());
+        let mut router = Router::new(command_sender.clone(), colors.clone());
+        let collection_list = CollectionList::new(size, config.clone(), colors.clone());
+        router.add_route(Routes::ListCollections.into(), Box::new(collection_list));
 
         Ok(Self {
             event_pool: EventPool::new(60f64, 30f64),

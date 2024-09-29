@@ -1,4 +1,5 @@
 use crate::slab::{Key, Slab};
+use crate::HAC_STORE;
 
 #[derive(Debug)]
 pub enum ReqTree {
@@ -63,4 +64,22 @@ pub enum KeyKind {
 pub struct Folder {
     pub name: String,
     pub requests: Vec<KeyKind>,
+}
+
+pub fn set_collection(collection: Option<Collection>) {
+    HAC_STORE.with_borrow_mut(|store| store.collection = collection);
+}
+
+pub fn get_request<F, R>(key: Key, f: F) -> Option<R>
+where
+    F: FnOnce(&Request) -> Option<R>,
+{
+    HAC_STORE.with_borrow(|store| {
+        if let Some(ref collection) = store.collection {
+            let request = collection.root_requests.get(key);
+            return f(request);
+        };
+
+        None
+    })
 }

@@ -27,11 +27,6 @@ pub enum Navigate {
     /// Go back in the navigation history, this completely wipes the current router history,
     /// and close every dialog thats visible
     Back,
-    /// Routes can only communicate with the router that owns the route, therefore,
-    /// if a route in a nested router needs to navigate to an entirely different router
-    /// the `Leave` variant is responsible for that. It will direct the navigation event
-    /// to the parent router of the current active router.
-    Leave(Key),
 }
 
 pub trait AnyCommand {}
@@ -259,14 +254,6 @@ impl Router {
                         new_dialog.update(data);
                     }
                     (false, true) => panic!("invalid navigation from route to dialog"),
-                }
-            }
-            Navigate::Leave(route) => {
-                tracing::debug!("leaving to: {route}");
-                if let Some(messenger) = self.parent_messager.as_mut() {
-                    messenger
-                        .send(RouterMessage::Navigate(Navigate::To(route)))
-                        .expect("lol");
                 }
             }
         }
