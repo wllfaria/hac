@@ -148,6 +148,7 @@ impl From<JsonFolder> for Folder {
         Self {
             name: file_folder.name,
             requests: vec![],
+            collapsed: false,
         }
     }
 }

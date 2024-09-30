@@ -157,16 +157,10 @@ impl Renderable for Sidebar {
                 let method = &req.method;
 
                 let style = match status {
-                    EntryStatus::None => Style::default().fg(self.colors.normal.white),
-                    EntryStatus::Hovered => Style::default()
-                        .fg(self.colors.normal.white)
-                        .bg(self.colors.primary.hover),
-                    EntryStatus::Selected => Style::default()
-                        .fg(self.colors.normal.white)
-                        .bg(self.colors.normal.blue),
-                    EntryStatus::Both => Style::default()
-                        .fg(self.colors.normal.yellow)
-                        .bg(self.colors.normal.blue),
+                    EntryStatus::None => Style::new().fg(self.colors.normal.white),
+                    EntryStatus::Hovered => Style::new().fg(self.colors.bright.blue).underlined().italic(),
+                    EntryStatus::Selected => Style::new().fg(self.colors.normal.red).bold(),
+                    EntryStatus::Both => Style::new().fg(self.colors.normal.red).underlined().italic().bold(),
                 };
 
                 lines.push(Line::from(vec![
@@ -184,13 +178,21 @@ impl Renderable for Sidebar {
                 };
                 lines.push(Line::from(folder_name).bold().fg(self.colors.normal.yellow));
                 for request in requests {
-                    hac_store::collection::get_request(request, |req| {
+                    hac_store::collection::get_request(request, |req, status| {
                         let name = req.name.clone();
                         let method = &req.method;
+
+                        let style = match status {
+                            EntryStatus::None => Style::new().fg(self.colors.normal.white),
+                            EntryStatus::Hovered => Style::new().fg(self.colors.bright.blue).underlined().italic(),
+                            EntryStatus::Selected => Style::new().fg(self.colors.normal.red).bold(),
+                            EntryStatus::Both => Style::new().fg(self.colors.normal.red).underlined().italic().bold(),
+                        };
+
                         lines.push(Line::from(vec![
                             " ".repeat(self.config.borrow().tab_size).into(),
                             colored_method(method, &self.colors),
-                            name.fg(self.colors.normal.white),
+                            name.set_style(style),
                         ]));
                     });
                 }

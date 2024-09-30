@@ -14,6 +14,25 @@ pub struct ReqTree {
     pub nodes: Vec<ReqTreeNode>,
 }
 
+#[derive(Debug)]
+pub enum EntryStatus {
+    None,
+    Hovered,
+    Selected,
+    Both,
+}
+
+impl From<(bool, bool)> for EntryStatus {
+    fn from((hovered, selected): (bool, bool)) -> Self {
+        match (hovered, selected) {
+            (false, false) => Self::None,
+            (true, false) => Self::Hovered,
+            (false, true) => Self::Selected,
+            (true, true) => Self::Both,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum WhichSlab {
     Requests,
@@ -93,6 +112,7 @@ pub struct Request {
 pub struct Folder {
     pub name: String,
     pub requests: Vec<Key>,
+    pub collapsed: bool,
 }
 
 pub fn set_collection(collection: Option<Collection>) {
@@ -160,25 +180,6 @@ pub fn tree_layout() -> ReqTree {
     nodes
 }
 
-#[derive(Debug)]
-pub enum EntryStatus {
-    None,
-    Hovered,
-    Selected,
-    Both,
-}
-
-impl From<(bool, bool)> for EntryStatus {
-    fn from((hovered, selected): (bool, bool)) -> Self {
-        match (hovered, selected) {
-            (false, false) => Self::None,
-            (true, false) => Self::Hovered,
-            (false, true) => Self::Selected,
-            (true, true) => Self::Both,
-        }
-    }
-}
-
 pub fn get_root_request<F>(key: Key, f: F)
 where
     F: FnOnce(&Request, EntryStatus),
@@ -200,12 +201,18 @@ where
 
 pub fn get_request<F>(key: Key, f: F)
 where
-    F: FnOnce(&Request),
+    F: FnOnce(&Request, EntryStatus),
 {
     HAC_STORE.with_borrow(|store| {
         if let Some(ref collection) = store.collection {
             let req = collection.requests.get(key);
-            f(req);
+            let is_hovered = collection
+                .hovered_request
+                .is_some_and(|(slab, k)| matches!(slab, WhichSlab::Requests) && key == k);
+            let is_selected = collection
+                .selected_request
+                .is_some_and(|(slab, k)| matches!(slab, WhichSlab::Requests) && key == k);
+            f(req, (is_hovered, is_selected).into());
         }
     })
 }
@@ -227,15 +234,59 @@ pub fn hover_next() {
         if let Some(collection) = &mut store.collection {
             if let Some((which, key)) = collection.hovered_request {
                 match which {
-                    WhichSlab::Requests => todo!(),
-                    WhichSlab::Folders => todo!(),
+                    WhichSlab::Requests => {
+                        let req = collection.requests.get(key);
+                        let parent_key = req.parent.expect("nested request has no parent");
+                        let parent = collection.folders.get(parent_key);
+                        let pos = parent
+                            .requests
+                            .iter()
+                            .position(|&req| req == key)
+                            .expect("nested request not listed on the parent");
+
+                        // when the current nested request is not the last on the folder, we hover
+                        // the next request on that folder
+                        if pos < parent.requests.len() - 1 {
+                            collection.hovered_request = Some((WhichSlab::Requests, parent.requests[pos + 1]));
+                            return;
+                        }
+
+                        // when it is the last one, we try to move to the next folder if possible
+                        if let Some(next) = collection
+                            .folders
+                            .try_get(parent_key + 1)
+                            .map(|_| (WhichSlab::Folders, parent_key + 1))
+                        {
+                            collection.hovered_request = Some(next)
+                        };
+                    }
+                    WhichSlab::Folders => {
+                        let folder = collection.folders.get(key);
+                        // when the folder is collapsed or has no requests, and its not the
+                        // last folder on the collection, we can hover the next folder
+                        if (folder.requests.is_empty() || folder.collapsed) && key < collection.folders.len() - 1 {
+                            collection.hovered_request = Some((WhichSlab::Folders, key + 1));
+                            return;
+                        }
+
+                        // when the folder has requests, we hover the first one
+                        if !folder.requests.is_empty() {
+                            collection.hovered_request = Some((WhichSlab::Requests, folder.requests[0]));
+                        }
+
+                        // when the folder has no requests and its the last folder, we don't do
+                        // anything
+                    }
                     WhichSlab::RootRequests => {
+                        // when the last root_request is hovered, we try to hover the first folder
+                        // as no request with a parent can appear before its parent
                         if key >= collection.root_requests.len() - 1 {
                             collection.hovered_request = collection.folders.try_get(0).map(|_| (WhichSlab::Folders, 0));
                             return;
                         }
 
-                        collection.hovered_request = Some((WhichSlab::RootRequests, key + 1))
+                        // when we are not at the last one, we can simply hover the next
+                        collection.hovered_request = Some((WhichSlab::RootRequests, key + 1));
                     }
                 }
             }
