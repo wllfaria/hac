@@ -169,14 +169,18 @@ impl Renderable for Sidebar {
                 ]));
             }),
             ReqTreeNode::Folder(folder_key, requests) => {
-                let mut folder_name = String::default();
-                hac_store::collection::get_folder(folder_key, |folder| folder_name.push_str(&folder.name));
-                let folder_name = if self.config.borrow().enable_icons {
-                    format!("{} {}", Icons::FOLDER, folder_name)
-                } else {
-                    folder_name
-                };
-                lines.push(Line::from(folder_name).bold().fg(self.colors.normal.yellow));
+                hac_store::collection::get_folder(folder_key, |folder, status| {
+                    let mut folder_name = folder.name.clone();
+                    if self.config.borrow().enable_icons {
+                        folder_name = format!("{}     {}", Icons::FOLDER, folder_name);
+                    }
+                    let style = match status {
+                        EntryStatus::None => Style::new().fg(self.colors.normal.yellow).bold(),
+                        _ => Style::new().fg(self.colors.normal.yellow).underlined().italic().bold(),
+                    };
+                    let name = Line::from(folder_name).set_style(style);
+                    lines.push(name);
+                });
                 for request in requests {
                     hac_store::collection::get_request(request, |req, status| {
                         let name = req.name.clone();
