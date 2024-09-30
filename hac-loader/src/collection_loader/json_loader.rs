@@ -1,4 +1,6 @@
-use hac_store::collection::{BodyKind, Collection, CollectionInfo, Folder, HeaderEntry, KeyKind, ReqMethod, Request};
+use hac_store::collection::{
+    BodyKind, Collection, CollectionInfo, Folder, HeaderEntry, ReqMethod, ReqTree, ReqTreeNode, Request, WhichSlab,
+};
 use hac_store::slab::{Key, Slab};
 
 use super::json_collection::{
@@ -35,11 +37,37 @@ fn from_file_to_collection(file_collection: JsonCollection) -> Collection {
         };
     }
 
+    let selected_request = match (root_requests.is_empty(), folders.is_empty()) {
+        (true, true) => None,
+        (false, _) => Some((WhichSlab::RootRequests, 0)),
+        (true, false) => {
+            let folder = folders.get(0);
+            match folder.requests.is_empty() {
+                true => Some((WhichSlab::Folders, 0)),
+                false => Some((WhichSlab::Requests, folder.requests[0])),
+            }
+        }
+    };
+
+    let mut nodes: Vec<ReqTreeNode> = (0..root_requests.len()).map(ReqTreeNode::Req).collect();
+    nodes.extend(
+        folders
+            .iter()
+            .enumerate()
+            .map(|(idx, folder)| ReqTreeNode::Folder(idx, folder.requests.clone()))
+            .collect::<Vec<_>>(),
+    );
+
+    let layout = ReqTree { nodes };
+
     Collection {
         info: file_collection.info.into(),
         folders,
         requests,
         root_requests,
+        layout,
+        hovered_request: selected_request,
+        selected_request,
     }
 }
 
@@ -49,18 +77,10 @@ fn collect_folder(file_folder: JsonFolder, requests: &mut Slab<Request>, folders
     let mut childrens = vec![];
 
     for item in file_folder.requests {
-        match item {
-            ReqKind::Req(inner) => {
-                let mut req: Request = inner.into();
-                req.parent = Some(idx);
-                let req_idx = requests.push(req);
-                childrens.push(KeyKind::Req(req_idx));
-            }
-            ReqKind::Folder(inner) => {
-                let folder_idx = collect_folder(inner, requests, folders);
-                childrens.push(KeyKind::Folder(folder_idx));
-            }
-        }
+        let mut req: Request = item.into();
+        req.parent = Some(idx);
+        let req_idx = requests.push(req);
+        childrens.push(req_idx);
     }
 
     let folder = folders.get_mut(idx);

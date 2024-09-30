@@ -93,5 +93,5 @@ pub enum JsonAuthKind {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JsonFolder {
     pub name: String,
-    pub requests: Vec<ReqKind>,
+    pub requests: Vec<JsonRequest>,
 }

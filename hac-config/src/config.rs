@@ -61,6 +61,8 @@ pub struct Config {
     #[serde(default)]
     pub collection_ext: CollectionExtensions,
     pub dry_run: bool,
+    pub tab_size: usize,
+    pub enable_icons: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

@@ -7,14 +7,14 @@ use std::sync::mpsc::Sender;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_core::command::Command;
 use hac_core::net::request_manager::Response;
-use hac_store::slab::Key;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Stylize;
 use ratatui::widgets::{Block, Clear};
 use ratatui::Frame;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use super::request_uri::RequestUri;
+use super::request_uri::{RequestUri, RequestUriEvent};
+use super::sidebar::{Sidebar, SidebarEvent};
 use crate::pages::collection_list::CollectionListData;
 //use crate::pages::collection_viewer::collection_store::{CollectionStore, CollectionStoreAction};
 //use crate::pages::collection_viewer::request_editor::{RequestEditor, RequestEditorEvent};
@@ -79,13 +79,13 @@ impl PaneFocus {
 
 #[derive(Debug)]
 pub struct CollectionViewer {
-    hovered_request: Key,
-    selected_request: Option<Key>,
+    focus: PaneFocus,
+    selection: Option<PaneFocus>,
     request_uri: RequestUri,
+    sidebar: Sidebar,
 
     //response_viewer: ResponseViewer<'cv>,
     //request_editor: RequestEditor<'cv>,
-    //sidebar: Sidebar<'cv>,
     colors: HacColors,
     config: HacConfig,
     layout: ExplorerLayout,
@@ -102,22 +102,21 @@ impl CollectionViewer {
         let layout = build_layout(size);
         let (request_tx, response_rx) = unbounded_channel::<Response>();
 
-        //let sidebar = sidebar::Sidebar::new(colors, collection_store.clone());
         //
         //let request_editor = RequestEditor::new(colors, config, collection_store.clone(), layout.req_editor);
         //
         //let response_viewer = ResponseViewer::new(colors, collection_store.clone(), None, layout.response_preview);
-
-        let request_uri = RequestUri::new(colors.clone(), layout.req_uri, Some(0));
+        let mut sidebar = Sidebar::new(colors.clone(), config.clone());
+        sidebar.focus();
 
         CollectionViewer {
-            request_uri,
-            hovered_request: 0,
-            selected_request: Some(0),
+            focus: PaneFocus::Sidebar,
+            selection: None,
+            request_uri: RequestUri::new(colors.clone(), layout.req_uri),
+            sidebar,
 
             //request_editor,
             //response_viewer,
-            //sidebar,
             colors,
             layout,
             config,
@@ -144,16 +143,6 @@ impl CollectionViewer {
     //        self.layout.response_preview,
     //    );
     //    self.request_uri = RequestUri::new(self.colors, self.collection_store.clone(), self.layout.req_uri);
-    //}
-
-    //fn focus_next(&mut self) {
-    //    let next_pane = self.collection_store.borrow().get_focused_pane().next();
-    //    self.update_focus(next_pane);
-    //}
-    //
-    //fn focus_prev(&mut self) {
-    //    let prev_pane = self.collection_store.borrow().get_focused_pane().prev();
-    //    self.update_focus(prev_pane);
     //}
 
     // collect all pending responses from the channel. Here, I don't see a way we
@@ -249,17 +238,70 @@ impl CollectionViewer {
     //});
     //}
 
-    //fn update_selection(&mut self, pane_to_select: Option<PaneFocus>) {
-    //    self.collection_store
-    //        .borrow_mut()
-    //        .dispatch(CollectionStoreAction::SetSelectedPane(pane_to_select));
-    //}
-    //
-    //fn update_focus(&mut self, pane_to_focus: PaneFocus) {
-    //    self.collection_store
-    //        .borrow_mut()
-    //        .dispatch(CollectionStoreAction::SetFocusedPane(pane_to_focus));
-    //}
+    /// updating selection will always also update the focus, as we cannot
+    /// select something that isn't also focused, unless pane_to_select is
+    /// None, in which case we won't change focus at all
+    #[inline]
+    fn update_selection(&mut self, pane_to_select: Option<PaneFocus>) {
+        if hac_store::collection::is_empty() {
+            return;
+        }
+
+        match self.selection {
+            Some(PaneFocus::Sidebar) => self.sidebar.deselect(),
+            Some(PaneFocus::ReqUri) => self.request_uri.deselect(),
+            Some(PaneFocus::Preview) => {}
+            Some(PaneFocus::Editor) => {}
+            None => {}
+        }
+        match pane_to_select {
+            Some(pane @ PaneFocus::Sidebar) => {
+                self.sidebar.select();
+                self.focus = pane;
+            }
+            Some(pane @ PaneFocus::ReqUri) => {
+                self.request_uri.select();
+                self.focus = pane;
+            }
+            Some(pane @ PaneFocus::Preview) => {
+                self.focus = pane;
+            }
+            Some(pane @ PaneFocus::Editor) => {
+                self.focus = pane;
+            }
+            None => {}
+        }
+        self.selection = pane_to_select;
+    }
+
+    #[inline]
+    fn update_focus(&mut self, pane_to_focus: PaneFocus) {
+        match self.focus {
+            PaneFocus::Sidebar => self.sidebar.blur(),
+            PaneFocus::ReqUri => self.request_uri.blur(),
+            PaneFocus::Preview => {}
+            PaneFocus::Editor => {}
+        }
+        match pane_to_focus {
+            PaneFocus::Sidebar => self.sidebar.focus(),
+            PaneFocus::ReqUri => self.request_uri.focus(),
+            PaneFocus::Preview => {}
+            PaneFocus::Editor => {}
+        }
+        self.focus = pane_to_focus;
+    }
+
+    #[inline]
+    fn focus_next(&mut self) {
+        let next = self.focus.next();
+        self.update_focus(next);
+    }
+
+    #[inline]
+    fn focus_prev(&mut self) {
+        let prev = self.focus.prev();
+        self.update_focus(prev);
+    }
 }
 
 impl Renderable for CollectionViewer {
@@ -268,15 +310,14 @@ impl Renderable for CollectionViewer {
 
     #[tracing::instrument(skip_all)]
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
-        // we redraw the background to prevent weird "transparent" spots when popups are
-        // cleared from the buffer
         frame.render_widget(Clear, size);
         frame.render_widget(Block::default().bg(self.colors.primary.background), size);
 
         //self.drain_responses_channel();
-        self.request_uri.draw(frame, self.layout.req_uri)?;
 
-        //self.sidebar.draw(frame, self.layout.sidebar)?;
+        self.request_uri.draw(frame, self.layout.req_uri)?;
+        self.sidebar.draw(frame, self.layout.sidebar)?;
+
         //self.response_viewer.draw(frame, self.layout.response_preview)?;
         //self.request_editor.draw(frame, self.layout.req_editor)?;
 
@@ -376,118 +417,89 @@ impl Eventful for CollectionViewer {
             return Ok(Some(Command::Quit));
         }
 
-        //if let (
-        //    None,
-        //    KeyEvent {
-        //        code: KeyCode::Char('c'),
-        //        modifiers: KeyModifiers::CONTROL,
-        //        ..
-        //    },
-        //) = (self.collection_store.borrow().get_selected_pane(), key_event)
-        //{
-        //    return Ok(Some(Command::Quit));
-        //}
+        if self.selection.is_none() {
+            match key_event.code {
+                KeyCode::Char('r') => self.update_selection(Some(PaneFocus::Sidebar)),
+                KeyCode::Char('u') => self.update_selection(Some(PaneFocus::ReqUri)),
+                KeyCode::Char('p') => self.update_selection(Some(PaneFocus::Preview)),
+                KeyCode::Char('e') => self.update_selection(Some(PaneFocus::Editor)),
+                KeyCode::Tab => self.focus_next(),
+                KeyCode::BackTab => self.focus_prev(),
+                KeyCode::Enter => self.update_selection(Some(self.focus)),
+                _ => {}
+            }
+            return Ok(None);
+        }
 
-        //if self.collection_store.borrow().get_selected_pane().is_none() {
-        //    match key_event.code {
-        //        KeyCode::Char('r') => {
-        //            self.update_focus(PaneFocus::Sidebar);
-        //            self.update_selection(Some(PaneFocus::Sidebar));
-        //        }
-        //        KeyCode::Char('u') => {
-        //            self.update_focus(PaneFocus::ReqUri);
-        //            self.update_selection(Some(PaneFocus::ReqUri));
-        //        }
-        //        KeyCode::Char('p') => {
-        //            self.update_focus(PaneFocus::Preview);
-        //            self.update_selection(Some(PaneFocus::Preview));
-        //        }
-        //        KeyCode::Char('e') => {
-        //            self.update_focus(PaneFocus::Editor);
-        //            self.update_selection(Some(PaneFocus::Editor));
-        //        }
-        //        KeyCode::Tab => self.focus_next(),
-        //        KeyCode::BackTab => self.focus_prev(),
-        //        KeyCode::Enter => {
-        //            let curr_pane = self.collection_store.borrow().get_focused_pane();
-        //            self.update_selection(Some(curr_pane));
-        //        }
-        //        _ => {}
-        //    }
-        //    return Ok(None);
-        //}
-
-        //let selected_pane = self.collection_store.borrow().get_selected_pane();
-        //if let Some(curr_pane) = selected_pane {
-        //    match curr_pane {
-        //        PaneFocus::Sidebar => match self.sidebar.handle_key_event(key_event)? {
-        //            Some(SidebarEvent::CreateRequest) => self
-        //                .collection_store
-        //                .borrow_mut()
-        //                .push_overlay(CollectionViewerOverlay::CreateRequest),
-        //            Some(SidebarEvent::EditRequest) => self
-        //                .collection_store
-        //                .borrow_mut()
-        //                .push_overlay(CollectionViewerOverlay::EditRequest),
-        //            Some(SidebarEvent::EditDirectory) => self
-        //                .collection_store
-        //                .borrow_mut()
-        //                .push_overlay(CollectionViewerOverlay::EditDirectory),
-        //            Some(SidebarEvent::CreateDirectory) => self
-        //                .collection_store
-        //                .borrow_mut()
-        //                .push_overlay(CollectionViewerOverlay::CreateDirectory),
-        //            Some(SidebarEvent::DeleteItem(item_id)) => self
-        //                .collection_store
-        //                .borrow_mut()
-        //                .push_overlay(CollectionViewerOverlay::DeleteSidebarItem(item_id)),
-        //            Some(SidebarEvent::RemoveSelection) => self.update_selection(None),
-        //            Some(SidebarEvent::SelectNext) => {
-        //                self.update_selection(None);
-        //                self.focus_next();
-        //            }
-        //            Some(SidebarEvent::SelectPrev) => {
-        //                self.update_selection(None);
-        //                self.focus_prev();
-        //            }
-        //            Some(SidebarEvent::SyncCollection) => self.sync_collection_changes(),
-        //            Some(SidebarEvent::Quit) => return Ok(Some(Command::Quit)),
-        //            Some(SidebarEvent::RebuildView) => self.rebuild_everything(),
-        //            // when theres no event we do nothing
-        //            None => {}
-        //        },
-        //        PaneFocus::ReqUri => match self.request_uri.handle_key_event(key_event)? {
-        //            Some(RequestUriEvent::Quit) => return Ok(Some(Command::Quit)),
-        //            Some(RequestUriEvent::SendRequest) => hac_core::net::handle_request(
-        //                self.collection_store.borrow().get_selected_request().as_ref().unwrap(),
-        //                self.request_tx.clone(),
-        //            ),
-        //            Some(RequestUriEvent::RemoveSelection) => self.update_selection(None),
-        //            Some(RequestUriEvent::SelectNext) => {
-        //                self.update_selection(None);
-        //                self.focus_next();
-        //            }
-        //            Some(RequestUriEvent::SelectPrev) => {
-        //                self.update_selection(None);
-        //                self.focus_prev();
-        //            }
-        //            // when theres no event we do nothing
-        //            None => {}
-        //        },
-        //        PaneFocus::Preview => match self.response_viewer.handle_key_event(key_event)? {
-        //            Some(ResponseViewerEvent::RemoveSelection) => self.update_selection(None),
-        //            Some(ResponseViewerEvent::Quit) => return Ok(Some(Command::Quit)),
-        //            // when theres no event we do nothing
-        //            None => {}
-        //        },
-        //        PaneFocus::Editor => match self.request_editor.handle_key_event(key_event)? {
-        //            Some(RequestEditorEvent::RemoveSelection) => self.update_selection(None),
-        //            Some(RequestEditorEvent::Quit) => return Ok(Some(Command::Quit)),
-        //            // when theres no event we do nothing
-        //            None => {}
-        //        },
-        //    };
-        //}
+        if let Some(pane) = self.selection {
+            match pane {
+                PaneFocus::ReqUri => match self.request_uri.handle_key_event(key_event)? {
+                    Some(RequestUriEvent::Quit) => return Ok(Some(Command::Quit)),
+                    Some(RequestUriEvent::RemoveSelection) => self.update_selection(None),
+                    Some(RequestUriEvent::SendRequest) => todo!(),
+                    Some(RequestUriEvent::SelectNext) => {
+                        self.update_selection(None);
+                        self.focus_next();
+                    }
+                    Some(RequestUriEvent::SelectPrev) => {
+                        self.update_selection(None);
+                        self.focus_prev();
+                    }
+                    None => {}
+                },
+                PaneFocus::Sidebar => match self.sidebar.handle_key_event(key_event)? {
+                    Some(SidebarEvent::SelectNext) => {
+                        self.update_selection(None);
+                        self.focus_next();
+                    }
+                    Some(SidebarEvent::SelectPrev) => {
+                        self.update_selection(None);
+                        self.focus_prev();
+                    }
+                    Some(SidebarEvent::RemoveSelection) => self.update_selection(None),
+                    Some(e) => tracing::trace!("{e:?}"),
+                    None => (),
+                    //Some(SidebarEvent::CreateRequest) => self
+                    //    .collection_store
+                    //    .borrow_mut()
+                    //    .push_overlay(CollectionViewerOverlay::CreateRequest),
+                    //Some(SidebarEvent::EditRequest) => self
+                    //    .collection_store
+                    //    .borrow_mut()
+                    //    .push_overlay(CollectionViewerOverlay::EditRequest),
+                    //Some(SidebarEvent::EditDirectory) => self
+                    //    .collection_store
+                    //    .borrow_mut()
+                    //    .push_overlay(CollectionViewerOverlay::EditDirectory),
+                    //Some(SidebarEvent::CreateDirectory) => self
+                    //    .collection_store
+                    //    .borrow_mut()
+                    //    .push_overlay(CollectionViewerOverlay::CreateDirectory),
+                    //Some(SidebarEvent::DeleteItem(item_id)) => self
+                    //    .collection_store
+                    //    .borrow_mut()
+                    //    .push_overlay(CollectionViewerOverlay::DeleteSidebarItem(item_id)),
+                    //Some(SidebarEvent::SyncCollection) => self.sync_collection_changes(),
+                    //Some(SidebarEvent::Quit) => return Ok(Some(Command::Quit)),
+                    //Some(SidebarEvent::RebuildView) => self.rebuild_everything(),
+                    //// when theres no event we do nothing
+                    //None => {}
+                },
+                //        PaneFocus::Preview => match self.response_viewer.handle_key_event(key_event)? {
+                //            Some(ResponseViewerEvent::RemoveSelection) => self.update_selection(None),
+                //            Some(ResponseViewerEvent::Quit) => return Ok(Some(Command::Quit)),
+                //            // when theres no event we do nothing
+                //            None => {}
+                //        },
+                //        PaneFocus::Editor => match self.request_editor.handle_key_event(key_event)? {
+                //            Some(RequestEditorEvent::RemoveSelection) => self.update_selection(None),
+                //            Some(RequestEditorEvent::Quit) => return Ok(Some(Command::Quit)),
+                //            // when theres no event we do nothing
+                //            None => {}
+                //        },
+                _ => todo!(),
+            };
+        }
 
         Ok(None)
     }

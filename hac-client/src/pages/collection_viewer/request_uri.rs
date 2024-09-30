@@ -1,5 +1,4 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use hac_store::slab::Key;
 use ratatui::layout::Rect;
 use ratatui::style::{Style, Stylize};
 use ratatui::widgets::{Block, Borders, Paragraph};
@@ -29,20 +28,34 @@ pub enum RequestUriEvent {
 pub struct RequestUri {
     colors: HacColors,
     size: Rect,
-    selected_request: Option<Key>,
-    is_focused: bool,
-    is_selected: bool,
+    focused: bool,
+    selected: bool,
 }
 
 impl RequestUri {
-    pub fn new(colors: HacColors, size: Rect, selected_request: Option<Key>) -> Self {
+    pub fn new(colors: HacColors, size: Rect) -> Self {
         Self {
             colors,
             size,
-            selected_request,
-            is_focused: true,
-            is_selected: true,
+            focused: false,
+            selected: false,
         }
+    }
+
+    pub fn focus(&mut self) {
+        self.focused = true;
+    }
+
+    pub fn blur(&mut self) {
+        self.focused = false;
+    }
+
+    pub fn select(&mut self) {
+        self.selected = true;
+    }
+
+    pub fn deselect(&mut self) {
+        self.selected = false;
     }
 }
 
@@ -57,22 +70,25 @@ impl Renderable for RequestUri {
     }
 
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
-        let block_border = match (self.is_focused, self.is_selected) {
+        let block_border = match (self.focused, self.selected) {
             (true, false) => Style::default().fg(self.colors.bright.blue),
             (true, true) => Style::default().fg(self.colors.normal.red),
             (false, _) => Style::default().fg(self.colors.bright.black),
         };
 
-        let uri = self
-            .selected_request
-            .and_then(|key| hac_store::collection::get_request(key, |req| Some(req.uri.to_string())))
-            .unwrap_or_default();
+        let uri = hac_store::collection::get_selected_request(|req| Some(req.uri.to_string())).unwrap_or_default();
+        let len = uri.chars().count() as u16;
 
         let uri = Paragraph::new(uri)
             .fg(self.colors.normal.white)
             .block(Block::default().borders(Borders::ALL).border_style(block_border));
 
         frame.render_widget(uri, size);
+
+        if self.selected {
+            let x = self.size.x + len + 1;
+            frame.set_cursor(x, self.size.y + 1);
+        }
 
         Ok(())
     }
@@ -82,49 +98,22 @@ impl Eventful for RequestUri {
     type Result = RequestUriEvent;
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
-        //let is_selected = self
-        //    .collection_store
-        //    .borrow()
-        //    .get_selected_pane()
-        //    .is_some_and(|pane| pane.eq(&PaneFocus::ReqUri));
-        //
-        //assert!(
-        //    is_selected,
-        //    "handled an event to the request uri while it was not selected"
-        //);
-        //
-        //if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
-        //    return Ok(Some(RequestUriEvent::Quit));
-        //}
-        //
-        //match key_event.code {
-        //    KeyCode::Esc => return Ok(Some(RequestUriEvent::RemoveSelection)),
-        //    KeyCode::Tab => return Ok(Some(RequestUriEvent::SelectNext)),
-        //    KeyCode::BackTab => return Ok(Some(RequestUriEvent::SelectPrev)),
-        //    KeyCode::Char(c) => {
-        //        if let Some(req) = self.collection_store.borrow().get_selected_request().as_mut() {
-        //            req.write().unwrap().uri.push(c);
-        //        }
-        //    }
-        //    KeyCode::Backspace => {
-        //        if let Some(req) = self.collection_store.borrow().get_selected_request().as_mut() {
-        //            req.write().unwrap().uri.pop();
-        //        }
-        //    }
-        //    KeyCode::Enter => {
-        //        let mut store = self.collection_store.borrow_mut();
-        //        if store
-        //            .get_selected_request()
-        //            .as_ref()
-        //            .is_some_and(|_| !store.has_pending_request())
-        //        {
-        //            store.dispatch(CollectionStoreAction::SetPendingRequest(true));
-        //            return Ok(Some(RequestUriEvent::SendRequest));
-        //        }
-        //    }
-        //    _ => {}
-        //}
-        //
+        assert!(self.selected);
+
+        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
+            return Ok(Some(RequestUriEvent::Quit));
+        }
+
+        match key_event.code {
+            KeyCode::Esc => return Ok(Some(RequestUriEvent::RemoveSelection)),
+            KeyCode::Tab => return Ok(Some(RequestUriEvent::SelectNext)),
+            KeyCode::BackTab => return Ok(Some(RequestUriEvent::SelectPrev)),
+            KeyCode::Char(c) => hac_store::collection::get_selected_request_mut(|req| req.uri.push(c)),
+            KeyCode::Backspace => hac_store::collection::get_selected_request_mut(|req| _ = req.uri.pop()),
+            KeyCode::Enter => return Ok(Some(RequestUriEvent::SendRequest)),
+            _ => {}
+        };
+
         Ok(None)
     }
 }

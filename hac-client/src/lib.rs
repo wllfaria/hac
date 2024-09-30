@@ -2,6 +2,7 @@ pub mod app;
 mod ascii;
 mod components;
 pub mod event_pool;
+mod icons;
 pub mod pages;
 mod renderable;
 mod router;

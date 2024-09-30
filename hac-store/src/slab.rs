@@ -80,6 +80,28 @@ impl<T> Slab<T> {
         val
     }
 
+    pub fn try_get(&self, idx: Key) -> Option<&T> {
+        if let Some(entry) = self.inner.get(idx) {
+            let Entry::Full(val) = entry else {
+                panic!("attempted to get an empty entry");
+            };
+            Some(val)
+        } else {
+            None
+        }
+    }
+
+    pub fn try_get_mut(&mut self, idx: Key) -> Option<&mut T> {
+        if let Some(entry) = self.inner.get_mut(idx) {
+            let Entry::Full(val) = entry else {
+                panic!("attempted to get an empty entry");
+            };
+            Some(val)
+        } else {
+            None
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.inner.len()
     }
@@ -95,7 +117,7 @@ impl<T> Slab<T> {
         }
     }
 
-    pub fn iter(&mut self) -> impl Iterator<Item = &T> {
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.inner.iter().filter_map(|e| match e {
             Entry::Full(val) => Some(val),
             Entry::Free(_) => None,
