@@ -20,7 +20,7 @@ build-time:
     cargo +nightly build -Z timings
 
 fmt:
-    cargo fmt --check
+    cargo +nightly fmt --check
 
 lint:
     cargo clippy -- -D warnings
