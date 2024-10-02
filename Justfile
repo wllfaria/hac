@@ -7,10 +7,10 @@ build-release:
     cargo build --release --verbose
 
 test:
-    cargo test --workspace
+    cargo test --workspace --all-features --verbose
 
 test-release:
-    cargo test --workspace --release --verbose
+    cargo test --workspace --all-features --release --verbose
 
 coverage:
     cargo tarpaulin --verbose --workspace -o Html
@@ -20,10 +20,10 @@ build-time:
     cargo +nightly build -Z timings
 
 fmt:
-    cargo fmt --check
+    cargo +nightly fmt -- --check
 
 lint:
-    cargo clippy -- -D warnings
+    cargo clippy --workspace --all-features --all-targets -- -D warnings
 
 # =================================== #
 #      RELEASE STUFF. DO NOT USE      #
