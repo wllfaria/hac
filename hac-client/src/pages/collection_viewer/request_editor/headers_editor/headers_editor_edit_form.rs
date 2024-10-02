@@ -1,10 +1,3 @@
-use crate::ascii::LOGO_ASCII;
-use crate::pages::collection_viewer::collection_store::CollectionStore;
-use crate::pages::collection_viewer::collection_viewer::CollectionViewerOverlay;
-use crate::pages::input::Input;
-use crate::pages::overlay::make_overlay;
-use crate::pages::{Eventful, Renderable};
-
 use std::cell::RefCell;
 use std::ops::{Add, Div, Sub};
 use std::rc::Rc;
@@ -16,6 +9,13 @@ use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
+
+use crate::ascii::LOGO_ASCII;
+use crate::pages::collection_viewer::collection_store::CollectionStore;
+use crate::pages::collection_viewer::collection_viewer::CollectionViewerOverlay;
+use crate::pages::input::Input;
+use crate::pages::overlay::make_overlay_old;
+use crate::pages::{Eventful, Renderable};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HeadersEditorFormEvent {
@@ -44,24 +44,17 @@ pub struct HeadersEditorForm<'hef> {
     colors: &'hef hac_colors::Colors,
     collection_store: Rc<RefCell<CollectionStore>>,
     header_idx: usize,
-    logo_idx: usize,
     focused_input: HeadersEditorFormInput,
     original_name: String,
     original_value: String,
 }
 
 impl<'hef> HeadersEditorForm<'hef> {
-    pub fn new(
-        colors: &'hef hac_colors::Colors,
-        collection_store: Rc<RefCell<CollectionStore>>,
-    ) -> HeadersEditorForm {
-        let logo_idx = rand::thread_rng().gen_range(0..LOGO_ASCII.len());
-
+    pub fn new(colors: &'hef hac_colors::Colors, collection_store: Rc<RefCell<CollectionStore>>) -> HeadersEditorForm {
         HeadersEditorForm {
             colors,
             header_idx: 0,
             collection_store,
-            logo_idx,
             focused_input: HeadersEditorFormInput::Name,
             original_name: String::default(),
             original_value: String::default(),
@@ -89,9 +82,7 @@ impl<'hef> HeadersEditorForm<'hef> {
             anyhow::bail!("tried to display the header form without the proper overlay set");
         };
 
-        let header = headers
-            .get(idx)
-            .expect("selected a non-existing header to edit");
+        let header = headers.get(idx).expect("selected a non-existing header to edit");
 
         self.original_name = header.pair.0.to_string();
         self.original_value = header.pair.1.to_string();
@@ -108,7 +99,7 @@ impl<'hef> HeadersEditorForm<'hef> {
 impl Renderable for HeadersEditorForm<'_> {
     #[tracing::instrument(skip_all, err)]
     fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
-        make_overlay(self.colors, self.colors.normal.black, 0.1, frame);
+        make_overlay_old(self.colors, self.colors.normal.black, 0.1, frame);
 
         let store = self.collection_store.borrow_mut();
         let Some(request) = store.get_selected_request() else {
@@ -124,22 +115,17 @@ impl Renderable for HeadersEditorForm<'_> {
             anyhow::bail!("tried to display the header form without the proper overlay set");
         };
 
-        let header = headers
-            .get(idx)
-            .expect("selected a non-existing header to edit");
+        let header = headers.get(idx).expect("selected a non-existing header to edit");
 
         let size = frame.size();
 
-        let mut logo = LOGO_ASCII[self.logo_idx];
+        let mut logo = LOGO_ASCII;
         let mut logo_size = logo.len() as u16;
 
         let total_size = logo_size.add(11).add(2);
         let mut size = Rect::new(
             size.width.div(2).sub(25),
-            size.height
-                .div(2)
-                .saturating_sub(logo_size.div(2))
-                .saturating_sub(5),
+            size.height.div(2).saturating_sub(logo_size.div(2)).saturating_sub(5),
             50,
             logo_size.add(11),
         );
@@ -153,10 +139,8 @@ impl Renderable for HeadersEditorForm<'_> {
 
         let mut name_input = Input::new(self.colors, "Name".into());
         let mut value_input = Input::new(self.colors, "Value".into());
-        let hint = Paragraph::new(
-            "Press enter to confirm, press esc to cancel".fg(self.colors.bright.black),
-        )
-        .centered();
+        let hint =
+            Paragraph::new("Press enter to confirm, press esc to cancel".fg(self.colors.bright.black)).centered();
 
         match self.focused_input {
             HeadersEditorFormInput::Name => name_input.focus(),
@@ -193,9 +177,7 @@ impl Renderable for HeadersEditorForm<'_> {
             }
             HeadersEditorFormInput::Value => {
                 frame.set_cursor(
-                    value_size
-                        .x
-                        .add(header.pair.1.chars().count().add(1) as u16),
+                    value_size.x.add(header.pair.1.chars().count().add(1) as u16),
                     value_size.y.add(1),
                 );
             }

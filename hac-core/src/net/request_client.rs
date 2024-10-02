@@ -1,4 +1,4 @@
-use crate::collection::types::Request;
+use hac_store::collection::Request;
 
 #[derive(Debug)]
 pub struct RequestClient {
@@ -42,12 +42,10 @@ impl RequestClient {
         request: &Request,
         mut request_builder: reqwest::RequestBuilder,
     ) -> reqwest::RequestBuilder {
-        if let Some(ref headers) = request.headers {
-            for header in headers.iter().filter(|header| header.enabled) {
-                let header_name = header.pair.0.clone();
-                let header_value = header.pair.1.clone();
-                request_builder = request_builder.header(header_name, header_value);
-            }
+        for header in request.headers.iter().filter(|header| header.enabled) {
+            let header_name = header.key.clone();
+            let header_value = header.val.clone();
+            request_builder = request_builder.header(header_name, header_value);
         }
 
         request_builder

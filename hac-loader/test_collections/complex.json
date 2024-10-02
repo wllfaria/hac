@@ -1,0 +1,84 @@
+{
+    "info": {
+        "name": "Basic Collection",
+        "description": "Basic Collection Description"
+    },
+    "requests": [
+        {
+            "name": "Root Request 1",
+            "method": "POST",
+            "uri": "https://example.com",
+            "headers": [
+                { "key": "Sample Header 1", "val": "Header Value 1", "enabled": true },
+                { "key": "Sample Header 2", "val": "Header Value 2", "enabled": false }
+            ],
+            "authKind": "NO_AUTH",
+            "bodyKind": "NO_BODY",
+            "body": "{\"sampleJsonBody\": { \"sampleKey\": \"sampleValue\" } }"
+        },
+        {
+            "name": "Folder 1",
+            "requests": [
+                {
+                    "name": "Folder 1 - 1",
+                    "requests": [
+                        {
+                            "name": "Parented Request 1 Folder 1 - 1",
+                            "method": "POST",
+                            "uri": "https://example.com",
+                            "headers": [
+                                { "key": "Sample Header 1", "val": "Header Value 1", "enabled": true },
+                                { "key": "Sample Header 2", "val": "Header Value 2", "enabled": false }
+                            ],
+                            "authKind": "NO_AUTH",
+                            "bodyKind": "JSON",
+                            "body": "{\"sampleJsonBody\": { \"sampleKey\": \"sampleValue\" } }"
+                        },
+                        {
+                            "name": "Folder 1 - 2",
+                            "requests": [
+                                {
+                                    "name": "Parented Request 1 Folder 1 - 2",
+                                    "method": "POST",
+                                    "uri": "https://example.com",
+                                    "headers": [
+                                        { "key": "Sample Header 1", "val": "Header Value 1", "enabled": true },
+                                        { "key": "Sample Header 2", "val": "Header Value 2", "enabled": false }
+                                    ],
+                                    "authKind": "NO_AUTH",
+                                    "bodyKind": "JSON",
+                                    "body": "{\"sampleJsonBody\": { \"sampleKey\": \"sampleValue\" } }"
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Parented Request 2 Folder 1 - 1",
+                            "method": "POST",
+                            "uri": "https://example.com",
+                            "headers": [
+                                { "key": "Sample Header 1", "val": "Header Value 1", "enabled": true },
+                                { "key": "Sample Header 2", "val": "Header Value 2", "enabled": false }
+                            ],
+                            "authKind": "NO_AUTH",
+                            "bodyKind": "JSON",
+                            "body": "{\"sampleJsonBody\": { \"sampleKey\": \"sampleValue\" } }"
+                        }
+                    ]
+                },
+                {
+                    "name": "Parented Request 1 Folder 1",
+                    "method": "POST",
+                    "uri": "https://example.com",
+                    "headers": [
+                        { "key": "Sample Header 1", "val": "Header Value 1", "enabled": true },
+                        { "key": "Sample Header 2", "val": "Header Value 2", "enabled": false }
+                    ],
+                    "authKind": "NO_AUTH",
+                    "bodyKind": "JSON",
+                    "body": "{\"sampleJsonBody\": { \"sampleKey\": \"sampleValue\" } }"
+                }
+            ]
+        }
+    ]
+}
+

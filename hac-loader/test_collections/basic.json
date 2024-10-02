@@ -1,0 +1,37 @@
+{
+    "info": {
+        "name": "Basic Collection",
+        "description": "Basic Collection Description"
+    },
+    "requests": [
+        {
+            "name": "Sample Folder",
+            "requests": [
+                {
+                    "name": "Sample Parented Request",
+                    "method": "POST",
+                    "uri": "https://example.com",
+                    "headers": [
+                        { "key": "Sample Header 1", "val": "Header Value 1", "enabled": true },
+                        { "key": "Sample Header 2", "val": "Header Value 2", "enabled": false }
+                    ],
+                    "authKind": "NO_AUTH",
+                    "bodyKind": "JSON",
+                    "body": "{\"sampleJsonBody\": { \"sampleKey\": \"sampleValue\" } }"
+                }
+            ]
+        },
+        {
+            "name": "Sample Root Request",
+            "method": "POST",
+            "uri": "https://example.com",
+            "headers": [
+                { "key": "Sample Header 1", "val": "Header Value 1", "enabled": true },
+                { "key": "Sample Header 2", "val": "Header Value 2", "enabled": false }
+            ],
+            "authKind": "NO_AUTH",
+            "bodyKind": "NO_BODY",
+            "body": "{\"sampleJsonBody\": { \"sampleKey\": \"sampleValue\" } }"
+        }
+    ]
+}

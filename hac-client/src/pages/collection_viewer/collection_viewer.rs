@@ -1,25 +1,28 @@
-use hac_core::collection::types::*;
-use hac_core::command::Command;
-use hac_core::net::request_manager::Response;
-
-use crate::pages::collection_viewer::collection_store::{CollectionStore, CollectionStoreAction};
-use crate::pages::collection_viewer::request_editor::{RequestEditor, RequestEditorEvent};
-use crate::pages::collection_viewer::request_uri::{RequestUri, RequestUriEvent};
-use crate::pages::collection_viewer::response_viewer::{ResponseViewer, ResponseViewerEvent};
-use crate::pages::collection_viewer::sidebar::{self, Sidebar, SidebarEvent};
-use crate::pages::{Eventful, Renderable};
-
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ops::{Add, Div};
+use std::ops::Div;
 use std::rc::Rc;
+use std::sync::mpsc::Sender;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use hac_core::command::Command;
+use hac_core::net::request_manager::Response;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Stylize;
 use ratatui::widgets::{Block, Clear};
 use ratatui::Frame;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+
+use super::request_uri::{RequestUri, RequestUriEvent};
+use super::sidebar::{Sidebar, SidebarEvent};
+use crate::pages::collection_list::CollectionListData;
+//use crate::pages::collection_viewer::collection_store::{CollectionStore, CollectionStoreAction};
+//use crate::pages::collection_viewer::request_editor::{RequestEditor, RequestEditorEvent};
+//use crate::pages::collection_viewer::request_uri::{RequestUri, RequestUriEvent};
+//use crate::pages::collection_viewer::response_viewer::{ResponseViewer, ResponseViewerEvent};
+//use crate::pages::collection_viewer::sidebar::{self, Sidebar, SidebarEvent};
+use crate::renderable::{Eventful, Renderable};
+use crate::{HacColors, HacConfig};
 
 #[derive(Debug, PartialEq)]
 pub struct ExplorerLayout {
@@ -75,56 +78,45 @@ impl PaneFocus {
 }
 
 #[derive(Debug)]
-pub struct CollectionViewer<'cv> {
-    response_viewer: ResponseViewer<'cv>,
-    request_editor: RequestEditor<'cv>,
-    request_uri: RequestUri<'cv>,
-    sidebar: Sidebar<'cv>,
+pub struct CollectionViewer {
+    focus: PaneFocus,
+    selection: Option<PaneFocus>,
+    request_uri: RequestUri,
+    sidebar: Sidebar,
 
-    colors: &'cv hac_colors::Colors,
-    config: &'cv hac_config::Config,
+    //response_viewer: ResponseViewer<'cv>,
+    //request_editor: RequestEditor<'cv>,
+    colors: HacColors,
+    config: HacConfig,
     layout: ExplorerLayout,
-    global_command_sender: Option<UnboundedSender<Command>>,
+    global_command_sender: Option<Sender<Command>>,
     collection_sync_timer: std::time::Instant,
-    collection_store: Rc<RefCell<CollectionStore>>,
 
     responses_map: HashMap<String, Rc<RefCell<Response>>>,
     response_rx: UnboundedReceiver<Response>,
     request_tx: UnboundedSender<Response>,
-
-    dry_run: bool,
 }
 
-impl<'cv> CollectionViewer<'cv> {
-    pub fn new(
-        size: Rect,
-        collection_store: Rc<RefCell<CollectionStore>>,
-        colors: &'cv hac_colors::Colors,
-        config: &'cv hac_config::Config,
-        dry_run: bool,
-    ) -> Self {
+impl CollectionViewer {
+    pub fn new(size: Rect, colors: HacColors, config: HacConfig) -> Self {
         let layout = build_layout(size);
         let (request_tx, response_rx) = unbounded_channel::<Response>();
 
-        let sidebar = sidebar::Sidebar::new(colors, collection_store.clone());
-
-        let request_editor =
-            RequestEditor::new(colors, config, collection_store.clone(), layout.req_editor);
-
-        let response_viewer = ResponseViewer::new(
-            colors,
-            collection_store.clone(),
-            None,
-            layout.response_preview,
-        );
-
-        let request_uri = RequestUri::new(colors, collection_store.clone(), layout.req_uri);
+        //
+        //let request_editor = RequestEditor::new(colors, config, collection_store.clone(), layout.req_editor);
+        //
+        //let response_viewer = ResponseViewer::new(colors, collection_store.clone(), None, layout.response_preview);
+        let mut sidebar = Sidebar::new(colors.clone(), config.clone());
+        sidebar.focus();
 
         CollectionViewer {
-            request_editor,
-            response_viewer,
+            focus: PaneFocus::Sidebar,
+            selection: None,
+            request_uri: RequestUri::new(colors.clone(), layout.req_uri),
             sidebar,
-            request_uri,
+
+            //request_editor,
+            //response_viewer,
             colors,
             layout,
             config,
@@ -133,355 +125,318 @@ impl<'cv> CollectionViewer<'cv> {
             responses_map: HashMap::default(),
             response_rx,
             request_tx,
-            dry_run,
-            collection_store,
         }
     }
 
-    fn rebuild_everything(&mut self) {
-        self.sidebar = sidebar::Sidebar::new(self.colors, self.collection_store.clone());
-        self.request_editor = RequestEditor::new(
-            self.colors,
-            self.config,
-            self.collection_store.clone(),
-            self.layout.req_editor,
-        );
-        self.response_viewer = ResponseViewer::new(
-            self.colors,
-            self.collection_store.clone(),
-            None,
-            self.layout.response_preview,
-        );
-        self.request_uri = RequestUri::new(
-            self.colors,
-            self.collection_store.clone(),
-            self.layout.req_uri,
-        );
-    }
-
-    fn focus_next(&mut self) {
-        let next_pane = self.collection_store.borrow().get_focused_pane().next();
-        self.update_focus(next_pane);
-    }
-
-    fn focus_prev(&mut self) {
-        let prev_pane = self.collection_store.borrow().get_focused_pane().prev();
-        self.update_focus(prev_pane);
-    }
+    //fn rebuild_everything(&mut self) {
+    //    self.sidebar = sidebar::Sidebar::new(self.colors, self.collection_store.clone());
+    //    self.request_editor = RequestEditor::new(
+    //        self.colors,
+    //        self.config,
+    //        self.collection_store.clone(),
+    //        self.layout.req_editor,
+    //    );
+    //    self.response_viewer = ResponseViewer::new(
+    //        self.colors,
+    //        self.collection_store.clone(),
+    //        None,
+    //        self.layout.response_preview,
+    //    );
+    //    self.request_uri = RequestUri::new(self.colors, self.collection_store.clone(), self.layout.req_uri);
+    //}
 
     // collect all pending responses from the channel. Here, I don't see a way we
     // may have more than one response on this channel at any point, but it shouldn't matter
     // if we have, so we can drain all the responses and update accordingly
-    fn drain_responses_channel(&mut self) {
-        while let Ok(res) = self.response_rx.try_recv() {
-            let res = Rc::new(RefCell::new(res));
-            self.collection_store
-                .borrow()
-                .get_selected_request()
-                .as_ref()
-                .and_then(|req| {
-                    self.responses_map
-                        .insert(req.read().unwrap().id.to_string(), Rc::clone(&res))
-                });
-            self.response_viewer.update(Some(Rc::clone(&res)));
-            self.response_rx.is_empty().then(|| {
-                self.collection_store
-                    .borrow_mut()
-                    .dispatch(CollectionStoreAction::SetPendingRequest(false));
-            });
-        }
-    }
+    //fn drain_responses_channel(&mut self) {
+    //    while let Ok(res) = self.response_rx.try_recv() {
+    //        let res = Rc::new(RefCell::new(res));
+    //        self.collection_store
+    //            .borrow()
+    //            .get_selected_request()
+    //            .as_ref()
+    //            .and_then(|req| {
+    //                self.responses_map
+    //                    .insert(req.read().unwrap().id.to_string(), Rc::clone(&res))
+    //            });
+    //        self.response_viewer.update(Some(Rc::clone(&res)));
+    //        self.response_rx.is_empty().then(|| {
+    //            self.collection_store
+    //                .borrow_mut()
+    //                .dispatch(CollectionStoreAction::SetPendingRequest(false));
+    //        });
+    //    }
+    //}
 
-    fn sync_collection_changes(&mut self) {
-        let sender = self
-            .global_command_sender
-            .as_ref()
-            .expect("should have a sender at this point")
-            .clone();
+    //fn sync_collection_changes(&mut self) {
+    //    let sender = self
+    //        .global_command_sender
+    //        .as_ref()
+    //        .expect("should have a sender at this point")
+    //        .clone();
+    //
+    //    let mut collection = self
+    //        .collection_store
+    //        .borrow()
+    //        .get_collection()
+    //        .clone()
+    //        .expect("tried to sync collection to disk without having a collection")
+    //        .borrow()
+    //        .clone();
+    //    if let Some(request) = self.collection_store.borrow().get_selected_request() {
+    //        let request = request.clone();
+    //        let body = self.request_editor.body().to_string();
+    //        // this is not the best idea for when we start implementing other kinds of
+    //        // body types like GraphQL
+    //        if !body.is_empty() {
+    //            request.write().unwrap().body = Some(body);
+    //            request.write().unwrap().body_type = Some(BodyType::Json)
+    //        }
+    //
+    //        // we might later on decide to keep track of the actual dir/request index
+    //        // so we dont have to go over all the possible requests, this might be a
+    //        // problem for huge collections, but I haven't tested
+    //        collection
+    //            .requests
+    //            .as_mut()
+    //            .expect("no requests on collection, but we have a selected request")
+    //            .write()
+    //            .unwrap()
+    //            .iter_mut()
+    //            .for_each(|other| match other {
+    //                RequestKind::Single(inner) => {
+    //                    if request.read().unwrap().id.eq(&inner.read().unwrap().id) {
+    //                        *inner = request.clone();
+    //                    }
+    //                }
+    //                RequestKind::Nested(dir) => dir.requests.write().unwrap().iter_mut().for_each(|other| {
+    //                    if let RequestKind::Single(inner) = other {
+    //                        if request.read().unwrap().id.eq(&inner.read().unwrap().id) {
+    //                            *inner = request.clone();
+    //                        }
+    //                    }
+    //                }),
+    //            });
+    //    }
 
-        let mut collection = self
-            .collection_store
-            .borrow()
-            .get_collection()
-            .clone()
-            .expect("tried to sync collection to disk without having a collection")
-            .borrow()
-            .clone();
-        if let Some(request) = self.collection_store.borrow().get_selected_request() {
-            let request = request.clone();
-            let body = self.request_editor.body().to_string();
-            // this is not the best idea for when we start implementing other kinds of
-            // body types like GraphQL
-            if !body.is_empty() {
-                request.write().unwrap().body = Some(body);
-                request.write().unwrap().body_type = Some(BodyType::Json)
-            }
+    //self.collection_sync_timer = std::time::Instant::now();
 
-            // we might later on decide to keep track of the actual dir/request index
-            // so we dont have to go over all the possible requests, this might be a
-            // problem for huge collections, but I haven't tested
-            collection
-                .requests
-                .as_mut()
-                .expect("no requests on collection, but we have a selected request")
-                .write()
-                .unwrap()
-                .iter_mut()
-                .for_each(|other| match other {
-                    RequestKind::Single(inner) => {
-                        if request.read().unwrap().id.eq(&inner.read().unwrap().id) {
-                            *inner = request.clone();
-                        }
-                    }
-                    RequestKind::Nested(dir) => {
-                        dir.requests.write().unwrap().iter_mut().for_each(|other| {
-                            if let RequestKind::Single(inner) = other {
-                                if request.read().unwrap().id.eq(&inner.read().unwrap().id) {
-                                    *inner = request.clone();
-                                }
-                            }
-                        })
-                    }
-                });
-        }
+    //if self.dry_run {
+    //    return;
+    //}
 
-        self.collection_sync_timer = std::time::Instant::now();
+    //tokio::spawn(async move {
+    //    match hac_core::fs::sync_collection(collection).await {
+    //        Ok(_) => {}
+    //        Err(e) => {
+    //            if sender.send(Command::Error(e.to_string())).is_err() {
+    //                tracing::error!("failed to send error command through channel");
+    //                std::process::abort();
+    //            }
+    //        }
+    //    }
+    //});
+    //}
 
-        if self.dry_run {
+    /// updating selection will always also update the focus, as we cannot
+    /// select something that isn't also focused, unless pane_to_select is
+    /// None, in which case we won't change focus at all
+    #[inline]
+    fn update_selection(&mut self, pane_to_select: Option<PaneFocus>) {
+        if hac_store::collection::is_empty() {
             return;
         }
 
-        tokio::spawn(async move {
-            match hac_core::fs::sync_collection(collection).await {
-                Ok(_) => {}
-                Err(e) => {
-                    if sender.send(Command::Error(e.to_string())).is_err() {
-                        tracing::error!("failed to send error command through channel");
-                        std::process::abort();
-                    }
-                }
+        match self.selection {
+            Some(PaneFocus::Sidebar) => self.sidebar.deselect(),
+            Some(PaneFocus::ReqUri) => self.request_uri.deselect(),
+            Some(PaneFocus::Preview) => {}
+            Some(PaneFocus::Editor) => {}
+            None => {}
+        }
+        match pane_to_select {
+            Some(pane @ PaneFocus::Sidebar) => {
+                self.sidebar.select();
+                self.focus = pane;
             }
-        });
+            Some(pane @ PaneFocus::ReqUri) => {
+                self.request_uri.select();
+                self.focus = pane;
+            }
+            Some(pane @ PaneFocus::Preview) => {
+                self.focus = pane;
+            }
+            Some(pane @ PaneFocus::Editor) => {
+                self.focus = pane;
+            }
+            None => {}
+        }
+        self.selection = pane_to_select;
     }
 
-    fn update_selection(&mut self, pane_to_select: Option<PaneFocus>) {
-        self.collection_store
-            .borrow_mut()
-            .dispatch(CollectionStoreAction::SetSelectedPane(pane_to_select));
-    }
-
+    #[inline]
     fn update_focus(&mut self, pane_to_focus: PaneFocus) {
-        self.collection_store
-            .borrow_mut()
-            .dispatch(CollectionStoreAction::SetFocusedPane(pane_to_focus));
+        match self.focus {
+            PaneFocus::Sidebar => self.sidebar.blur(),
+            PaneFocus::ReqUri => self.request_uri.blur(),
+            PaneFocus::Preview => {}
+            PaneFocus::Editor => {}
+        }
+        match pane_to_focus {
+            PaneFocus::Sidebar => self.sidebar.focus(),
+            PaneFocus::ReqUri => self.request_uri.focus(),
+            PaneFocus::Preview => {}
+            PaneFocus::Editor => {}
+        }
+        self.focus = pane_to_focus;
+    }
+
+    #[inline]
+    fn focus_next(&mut self) {
+        let next = self.focus.next();
+        self.update_focus(next);
+    }
+
+    #[inline]
+    fn focus_prev(&mut self) {
+        let prev = self.focus.prev();
+        self.update_focus(prev);
     }
 }
 
-impl Renderable for CollectionViewer<'_> {
+impl Renderable for CollectionViewer {
+    type Input = CollectionListData;
+    type Output = ();
+
     #[tracing::instrument(skip_all)]
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
-        // we redraw the background to prevent weird "transparent" spots when popups are
-        // cleared from the buffer
         frame.render_widget(Clear, size);
         frame.render_widget(Block::default().bg(self.colors.primary.background), size);
 
-        self.drain_responses_channel();
+        //self.drain_responses_channel();
 
-        self.sidebar.draw(frame, self.layout.sidebar)?;
-        self.response_viewer
-            .draw(frame, self.layout.response_preview)?;
-        self.request_editor.draw(frame, self.layout.req_editor)?;
         self.request_uri.draw(frame, self.layout.req_uri)?;
+        self.sidebar.draw(frame, self.layout.sidebar)?;
 
-        let overlay = self.collection_store.borrow().peek_overlay();
-        match overlay {
-            CollectionViewerOverlay::CreateRequest => {
-                self.sidebar.draw_overlay(frame, overlay)?;
-            }
-            CollectionViewerOverlay::CreateDirectory => {
-                self.sidebar.draw_overlay(frame, overlay)?;
-            }
-            CollectionViewerOverlay::SelectParentDir => {
-                self.sidebar.draw_overlay(frame, overlay)?;
-            }
-            CollectionViewerOverlay::EditRequest => {
-                self.sidebar.draw_overlay(frame, overlay)?;
-            }
-            CollectionViewerOverlay::EditDirectory => {
-                self.sidebar.draw_overlay(frame, overlay)?;
-            }
-            CollectionViewerOverlay::DeleteSidebarItem(_) => {
-                self.sidebar.draw_overlay(frame, overlay)?;
-            }
-            CollectionViewerOverlay::HeadersHelp => {
-                self.request_editor.draw_overlay(frame, overlay)?;
-            }
-            CollectionViewerOverlay::HeadersDelete => {
-                self.request_editor.draw_overlay(frame, overlay)?;
-            }
-            CollectionViewerOverlay::HeadersForm(_, _) => {
-                self.request_editor.draw_overlay(frame, overlay)?;
-            }
-            CollectionViewerOverlay::ChangeAuthMethod => {
-                self.request_editor.draw_overlay(frame, overlay)?;
-            }
-            CollectionViewerOverlay::None => {}
-        }
+        //self.response_viewer.draw(frame, self.layout.response_preview)?;
+        //self.request_editor.draw(frame, self.layout.req_editor)?;
 
-        if self
-            .collection_store
-            .borrow()
-            .get_selected_pane()
-            .as_ref()
-            .is_some_and(|pane| pane.eq(&PaneFocus::Editor))
-        {
-            self.request_editor.maybe_draw_cursor(frame);
-        }
+        //let overlay = self.collection_store.borrow().peek_overlay();
+        //match overlay {
+        //    CollectionViewerOverlay::CreateRequest => {
+        //        self.sidebar.draw_overlay(frame, overlay)?;
+        //    }
+        //    CollectionViewerOverlay::CreateDirectory => {
+        //        self.sidebar.draw_overlay(frame, overlay)?;
+        //    }
+        //    CollectionViewerOverlay::SelectParentDir => {
+        //        self.sidebar.draw_overlay(frame, overlay)?;
+        //    }
+        //    CollectionViewerOverlay::EditRequest => {
+        //        self.sidebar.draw_overlay(frame, overlay)?;
+        //    }
+        //    CollectionViewerOverlay::EditDirectory => {
+        //        self.sidebar.draw_overlay(frame, overlay)?;
+        //    }
+        //    CollectionViewerOverlay::DeleteSidebarItem(_) => {
+        //        self.sidebar.draw_overlay(frame, overlay)?;
+        //    }
+        //    CollectionViewerOverlay::HeadersHelp => {
+        //        self.request_editor.draw_overlay(frame, overlay)?;
+        //    }
+        //    CollectionViewerOverlay::HeadersDelete => {
+        //        self.request_editor.draw_overlay(frame, overlay)?;
+        //    }
+        //    CollectionViewerOverlay::HeadersForm(_, _) => {
+        //        self.request_editor.draw_overlay(frame, overlay)?;
+        //    }
+        //    CollectionViewerOverlay::ChangeAuthMethod => {
+        //        self.request_editor.draw_overlay(frame, overlay)?;
+        //    }
+        //    CollectionViewerOverlay::None => {}
+        //}
 
-        if self
-            .collection_store
-            .borrow()
-            .get_selected_pane()
-            .as_ref()
-            .is_some_and(|pane| pane.eq(&PaneFocus::ReqUri))
-        {
-            if let Some(request) = self
-                .collection_store
-                .borrow()
-                .get_selected_request()
-                .as_ref()
-            {
-                frame.set_cursor(
-                    self.layout
-                        .req_uri
-                        .x
-                        .add(request.read().unwrap().uri.chars().count() as u16)
-                        .add(1),
-                    self.layout.req_uri.y.add(1),
-                )
-            }
-        }
+        //if self
+        //    .collection_store
+        //    .borrow()
+        //    .get_selected_pane()
+        //    .as_ref()
+        //    .is_some_and(|pane| pane.eq(&PaneFocus::Editor))
+        //{
+        //    self.request_editor.maybe_draw_cursor(frame);
+        //}
+
+        //if self
+        //    .collection_store
+        //    .borrow()
+        //    .get_selected_pane()
+        //    .as_ref()
+        //    .is_some_and(|pane| pane.eq(&PaneFocus::ReqUri))
+        //{
+        //    if let Some(request) = self.collection_store.borrow().get_selected_request().as_ref() {
+        //        frame.set_cursor(
+        //            self.layout
+        //                .req_uri
+        //                .x
+        //                .add(request.read().unwrap().uri.chars().count() as u16)
+        //                .add(1),
+        //            self.layout.req_uri.y.add(1),
+        //        )
+        //    }
+        //}
 
         Ok(())
     }
 
-    fn handle_tick(&mut self) -> anyhow::Result<()> {
+    fn tick(&mut self) -> anyhow::Result<()> {
         if self.collection_sync_timer.elapsed().as_secs().ge(&5) {
-            self.sync_collection_changes();
+            //self.sync_collection_changes();
         }
         Ok(())
     }
 
-    fn register_command_handler(&mut self, sender: UnboundedSender<Command>) -> anyhow::Result<()> {
+    fn data(&self, _requester: u8) -> Self::Output {}
+
+    fn register_command_handler(&mut self, sender: Sender<Command>) {
         self.global_command_sender = Some(sender);
-        Ok(())
     }
 
     fn resize(&mut self, new_size: Rect) {
         let new_layout = build_layout(new_size);
-        self.request_editor.resize(new_layout.req_editor);
-        self.response_viewer.resize(new_layout.response_preview);
+        //self.request_editor.resize(new_layout.req_editor);
+        //self.response_viewer.resize(new_layout.response_preview);
         self.layout = new_layout;
     }
 }
 
-impl Eventful for CollectionViewer<'_> {
+impl Eventful for CollectionViewer {
     type Result = Command;
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Command>> {
-        if let (
-            None,
-            KeyEvent {
-                code: KeyCode::Char('c'),
-                modifiers: KeyModifiers::CONTROL,
-                ..
-            },
-        ) = (
-            self.collection_store.borrow().get_selected_pane(),
-            key_event,
-        ) {
+        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
             return Ok(Some(Command::Quit));
         }
 
-        if self.collection_store.borrow().get_selected_pane().is_none() {
+        if self.selection.is_none() {
             match key_event.code {
-                KeyCode::Char('r') => {
-                    self.update_focus(PaneFocus::Sidebar);
-                    self.update_selection(Some(PaneFocus::Sidebar));
-                }
-                KeyCode::Char('u') => {
-                    self.update_focus(PaneFocus::ReqUri);
-                    self.update_selection(Some(PaneFocus::ReqUri));
-                }
-                KeyCode::Char('p') => {
-                    self.update_focus(PaneFocus::Preview);
-                    self.update_selection(Some(PaneFocus::Preview));
-                }
-                KeyCode::Char('e') => {
-                    self.update_focus(PaneFocus::Editor);
-                    self.update_selection(Some(PaneFocus::Editor));
-                }
+                KeyCode::Char('r') => self.update_selection(Some(PaneFocus::Sidebar)),
+                KeyCode::Char('u') => self.update_selection(Some(PaneFocus::ReqUri)),
+                KeyCode::Char('p') => self.update_selection(Some(PaneFocus::Preview)),
+                KeyCode::Char('e') => self.update_selection(Some(PaneFocus::Editor)),
                 KeyCode::Tab => self.focus_next(),
                 KeyCode::BackTab => self.focus_prev(),
-                KeyCode::Enter => {
-                    let curr_pane = self.collection_store.borrow().get_focused_pane();
-                    self.update_selection(Some(curr_pane));
-                }
+                KeyCode::Enter => self.update_selection(Some(self.focus)),
                 _ => {}
             }
             return Ok(None);
         }
 
-        let selected_pane = self.collection_store.borrow().get_selected_pane();
-        if let Some(curr_pane) = selected_pane {
-            match curr_pane {
-                PaneFocus::Sidebar => match self.sidebar.handle_key_event(key_event)? {
-                    Some(SidebarEvent::CreateRequest) => self
-                        .collection_store
-                        .borrow_mut()
-                        .push_overlay(CollectionViewerOverlay::CreateRequest),
-                    Some(SidebarEvent::EditRequest) => self
-                        .collection_store
-                        .borrow_mut()
-                        .push_overlay(CollectionViewerOverlay::EditRequest),
-                    Some(SidebarEvent::EditDirectory) => self
-                        .collection_store
-                        .borrow_mut()
-                        .push_overlay(CollectionViewerOverlay::EditDirectory),
-                    Some(SidebarEvent::CreateDirectory) => self
-                        .collection_store
-                        .borrow_mut()
-                        .push_overlay(CollectionViewerOverlay::CreateDirectory),
-                    Some(SidebarEvent::DeleteItem(item_id)) => self
-                        .collection_store
-                        .borrow_mut()
-                        .push_overlay(CollectionViewerOverlay::DeleteSidebarItem(item_id)),
-                    Some(SidebarEvent::RemoveSelection) => self.update_selection(None),
-                    Some(SidebarEvent::SelectNext) => {
-                        self.update_selection(None);
-                        self.focus_next();
-                    }
-                    Some(SidebarEvent::SelectPrev) => {
-                        self.update_selection(None);
-                        self.focus_prev();
-                    }
-                    Some(SidebarEvent::SyncCollection) => self.sync_collection_changes(),
-                    Some(SidebarEvent::Quit) => return Ok(Some(Command::Quit)),
-                    Some(SidebarEvent::RebuildView) => self.rebuild_everything(),
-                    // when theres no event we do nothing
-                    None => {}
-                },
+        if let Some(pane) = self.selection {
+            match pane {
                 PaneFocus::ReqUri => match self.request_uri.handle_key_event(key_event)? {
                     Some(RequestUriEvent::Quit) => return Ok(Some(Command::Quit)),
-                    Some(RequestUriEvent::SendRequest) => hac_core::net::handle_request(
-                        self.collection_store
-                            .borrow()
-                            .get_selected_request()
-                            .as_ref()
-                            .unwrap(),
-                        self.request_tx.clone(),
-                    ),
                     Some(RequestUriEvent::RemoveSelection) => self.update_selection(None),
+                    Some(RequestUriEvent::SendRequest) => todo!(),
                     Some(RequestUriEvent::SelectNext) => {
                         self.update_selection(None);
                         self.focus_next();
@@ -490,21 +445,59 @@ impl Eventful for CollectionViewer<'_> {
                         self.update_selection(None);
                         self.focus_prev();
                     }
-                    // when theres no event we do nothing
                     None => {}
                 },
-                PaneFocus::Preview => match self.response_viewer.handle_key_event(key_event)? {
-                    Some(ResponseViewerEvent::RemoveSelection) => self.update_selection(None),
-                    Some(ResponseViewerEvent::Quit) => return Ok(Some(Command::Quit)),
-                    // when theres no event we do nothing
-                    None => {}
+                PaneFocus::Sidebar => match self.sidebar.handle_key_event(key_event)? {
+                    Some(SidebarEvent::SelectNext) => {
+                        self.update_selection(None);
+                        self.focus_next();
+                    }
+                    Some(SidebarEvent::SelectPrev) => {
+                        self.update_selection(None);
+                        self.focus_prev();
+                    }
+                    Some(SidebarEvent::RemoveSelection) => self.update_selection(None),
+                    Some(e) => tracing::trace!("{e:?}"),
+                    None => (),
+                    //Some(SidebarEvent::CreateRequest) => self
+                    //    .collection_store
+                    //    .borrow_mut()
+                    //    .push_overlay(CollectionViewerOverlay::CreateRequest),
+                    //Some(SidebarEvent::EditRequest) => self
+                    //    .collection_store
+                    //    .borrow_mut()
+                    //    .push_overlay(CollectionViewerOverlay::EditRequest),
+                    //Some(SidebarEvent::EditDirectory) => self
+                    //    .collection_store
+                    //    .borrow_mut()
+                    //    .push_overlay(CollectionViewerOverlay::EditDirectory),
+                    //Some(SidebarEvent::CreateDirectory) => self
+                    //    .collection_store
+                    //    .borrow_mut()
+                    //    .push_overlay(CollectionViewerOverlay::CreateDirectory),
+                    //Some(SidebarEvent::DeleteItem(item_id)) => self
+                    //    .collection_store
+                    //    .borrow_mut()
+                    //    .push_overlay(CollectionViewerOverlay::DeleteSidebarItem(item_id)),
+                    //Some(SidebarEvent::SyncCollection) => self.sync_collection_changes(),
+                    //Some(SidebarEvent::Quit) => return Ok(Some(Command::Quit)),
+                    //Some(SidebarEvent::RebuildView) => self.rebuild_everything(),
+                    //// when theres no event we do nothing
+                    //None => {}
                 },
-                PaneFocus::Editor => match self.request_editor.handle_key_event(key_event)? {
-                    Some(RequestEditorEvent::RemoveSelection) => self.update_selection(None),
-                    Some(RequestEditorEvent::Quit) => return Ok(Some(Command::Quit)),
-                    // when theres no event we do nothing
-                    None => {}
-                },
+                //        PaneFocus::Preview => match self.response_viewer.handle_key_event(key_event)? {
+                //            Some(ResponseViewerEvent::RemoveSelection) => self.update_selection(None),
+                //            Some(ResponseViewerEvent::Quit) => return Ok(Some(Command::Quit)),
+                //            // when theres no event we do nothing
+                //            None => {}
+                //        },
+                //        PaneFocus::Editor => match self.request_editor.handle_key_event(key_event)? {
+                //            Some(RequestEditorEvent::RemoveSelection) => self.update_selection(None),
+                //            Some(RequestEditorEvent::Quit) => return Ok(Some(Command::Quit)),
+                //            // when theres no event we do nothing
+                //            None => {}
+                //        },
+                _ => todo!(),
             };
         }
 

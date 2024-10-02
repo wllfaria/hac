@@ -18,6 +18,8 @@ hac-core.workspace = true
 hac-config.workspace = true
 hac-colors.workspace = true
 hac-cli.workspace = true
+hac-loader.workspace = true
+hac-store.workspace = true
 
 anyhow.workspace = true
 crossterm.workspace = true
@@ -31,7 +33,6 @@ divan.workspace = true
 lazy_static.workspace = true
 
 futures = "0.3.30"
-tui-big-text = { version = "0.4.3" }
 tracing-subscriber = { version = "0.3.18" }
 tracing-appender = "0.2.3"
 uuid = { version = "1.10.0", features = ["v4", "fast-rng", "macro-diagnostics"] }
@@ -46,7 +47,3 @@ name = "hac"
 test = false
 bench = false
 path = "src/main.rs"
-
-[[bench]]
-name = "collection_viewer_bench"
-harness = false

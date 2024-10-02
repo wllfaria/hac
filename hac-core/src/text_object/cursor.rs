@@ -42,8 +42,13 @@ impl Cursor {
     }
 
     pub fn move_to_line_end(&mut self, line_len: usize) {
-        self.col = line_len.saturating_sub(1);
+        self.col = line_len + 1;
         self.snapback_col = self.col;
+    }
+
+    pub fn move_to(&mut self, col: usize, row: usize) {
+        self.move_to_row(row);
+        self.move_to_col(col);
     }
 
     pub fn move_to_col(&mut self, col: usize) {
@@ -91,16 +96,11 @@ impl Cursor {
     // when moving into a bigger line (line_len > cursor.col) we make the col snap back
     // to the min col between line_len and the current expand_col position.
     pub fn maybe_snap_to_col(&mut self, line_len: usize) {
-        match line_len.saturating_sub(1).cmp(&self.col) {
+        match line_len.cmp(&self.col) {
             std::cmp::Ordering::Less => {
-                if self.snapback_col.eq(&self.col) {
-                    self.snapback_col = self.col;
-                }
-                self.col = line_len.saturating_sub(1);
+                self.col = line_len + 1;
             }
-            std::cmp::Ordering::Greater => {
-                self.col = self.snapback_col.min(line_len.saturating_sub(1))
-            }
+            std::cmp::Ordering::Greater => self.col = self.snapback_col.min(line_len.saturating_sub(1)),
             // if both expand_col and col are the same we dont have to do nothing
             std::cmp::Ordering::Equal => {}
         }

@@ -1,12 +1,12 @@
-use crate::collection::types::{BodyType, Request};
-use crate::net::request_strategies::{http_strategy::HttpResponse, RequestStrategy};
-use crate::text_object::{Readonly, TextObject};
-
-use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+use hac_store::collection::{BodyKind, Request};
 use reqwest::header::{HeaderMap, HeaderValue};
 use tokio::sync::mpsc::UnboundedSender;
+
+use crate::net::request_strategies::http_strategy::HttpResponse;
+use crate::net::request_strategies::RequestStrategy;
+use crate::text_object::{Readonly, TextObject};
 
 #[derive(Debug, PartialEq)]
 pub struct Response {
@@ -58,20 +58,14 @@ impl From<&str> for ContentType {
 }
 
 #[tracing::instrument(skip_all)]
-pub fn handle_request(request: &Arc<RwLock<Request>>, response_tx: UnboundedSender<Response>) {
-    let request = request.read().unwrap().clone();
+pub fn handle_request(request: Request, response_tx: UnboundedSender<Response>) {
     tokio::spawn(async move {
-        let response = match request.body_type.as_ref() {
+        let response = match request.body_kind {
             // if we dont have a body type, this is a GET request, so we use HTTP strategy
-            None => RequestManager::handle(HttpResponse, request).await,
-            Some(body_type) => match body_type {
-                BodyType::Json => RequestManager::handle(HttpResponse, request).await,
-            },
+            BodyKind::NoBody => RequestManager::handle(HttpResponse, request).await,
+            BodyKind::Json => RequestManager::handle(HttpResponse, request).await,
         };
 
-        response_tx
-            .send(response)
-            .is_err()
-            .then(|| std::process::abort());
+        response_tx.send(response).is_err().then(|| std::process::abort());
     });
 }

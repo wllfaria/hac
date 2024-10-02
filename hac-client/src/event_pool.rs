@@ -1,7 +1,8 @@
+use std::ops::Div;
+
 use crossterm::event::{Event as CrosstermEvent, KeyEventKind};
 use futures::{FutureExt, StreamExt};
 use ratatui::layout::Rect;
-use std::ops::Div;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Event {
@@ -15,15 +16,15 @@ pub enum Event {
 /// them over to be handled
 #[derive(Debug)]
 pub struct EventPool {
-    event_rx: tokio::sync::mpsc::UnboundedReceiver<Event>,
-    event_tx: tokio::sync::mpsc::UnboundedSender<Event>,
+    event_rx: std::sync::mpsc::Receiver<Event>,
+    event_tx: std::sync::mpsc::Sender<Event>,
     frame_rate: f64,
     tick_rate: f64,
 }
 
 impl EventPool {
     pub fn new(frame_rate: f64, tick_rate: f64) -> Self {
-        let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (event_tx, event_rx) = std::sync::mpsc::channel();
 
         EventPool {
             event_rx,
@@ -75,7 +76,7 @@ impl EventPool {
     }
 
     #[cfg_attr(test, mutants::skip)]
-    pub async fn next(&mut self) -> Option<Event> {
-        self.event_rx.recv().await
+    pub fn next_event(&mut self) -> Option<Event> {
+        self.event_rx.recv().ok()
     }
 }

@@ -1,7 +1,9 @@
-use crate::net::{request_manager::Response, response_decoders::ResponseDecoder};
-use crate::text_object::TextObject;
+use std::ops::Add;
+use std::time::Instant;
 
-use std::{ops::Add, time::Instant};
+use crate::net::request_manager::Response;
+use crate::net::response_decoders::ResponseDecoder;
+use crate::text_object::TextObject;
 
 pub struct JsonDecoder;
 
@@ -22,7 +24,7 @@ impl ResponseDecoder for JsonDecoder {
         if response.content_length().is_some_and(|len| len.gt(&0)) {
             if let Ok(body_str) = response.text().await {
                 let pretty_body_str = jsonxf::pretty_print(&body_str).unwrap_or_default();
-                pretty_body = Some(TextObject::from(&pretty_body_str));
+                pretty_body = Some(TextObject::from(pretty_body_str.as_str()));
                 body = Some(body_str);
             };
         }

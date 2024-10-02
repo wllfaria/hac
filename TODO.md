@@ -15,3 +15,16 @@
 - [ ] edit bodies in $EDITOR
 - [ ] add scripting to requests
 - [ ] export requests to other formats
+
+
+```rust
+
+struct AppRouter {
+    routers: Vec<Router>,
+}
+
+struct Router<R> {
+    routes: HashMap<usize, Box<dyn Renderable>>,
+}
+
+```

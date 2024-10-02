@@ -1,11 +1,4 @@
-use crate::ascii::LOGO_ASCII;
-use crate::components::component_styles::ComponentBorder;
-use crate::components::list_item::{list_item, ListItemKind};
-use crate::pages::collection_viewer::collection_store::CollectionStore;
-use crate::pages::{overlay::make_overlay, Eventful, Renderable};
-
 use std::cell::RefCell;
-use std::ops::{Add, Div, Sub};
 use std::rc::Rc;
 
 use crossterm::event::{KeyCode, KeyEvent};
@@ -17,6 +10,13 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+use crate::ascii::LOGO_ASCII;
+use crate::components::component_styles::ComponentBorder;
+use crate::components::list_item::{list_item, ListItemKind};
+use crate::pages::collection_viewer::collection_store::CollectionStore;
+use crate::pages::overlay::make_overlay_old;
+use crate::pages::{Eventful, Renderable};
+
 pub enum AuthKindPromptEvent {
     Confirm(AuthMethod),
     Cancel,
@@ -27,39 +27,28 @@ pub struct AuthKindPrompt<'akp> {
     colors: &'akp hac_colors::Colors,
     collection_store: Rc<RefCell<CollectionStore>>,
     selected_idx: usize,
-    logo_idx: usize,
 }
 
 impl<'akp> AuthKindPrompt<'akp> {
-    pub fn new(
-        colors: &'akp hac_colors::Colors,
-        collection_store: Rc<RefCell<CollectionStore>>,
-    ) -> AuthKindPrompt {
-        let logo_idx = rand::thread_rng().gen_range(0..LOGO_ASCII.len());
-
+    pub fn new(colors: &'akp hac_colors::Colors, collection_store: Rc<RefCell<CollectionStore>>) -> AuthKindPrompt {
         AuthKindPrompt {
             colors,
             collection_store,
             selected_idx: 0,
-            logo_idx,
         }
     }
 }
 
 impl Renderable for AuthKindPrompt<'_> {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
-        make_overlay(self.colors, self.colors.normal.black, 0.1, frame);
+        make_overlay_old(self.colors, self.colors.normal.black, 0.1, frame);
 
-        let logo = LOGO_ASCII[self.logo_idx];
+        let logo = LOGO_ASCII;
         let logo_size = logo.len() as u16;
         // adding size of the form + spacing + hint
 
         let [_, center, _] = Layout::default()
-            .constraints([
-                Constraint::Fill(1),
-                Constraint::Min(80),
-                Constraint::Fill(1),
-            ])
+            .constraints([Constraint::Fill(1), Constraint::Min(80), Constraint::Fill(1)])
             .direction(Direction::Horizontal)
             .areas(size);
 

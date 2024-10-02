@@ -1,22 +1,32 @@
-pub mod collection_dashboard;
-pub mod collection_viewer;
-pub mod confirm_popup;
-pub mod error_popup;
-pub mod input;
-pub mod overlay;
-mod spinner;
-pub mod terminal_too_small;
-mod under_construction;
+use std::sync::mpsc::Sender;
 
-use crate::event_pool::Event;
 use crossterm::event::KeyEvent;
 use hac_core::command::Command;
-use ratatui::{layout::Rect, Frame};
-use tokio::sync::mpsc::UnboundedSender;
+use ratatui::layout::Rect;
+use ratatui::Frame;
 
-/// A `Page` is anything that is a top level page and can be drawn to the screen
+use crate::event_pool::Event;
+use crate::router::RouterMessage;
+
+/// A `Renderable` is anything that is a top level page and can be drawn to the screen
 pub trait Renderable {
-    fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()>;
+    type Input: 'static;
+    type Output: 'static;
+
+    #[allow(unused_variables)]
+    fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// when navigating to a new route, you might need to pass in some data, here you do it
+    #[allow(unused_variables)]
+    fn update(&mut self, data: Self::Input) {}
+
+    fn data(&self, requester: u8) -> Self::Output;
+
+    /// each route can, (and must) have a navigator, this is how you attach one
+    #[allow(unused_variables)]
+    fn attach_navigator(&mut self, messager: Sender<RouterMessage>) {}
 
     /// pages need to adapt to change of sizes on the application, this function is called
     /// by the top level event loop whenever a resize event is produced
@@ -26,13 +36,16 @@ pub trait Renderable {
     /// register a page to be a command handler, which means this page will now receive
     /// commands from the channel to handle whatever the commands it is interested into
     #[allow(unused_variables)]
-    fn register_command_handler(&mut self, sender: UnboundedSender<Command>) -> anyhow::Result<()> {
+    fn register_command_handler(&mut self, sender: Sender<Command>) {}
+
+    #[allow(unused_variables)]
+    fn handle_command(&mut self, command: Command) -> anyhow::Result<()> {
         Ok(())
     }
 
     /// tick is a bigger interval than the one used by the render cycle, it is mainly used
     /// for actions that rely on time, such as syncing changes to disk
-    fn handle_tick(&mut self) -> anyhow::Result<()> {
+    fn tick(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
 }

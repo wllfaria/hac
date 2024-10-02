@@ -130,4 +130,3 @@ cross:
     ### x86
     just binary hac.exe x86_64-pc-windows-gnu
     just binary_static hac.exe x86_64-pc-windows-gnu
-

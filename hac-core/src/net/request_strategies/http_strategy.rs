@@ -1,8 +1,8 @@
-use crate::collection::types::{Request, RequestMethod};
 use crate::net::request_client::RequestClient;
 use crate::net::request_manager::Response;
 use crate::net::request_strategies::RequestStrategy;
 use crate::net::response_decoders::{decoder_from_headers, ResponseDecoder};
+use hac_store::collection::{ReqMethod, Request};
 
 pub struct HttpResponse;
 
@@ -11,11 +11,11 @@ impl RequestStrategy for HttpResponse {
         let client = RequestClient::default();
 
         match request.method {
-            RequestMethod::Get => self.handle_get_request(client, request).await,
-            RequestMethod::Post => self.handle_post_request(client, request).await,
-            RequestMethod::Put => self.handle_put_request(client, request).await,
-            RequestMethod::Patch => self.handle_patch_request(client, request).await,
-            RequestMethod::Delete => self.handle_delete_request(client, request).await,
+            ReqMethod::Get => self.handle_get_request(client, request).await,
+            ReqMethod::Post => self.handle_post_request(client, request).await,
+            ReqMethod::Put => self.handle_put_request(client, request).await,
+            ReqMethod::Patch => self.handle_patch_request(client, request).await,
+            ReqMethod::Delete => self.handle_delete_request(client, request).await,
         }
     }
 }
@@ -45,12 +45,7 @@ impl HttpResponse {
 
     async fn handle_post_request(&self, client: RequestClient, request: Request) -> Response {
         let now = std::time::Instant::now();
-        match client
-            .post(&request)
-            .json(&request.body.unwrap_or_default())
-            .send()
-            .await
-        {
+        match client.post(&request).json(&request.body).send().await {
             Ok(response) => {
                 let decoder = decoder_from_headers(response.headers());
                 decoder.decode(response, now).await
@@ -72,12 +67,7 @@ impl HttpResponse {
 
     async fn handle_put_request(&self, client: RequestClient, request: Request) -> Response {
         let now = std::time::Instant::now();
-        match client
-            .put(&request)
-            .json(&request.body.unwrap_or_default())
-            .send()
-            .await
-        {
+        match client.put(&request).json(&request.body).send().await {
             Ok(response) => {
                 let decoder = decoder_from_headers(response.headers());
                 decoder.decode(response, now).await
@@ -99,12 +89,7 @@ impl HttpResponse {
 
     async fn handle_patch_request(&self, client: RequestClient, request: Request) -> Response {
         let now = std::time::Instant::now();
-        match client
-            .patch(&request)
-            .json(&request.body.unwrap_or_default())
-            .send()
-            .await
-        {
+        match client.patch(&request).json(&request.body).send().await {
             Ok(response) => {
                 let decoder = decoder_from_headers(response.headers());
                 decoder.decode(response, now).await
@@ -126,12 +111,7 @@ impl HttpResponse {
 
     async fn handle_delete_request(&self, client: RequestClient, request: Request) -> Response {
         let now = std::time::Instant::now();
-        match client
-            .delete(&request)
-            .json(&request.body.unwrap_or_default())
-            .send()
-            .await
-        {
+        match client.delete(&request).json(&request.body).send().await {
             Ok(response) => {
                 let decoder = decoder_from_headers(response.headers());
                 decoder.decode(response, now).await

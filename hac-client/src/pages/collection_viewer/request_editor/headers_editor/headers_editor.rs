@@ -1,10 +1,6 @@
-use crate::ascii::LOGO_ASCII;
-use crate::pages::collection_viewer::collection_viewer::CollectionViewerOverlay;
-use crate::pages::overlay::make_overlay;
-use crate::pages::{collection_viewer::collection_store::CollectionStore, Eventful, Renderable};
-
-use std::ops::{Div, Mul, Sub};
-use std::{cell::RefCell, ops::Add, rc::Rc};
+use std::cell::RefCell;
+use std::ops::{Add, Div, Mul, Sub};
+use std::rc::Rc;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_core::collection::types::HeaderMap;
@@ -12,15 +8,16 @@ use rand::Rng;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::Line;
-use ratatui::widgets::{
-    Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
-};
+use ratatui::widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::Frame;
 
-use super::headers_editor_delete_prompt::{
-    HeadersEditorDeletePrompt, HeadersEditorDeletePromptEvent,
-};
+use super::headers_editor_delete_prompt::{HeadersEditorDeletePrompt, HeadersEditorDeletePromptEvent};
 use super::headers_editor_edit_form::{HeadersEditorForm, HeadersEditorFormEvent};
+use crate::ascii::LOGO_ASCII;
+use crate::pages::collection_viewer::collection_store::CollectionStore;
+use crate::pages::collection_viewer::collection_viewer::CollectionViewerOverlay;
+use crate::pages::overlay::make_overlay_old;
+use crate::pages::{Eventful, Renderable};
 
 #[derive(Debug)]
 pub enum HeadersEditorEvent {
@@ -46,7 +43,6 @@ pub struct HeadersEditor<'he> {
     row_height: u16,
     amount_on_view: usize,
     layout: HeadersEditorLayout,
-    logo_idx: usize,
 
     delete_prompt: HeadersEditorDeletePrompt<'he>,
     header_form: HeadersEditorForm<'he>,
@@ -60,7 +56,6 @@ impl<'he> HeadersEditor<'he> {
     ) -> Self {
         let row_height = 2;
         let layout = build_layout(size, row_height);
-        let logo_idx = rand::thread_rng().gen_range(0..LOGO_ASCII.len());
 
         HeadersEditor {
             delete_prompt: HeadersEditorDeletePrompt::new(colors),
@@ -73,7 +68,6 @@ impl<'he> HeadersEditor<'he> {
             row_height,
             amount_on_view: layout.content_size.height.div_ceil(row_height).into(),
             layout,
-            logo_idx,
         }
     }
 
@@ -115,14 +109,11 @@ impl<'he> HeadersEditor<'he> {
             w if w.le(&100) => "[j/k -> move down/up] [enter -> select] [space -> enable/disable] [? -> help]",
             _ => "[j/k -> move down/up] [enter -> select] [space -> enable/disable] [d -> delete] [? -> help]",
         };
-        frame.render_widget(
-            Paragraph::new(hint).fg(self.colors.bright.black).centered(),
-            hint_size,
-        );
+        frame.render_widget(Paragraph::new(hint).fg(self.colors.bright.black).centered(), hint_size);
     }
 
     fn draw_help_overlay(&self, frame: &mut Frame) {
-        make_overlay(self.colors, self.colors.normal.black, 0.1, frame);
+        make_overlay_old(self.colors, self.colors.normal.black, 0.1, frame);
 
         let lines = [
             [
@@ -139,18 +130,15 @@ impl<'he> HeadersEditor<'he> {
             ],
             [
                 format!("space{}", " ".repeat(7)).fg(self.colors.normal.red),
-                format!("- enables or disabled header{}", " ".repeat(12))
-                    .fg(self.colors.normal.yellow),
+                format!("- enables or disabled header{}", " ".repeat(12)).fg(self.colors.normal.yellow),
             ],
             [
                 format!("enter{}", " ".repeat(7)).fg(self.colors.normal.red),
-                format!("- select header for editing{}", " ".repeat(13))
-                    .fg(self.colors.normal.yellow),
+                format!("- select header for editing{}", " ".repeat(13)).fg(self.colors.normal.yellow),
             ],
             [
                 format!("?{}", " ".repeat(11)).fg(self.colors.normal.red),
-                format!("- shows this help message{}", " ".repeat(15))
-                    .fg(self.colors.normal.yellow),
+                format!("- shows this help message{}", " ".repeat(15)).fg(self.colors.normal.yellow),
             ],
         ];
 
@@ -159,7 +147,7 @@ impl<'he> HeadersEditor<'he> {
             .map(|l| Line::from(l.into_iter().collect::<Vec<_>>()))
             .collect();
 
-        let mut logo = LOGO_ASCII[self.logo_idx];
+        let mut logo = LOGO_ASCII;
         let size = frame.size();
         let logo_size = logo.len();
         // we are adding 2 spaces for the gap between the logo and the text
@@ -187,12 +175,7 @@ impl<'he> HeadersEditor<'he> {
             .chain(lines)
             .collect::<Vec<_>>();
 
-        let hint_size = Rect::new(
-            popup_size.x,
-            popup_size.y.add(popup_size.height).add(1),
-            40,
-            1,
-        );
+        let hint_size = Rect::new(popup_size.x, popup_size.y.add(popup_size.height).add(1), 40, 1);
 
         let hint = Line::from("press any key to close this dialog")
             .fg(self.colors.bright.black)
@@ -205,22 +188,16 @@ impl<'he> HeadersEditor<'he> {
     pub fn draw_empty_message(&self, frame: &mut Frame) {
         let size = self.layout.content_size;
         let no_headers = "No headers method".fg(self.colors.bright.black);
-        let no_request = Paragraph::new(no_headers).centered().block(
-            Block::default()
-                .fg(self.colors.normal.white)
-                .borders(Borders::ALL),
-        );
+        let no_request = Paragraph::new(no_headers)
+            .centered()
+            .block(Block::default().fg(self.colors.normal.white).borders(Borders::ALL));
 
         let size = Rect::new(size.x.add(5), size.y.sub(2), size.width.sub(10), 3);
         frame.render_widget(no_request, size);
         self.draw_hint(frame);
     }
 
-    pub fn draw_overlay(
-        &mut self,
-        frame: &mut Frame,
-        overlay: CollectionViewerOverlay,
-    ) -> anyhow::Result<()> {
+    pub fn draw_overlay(&mut self, frame: &mut Frame, overlay: CollectionViewerOverlay) -> anyhow::Result<()> {
         match overlay {
             CollectionViewerOverlay::HeadersHelp => self.draw_help_overlay(frame),
             CollectionViewerOverlay::HeadersDelete => {
@@ -254,16 +231,9 @@ impl Renderable for HeadersEditor<'_> {
         let headers = headers.unwrap();
         let title_name = Paragraph::new("Name").fg(self.colors.normal.yellow).bold();
         let title_value = Paragraph::new("Value").fg(self.colors.normal.yellow).bold();
-        let title_enabled = Paragraph::new("Enabled")
-            .fg(self.colors.normal.yellow)
-            .bold();
+        let title_enabled = Paragraph::new("Enabled").fg(self.colors.normal.yellow).bold();
 
-        for (idx, header) in headers
-            .iter()
-            .skip(self.scroll)
-            .take(self.amount_on_view)
-            .enumerate()
-        {
+        for (idx, header) in headers.iter().skip(self.scroll).take(self.amount_on_view).enumerate() {
             let size = self.layout.content_size;
             let offset = self.row_height.mul(idx as u16);
             let size = Rect::new(size.x, size.y.add(offset), size.width, self.row_height);
@@ -315,12 +285,7 @@ impl Renderable for HeadersEditor<'_> {
 
     fn resize(&mut self, new_size: Rect) {
         self.layout = build_layout(new_size, self.row_height);
-        self.amount_on_view = self
-            .layout
-            .content_size
-            .height
-            .div_ceil(self.row_height)
-            .into();
+        self.amount_on_view = self.layout.content_size.height.div_ceil(self.row_height).into();
     }
 }
 
@@ -392,11 +357,7 @@ impl Eventful for HeadersEditor<'_> {
 
         let mut request = request.write().unwrap();
 
-        let total_headers = request
-            .headers
-            .as_ref()
-            .map(|h| h.len())
-            .unwrap_or_default();
+        let total_headers = request.headers.as_ref().map(|h| h.len()).unwrap_or_default();
 
         match key_event.code {
             KeyCode::Char('j') | KeyCode::Down => {
@@ -461,9 +422,9 @@ impl Eventful for HeadersEditor<'_> {
                     };
 
                     drop(request);
-                    self.collection_store.borrow_mut().push_overlay(
-                        CollectionViewerOverlay::HeadersForm(self.selected_row, false),
-                    );
+                    self.collection_store
+                        .borrow_mut()
+                        .push_overlay(CollectionViewerOverlay::HeadersForm(self.selected_row, false));
                 }
             }
             KeyCode::Esc => return Ok(Some(HeadersEditorEvent::RemoveSelection)),

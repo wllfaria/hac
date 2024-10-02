@@ -1,8 +1,9 @@
-use crate::{APP_NAME, COLLECTIONS_DIR, XDG_DEFAULTS, XDG_ENV_VARS};
+pub mod collection_loader;
 
+use hac_config::{APP_NAME, COLLECTIONS_DIR, XDG_DEFAULTS, XDG_ENV_VARS};
 use std::path::PathBuf;
 
-pub fn get_data_dir() -> PathBuf {
+pub fn data_dir() -> PathBuf {
     let data_dir = std::env::var(XDG_ENV_VARS[1])
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from(XDG_DEFAULTS[1]));
@@ -14,7 +15,7 @@ pub fn get_data_dir() -> PathBuf {
 }
 
 pub fn get_or_create_data_dir() -> PathBuf {
-    let data_dir = get_data_dir();
+    let data_dir = data_dir();
 
     if !data_dir.exists() && !data_dir.is_dir() {
         match std::fs::create_dir(&data_dir) {
@@ -32,13 +33,14 @@ pub fn get_or_create_data_dir() -> PathBuf {
     data_dir
 }
 
-pub fn get_collections_dir() -> PathBuf {
-    let data_dir = get_data_dir();
+pub fn collections_dir() -> PathBuf {
+    let data_dir = data_dir();
     data_dir.join(COLLECTIONS_DIR)
 }
 
+#[tracing::instrument]
 pub fn get_or_create_collections_dir() -> PathBuf {
-    let collections_dir = get_collections_dir();
+    let collections_dir = collections_dir();
 
     if !collections_dir.exists() && !collections_dir.is_dir() {
         match std::fs::create_dir(&collections_dir) {
@@ -47,15 +49,10 @@ pub fn get_or_create_collections_dir() -> PathBuf {
             // if we fail to do so, panicking is adequate as we won't be able to properly run the
             // application
             Err(_) => {
-                tracing::error!("failed to create collections_dir at: {collections_dir:?}");
                 panic!("failed to create collections_dir at: {collections_dir:?}");
             }
         }
     }
 
     collections_dir
-}
-
-pub fn log_file() -> (PathBuf, String) {
-    (get_data_dir(), format!("{}.log", APP_NAME))
 }

@@ -1,26 +1,31 @@
-use crate::pages::Renderable;
-
 use ratatui::layout::{Alignment, Constraint, Direction, Flex, Layout, Rect};
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::{Paragraph, Wrap};
 use ratatui::Frame;
 
+use crate::renderable::Renderable;
+use crate::{HacColors, MIN_HEIGHT, MIN_WIDTH};
+
 /// `TerminalTooSmall` as the name suggests is a screen rendered by the
 /// `screen_manager` when the terminal gets smaller than a certain threshold,
 /// this page will display over everything and will automatically be hidden
 /// when the terminal gets bigger than said threshold
-pub struct TerminalTooSmall<'tts> {
-    colors: &'tts hac_colors::Colors,
+#[derive(Debug)]
+pub struct TerminalTooSmall {
+    colors: HacColors,
 }
 
-impl<'a> TerminalTooSmall<'a> {
-    pub fn new(colors: &'a hac_colors::Colors) -> Self {
+impl TerminalTooSmall {
+    pub fn new(colors: HacColors) -> Self {
         TerminalTooSmall { colors }
     }
 }
 
-impl Renderable for TerminalTooSmall<'_> {
+impl Renderable for TerminalTooSmall {
+    type Input = ();
+    type Output = ();
+
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         let layout = build_layout(size);
 
@@ -33,7 +38,11 @@ impl Renderable for TerminalTooSmall<'_> {
         ]);
         let empty = Line::from(" ");
         let hint = Line::from("Minimum size needed:".bold().fg(self.colors.bright.black));
-        let min_size = Line::from("Width = 80 Height = 22".bold().fg(self.colors.bright.black));
+        let min_size = Line::from(
+            format!("Width = {MIN_WIDTH} Height = {MIN_HEIGHT}")
+                .bold()
+                .fg(self.colors.bright.black),
+        );
 
         let text = Paragraph::new(vec![lines, curr_size, empty, hint, min_size])
             .wrap(Wrap { trim: true })
@@ -48,15 +57,13 @@ impl Renderable for TerminalTooSmall<'_> {
     // we purposefully don't do nothing here, as this page automatically adapts to the
     // size of the window when rendering
     fn resize(&mut self, _new_size: Rect) {}
+
+    fn data(&self, _requester: u8) -> Self::Output {}
 }
 
 fn build_layout(size: Rect) -> Rect {
     Layout::default()
-        .constraints([
-            Constraint::Fill(1),
-            Constraint::Length(5),
-            Constraint::Fill(1),
-        ])
+        .constraints([Constraint::Fill(1), Constraint::Length(5), Constraint::Fill(1)])
         .direction(Direction::Vertical)
         .flex(Flex::Center)
         .split(size)[1]

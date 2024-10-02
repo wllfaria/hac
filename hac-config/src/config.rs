@@ -1,10 +1,10 @@
-use crate::default_config::DEFAULT_CONFIG;
-use crate::{EditorMode, APP_NAME, CONFIG_ENV_VAR, CONFIG_FILE, XDG_DEFAULTS, XDG_ENV_VARS};
-
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+
+use crate::default_config::DEFAULT_CONFIG;
+use crate::{EditorMode, APP_NAME, CONFIG_ENV_VAR, CONFIG_FILE, XDG_DEFAULTS, XDG_ENV_VARS};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum Action {
@@ -49,9 +49,20 @@ pub enum Action {
     JumpToEmptyLineAbove,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, Copy, Clone)]
+pub enum CollectionExtensions {
+    #[default]
+    Json,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub editor_keys: Keys,
+    #[serde(default)]
+    pub collection_ext: CollectionExtensions,
+    pub dry_run: bool,
+    pub tab_size: usize,
+    pub enable_icons: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

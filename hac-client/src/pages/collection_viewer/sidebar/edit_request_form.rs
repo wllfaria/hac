@@ -1,9 +1,14 @@
-use hac_core::collection::types::*;
+use std::cell::RefCell;
+use std::ops::Sub;
+use std::rc::Rc;
+use std::sync::{Arc, RwLock};
 
-use super::request_form::FormField;
-use super::request_form::RequestForm;
-use super::request_form::RequestFormEdit;
-use super::request_form::RequestFormEvent;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use hac_core::collection::types::*;
+use rand::Rng;
+use ratatui::Frame;
+
+use super::request_form::{FormField, RequestForm, RequestFormEdit, RequestFormEvent};
 use super::select_request_parent::{SelectRequestParent, SelectRequestParentEvent};
 use super::RequestFormTrait;
 use crate::ascii::LOGO_ASCII;
@@ -11,21 +16,8 @@ use crate::pages::collection_viewer::collection_store::CollectionStore;
 use crate::pages::collection_viewer::collection_viewer::CollectionViewerOverlay;
 use crate::pages::{Eventful, Renderable};
 
-use std::cell::RefCell;
-use std::ops::Sub;
-use std::rc::Rc;
-use std::sync::{Arc, RwLock};
-
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use rand::Rng;
-use ratatui::Frame;
-
 impl<'rf> RequestFormTrait for RequestForm<'rf, RequestFormEdit> {
-    fn draw_overlay(
-        &mut self,
-        frame: &mut Frame,
-        overlay: CollectionViewerOverlay,
-    ) -> anyhow::Result<()> {
+    fn draw_overlay(&mut self, frame: &mut Frame, overlay: CollectionViewerOverlay) -> anyhow::Result<()> {
         if let CollectionViewerOverlay::SelectParentDir = overlay {
             self.parent_selector.draw(frame, frame.size())?;
         }
@@ -40,7 +32,6 @@ impl<'rf> RequestForm<'rf, RequestFormEdit> {
         collection_store: Rc<RefCell<CollectionStore>>,
         request: Arc<RwLock<Request>>,
     ) -> Self {
-        let logo_idx = rand::thread_rng().gen_range(0..LOGO_ASCII.len());
         let request_method = request.read().unwrap().method.clone();
         let request_name = request.read().unwrap().name.clone();
 
@@ -72,7 +63,6 @@ impl<'rf> RequestForm<'rf, RequestFormEdit> {
             colors,
             parent_selector: SelectRequestParent::new(colors, collection_store.clone()),
             collection_store,
-            logo_idx,
             request_name,
             request_method,
             parent_dir,
@@ -150,31 +140,19 @@ impl Eventful for RequestForm<'_, RequestFormEdit> {
                 .get_collection()
                 .expect("tried to create a request without a collection");
             let mut collection = collection.borrow_mut();
-            let requests = collection
-                .requests
-                .get_or_insert(Arc::new(RwLock::new(vec![])));
+            let requests = collection.requests.get_or_insert(Arc::new(RwLock::new(vec![])));
             let mut requests = requests.write().unwrap();
 
             requests.iter_mut().for_each(|req| {
                 if let RequestKind::Nested(dir) = req {
-                    dir.requests
-                        .write()
-                        .unwrap()
-                        .retain(|req| req.get_id().ne(&request_id));
+                    dir.requests.write().unwrap().retain(|req| req.get_id().ne(&request_id));
                 }
             });
 
             if let Some((dir_id, _)) = self.parent_dir.as_ref() {
-                if let RequestKind::Nested(dir) = requests
-                    .iter_mut()
-                    .find(|req| req.get_id().eq(dir_id))
-                    .unwrap()
-                {
+                if let RequestKind::Nested(dir) = requests.iter_mut().find(|req| req.get_id().eq(dir_id)).unwrap() {
                     let request = self.request.as_ref().unwrap().clone();
-                    dir.requests
-                        .write()
-                        .unwrap()
-                        .push(RequestKind::Single(request));
+                    dir.requests.write().unwrap().push(RequestKind::Single(request));
                 }
             }
 

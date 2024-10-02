@@ -1,14 +1,16 @@
 use std::ops::{Add, Div};
 
-use crate::ascii::LOGO_ASCII;
-use crate::pages::{overlay::make_overlay, Eventful, Renderable};
-
 use crossterm::event::{KeyCode, KeyEvent};
 use rand::Rng;
+use ratatui::layout::Rect;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
-use ratatui::{layout::Rect, Frame};
+use ratatui::Frame;
+
+use crate::ascii::LOGO_ASCII;
+use crate::pages::overlay::make_overlay_old;
+use crate::pages::{Eventful, Renderable};
 
 /// set of events `HeadersEditorDeletePrompt` can emit to its parent
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -24,19 +26,17 @@ pub enum HeadersEditorDeletePromptEvent {
 #[derive(Debug)]
 pub struct HeadersEditorDeletePrompt<'hedp> {
     colors: &'hedp hac_colors::Colors,
-    logo_idx: usize,
 }
 
 impl<'hedp> HeadersEditorDeletePrompt<'hedp> {
     pub fn new(colors: &'hedp hac_colors::Colors) -> Self {
-        let logo_idx = rand::thread_rng().gen_range(0..LOGO_ASCII.len());
-        HeadersEditorDeletePrompt { colors, logo_idx }
+        HeadersEditorDeletePrompt { colors }
     }
 }
 
 impl Renderable for HeadersEditorDeletePrompt<'_> {
     fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
-        make_overlay(self.colors, self.colors.normal.black, 0.1, frame);
+        make_overlay_old(self.colors, self.colors.normal.black, 0.1, frame);
 
         let lines: Vec<Line> = vec![
             "are you sure you want to delete this header?"
@@ -52,7 +52,7 @@ impl Renderable for HeadersEditorDeletePrompt<'_> {
             .centered(),
         ];
 
-        let logo = LOGO_ASCII[self.logo_idx];
+        let logo = LOGO_ASCII;
         let size = frame.size();
         let logo_size = logo.len();
         // we are adding 2 spaces for the gap between the logo and the text
@@ -85,12 +85,8 @@ impl Eventful for HeadersEditorDeletePrompt<'_> {
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
         match key_event.code {
-            KeyCode::Char('y') | KeyCode::Char('Y') => {
-                Ok(Some(HeadersEditorDeletePromptEvent::Confirm))
-            }
-            KeyCode::Char('n') | KeyCode::Char('N') => {
-                Ok(Some(HeadersEditorDeletePromptEvent::Cancel))
-            }
+            KeyCode::Char('y') | KeyCode::Char('Y') => Ok(Some(HeadersEditorDeletePromptEvent::Confirm)),
+            KeyCode::Char('n') | KeyCode::Char('N') => Ok(Some(HeadersEditorDeletePromptEvent::Cancel)),
             _ => Ok(None),
         }
     }

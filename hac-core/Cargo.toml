@@ -15,6 +15,7 @@ workspace = "../"
 
 [dependencies]
 hac-config.workspace = true
+hac-store.workspace = true
 
 anyhow.workspace = true
 tracing.workspace = true
