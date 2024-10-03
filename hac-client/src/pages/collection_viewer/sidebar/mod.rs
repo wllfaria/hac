@@ -1,5 +1,5 @@
+pub mod create_request_form;
 // mod create_directory_form;
-// mod create_request_form;
 // mod delete_item_prompt;
 // mod directory_form;
 // mod edit_directory_form;
@@ -8,7 +8,7 @@
 // mod select_request_parent;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use hac_store::collection::{EntryStatus, ReqMethod, ReqTreeNode, WhichSlab};
+use hac_store::collection::{self, EntryStatus, ReqMethod, ReqTreeNode, WhichSlab};
 use ratatui::layout::Rect;
 use ratatui::style::{Style, Styled, Stylize};
 use ratatui::text::{Line, Span};
@@ -170,36 +170,43 @@ impl Renderable for Sidebar {
             }),
             ReqTreeNode::Folder(folder_key, requests) => {
                 hac_store::collection::get_folder(folder_key, |folder, status| {
-                    let mut folder_name = folder.name.clone();
-                    if self.config.borrow().enable_icons {
-                        folder_name = format!("{}     {}", Icons::FOLDER, folder_name);
-                    }
+                    let folder_name = folder.name.clone();
                     let style = match status {
                         EntryStatus::None => Style::new().fg(self.colors.normal.yellow).bold(),
                         _ => Style::new().fg(self.colors.normal.yellow).underlined().italic().bold(),
                     };
-                    let name = Line::from(folder_name).set_style(style);
+                    let name = Line::from(vec![
+                        format!("{}     ", Icons::FOLDER).bold().fg(self.colors.normal.yellow),
+                        folder_name.set_style(style),
+                    ]);
                     lines.push(name);
+
+                    if folder.collapsed {
+                        return;
+                    }
+
+                    for request in requests {
+                        hac_store::collection::get_request(request, |req, status| {
+                            let name = req.name.clone();
+                            let method = &req.method;
+
+                            let style = match status {
+                                EntryStatus::None => Style::new().fg(self.colors.normal.white),
+                                EntryStatus::Hovered => Style::new().fg(self.colors.bright.blue).underlined().italic(),
+                                EntryStatus::Selected => Style::new().fg(self.colors.normal.red).bold(),
+                                EntryStatus::Both => {
+                                    Style::new().fg(self.colors.normal.red).underlined().italic().bold()
+                                }
+                            };
+
+                            lines.push(Line::from(vec![
+                                " ".repeat(self.config.borrow().tab_size).into(),
+                                colored_method(method, &self.colors),
+                                name.set_style(style),
+                            ]));
+                        });
+                    }
                 });
-                for request in requests {
-                    hac_store::collection::get_request(request, |req, status| {
-                        let name = req.name.clone();
-                        let method = &req.method;
-
-                        let style = match status {
-                            EntryStatus::None => Style::new().fg(self.colors.normal.white),
-                            EntryStatus::Hovered => Style::new().fg(self.colors.bright.blue).underlined().italic(),
-                            EntryStatus::Selected => Style::new().fg(self.colors.normal.red).bold(),
-                            EntryStatus::Both => Style::new().fg(self.colors.normal.red).underlined().italic().bold(),
-                        };
-
-                        lines.push(Line::from(vec![
-                            " ".repeat(self.config.borrow().tab_size).into(),
-                            colored_method(method, &self.colors),
-                            name.set_style(style),
-                        ]));
-                    });
-                }
             }
         });
 
@@ -356,32 +363,18 @@ impl Eventful for Sidebar {
             KeyCode::Tab => return Ok(Some(SidebarEvent::SelectNext)),
             KeyCode::BackTab => return Ok(Some(SidebarEvent::SelectPrev)),
             KeyCode::Esc => return Ok(Some(SidebarEvent::RemoveSelection)),
-            KeyCode::Char('j') | KeyCode::Down => hac_store::collection::hover_next(),
-            KeyCode::Char('k') | KeyCode::Up => hac_store::collection::hover_prev(),
+            KeyCode::Char('j') | KeyCode::Down => collection::hover_next(),
+            KeyCode::Char('k') | KeyCode::Up => collection::hover_prev(),
+            KeyCode::Char('n') => return Ok(Some(SidebarEvent::CreateRequest)),
+            KeyCode::Enter => {
+                if let Some((which, key)) = collection::get_hovered_request(|req| req).flatten() {
+                    match which {
+                        WhichSlab::Requests | WhichSlab::RootRequests => collection::select_request((which, key)),
+                        WhichSlab::Folders => collection::toggle_dir(key),
+                    }
+                };
+            }
             _ => (),
-            //    KeyCode::Enter => {
-            //        if store.get_requests().is_none() || store.get_hovered_request().is_none() {
-            //            return Ok(None);
-            //        }
-            //
-            //        let request = store.find_hovered_request();
-            //        match request {
-            //            RequestKind::Nested(_) => {
-            //                store.dispatch(CollectionStoreAction::ToggleDirectory(request.get_id()));
-            //            }
-            //            RequestKind::Single(req) => {
-            //                store.dispatch(CollectionStoreAction::SetSelectedRequest(Some(req)));
-            //                return Ok(Some(SidebarEvent::RebuildView));
-            //            }
-            //        }
-            //    }
-            //    KeyCode::Char('n') => {
-            //        self.request_form = RequestFormVariant::Create(RequestForm::<RequestFormCreate>::new(
-            //            self.colors,
-            //            self.collection_store.clone(),
-            //        ));
-            //        return Ok(Some(SidebarEvent::CreateRequest));
-            //    }
             //    KeyCode::Char('e') => {
             //        let hovered_request = store.find_hovered_request();
             //        drop(store);

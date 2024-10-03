@@ -42,7 +42,6 @@ pub enum WhichSlab {
 
 #[derive(Debug)]
 pub struct Collection {
-    pub info: CollectionInfo,
     pub requests: Slab<Request>,
     pub root_requests: Slab<Request>,
     pub folders: Slab<Folder>,
@@ -57,19 +56,72 @@ impl Collection {
     }
 }
 
-#[derive(Debug)]
-pub struct CollectionInfo {
-    pub name: String,
-    pub description: String,
-}
-
-#[derive(Debug)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub enum ReqMethod {
+    #[default]
     Get,
     Post,
     Put,
     Patch,
     Delete,
+}
+
+impl ReqMethod {
+    pub fn size() -> usize {
+        5
+    }
+
+    pub fn iter() -> impl Iterator<Item = ReqMethod> {
+        [
+            ReqMethod::Get,
+            ReqMethod::Post,
+            ReqMethod::Put,
+            ReqMethod::Patch,
+            ReqMethod::Delete,
+        ]
+        .into_iter()
+    }
+
+    pub fn set_first(&mut self) {
+        *self = ReqMethod::Get;
+    }
+
+    pub fn set_last(&mut self) {
+        *self = ReqMethod::Delete;
+    }
+
+    pub fn set_next(&mut self) {
+        match self {
+            ReqMethod::Get => *self = ReqMethod::Post,
+            ReqMethod::Post => *self = ReqMethod::Put,
+            ReqMethod::Put => *self = ReqMethod::Patch,
+            ReqMethod::Patch => *self = ReqMethod::Delete,
+            ReqMethod::Delete => *self = ReqMethod::Get,
+        }
+    }
+
+    pub fn set_prev(&mut self) {
+        match self {
+            ReqMethod::Get => *self = ReqMethod::Delete,
+            ReqMethod::Post => *self = ReqMethod::Get,
+            ReqMethod::Put => *self = ReqMethod::Post,
+            ReqMethod::Patch => *self = ReqMethod::Put,
+            ReqMethod::Delete => *self = ReqMethod::Patch,
+        }
+    }
+}
+
+impl From<char> for ReqMethod {
+    fn from(value: char) -> Self {
+        match value {
+            '1' => ReqMethod::Get,
+            '2' => ReqMethod::Post,
+            '3' => ReqMethod::Put,
+            '4' => ReqMethod::Patch,
+            '5' => ReqMethod::Delete,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl Display for ReqMethod {
@@ -275,8 +327,9 @@ pub fn hover_next() {
                             return;
                         }
 
-                        // when the folder has requests, we hover the first one
-                        if !folder.requests.is_empty() {
+                        // when the folder has requests, we hover the first one, unless the folder
+                        // is collapsed
+                        if !folder.requests.is_empty() && !folder.collapsed {
                             collection.hovered_request = Some((WhichSlab::Requests, folder.requests[0]));
                         }
 
@@ -327,13 +380,17 @@ pub fn hover_prev() {
                     }
                     WhichSlab::Folders => {
                         // when we are hovering a folder, we try to hover the previous folders's last
-                        // request if it exists, otherwise we select the previous folder itself
+                        // request if it exists and the folder is not collapsed, otherwise we select
+                        // the previous folder itself
                         if key > 0 {
                             let folder = collection.folders.get(key - 1);
-                            if let Some(last) = folder.requests.last() {
-                                collection.hovered_request = Some((WhichSlab::Requests, *last));
-                                return;
-                            };
+
+                            if !folder.collapsed {
+                                if let Some(last) = folder.requests.last() {
+                                    collection.hovered_request = Some((WhichSlab::Requests, *last));
+                                    return;
+                                };
+                            }
 
                             collection.hovered_request = Some((WhichSlab::Folders, key - 1));
                             return;
@@ -359,4 +416,33 @@ pub fn hover_prev() {
             }
         }
     })
+}
+
+pub fn get_hovered_request<F, R>(f: F) -> Option<R>
+where
+    F: FnOnce(Option<(WhichSlab, Key)>) -> R,
+{
+    HAC_STORE.with_borrow(|store| {
+        if let Some(ref collection) = store.collection {
+            return Some(f(collection.hovered_request));
+        };
+        None
+    })
+}
+
+pub fn select_request((which, key): (WhichSlab, Key)) {
+    HAC_STORE.with_borrow_mut(|store| {
+        if let Some(collection) = &mut store.collection {
+            collection.selected_request = Some((which, key));
+        }
+    });
+}
+
+pub fn toggle_dir(key: Key) {
+    HAC_STORE.with_borrow_mut(|store| {
+        if let Some(collection) = &mut store.collection {
+            let folder = collection.folders.get_mut(key);
+            folder.collapsed = !folder.collapsed;
+        }
+    });
 }

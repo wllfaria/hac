@@ -1,7 +1,6 @@
-use hac_core::syntax::highlighter::HIGHLIGHTER;
-
 use std::ops::Add;
 
+use hac_core::syntax::highlighter::HIGHLIGHTER;
 use ratatui::style::{Color, Stylize};
 use ratatui::text::{Line, Span};
 use tree_sitter::Tree;
@@ -152,8 +151,8 @@ pub fn build_syntax_highlighted_lines(
 /// eg:
 ///
 /// ```rust
-/// use ratatui::prelude::Color;
 /// use hac_client::utils::blend_colors_multiply;
+/// use ratatui::prelude::Color;
 ///
 /// blend_colors_multiply(Color::Rgb(255, 255, 25), Color::Rgb(0, 0, 0), 0.5);
 /// ```

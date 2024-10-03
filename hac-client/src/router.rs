@@ -29,6 +29,24 @@ pub enum Navigate {
     Back,
 }
 
+#[macro_export]
+macro_rules! router_add_dialog {
+    ($messager:expr, $route:expr, $renderable:expr) => {
+        $messager
+            .send(RouterMessage::AddDialog($route.into(), Box::new($renderable)))
+            .expect("failed to send router message");
+    };
+}
+
+#[macro_export]
+macro_rules! router_navigate_to {
+    ($messager:expr, $route:expr) => {
+        $messager
+            .send(RouterMessage::Navigate($crate::router::Navigate::To($route.into())))
+            .expect("failed to send router message");
+    };
+}
+
 pub trait AnyCommand {}
 impl AnyCommand for Command {}
 
@@ -96,7 +114,6 @@ impl<K: AnyCommand, T: Renderable + Eventful<Result = K> + Debug> AnyRenderable 
 pub enum RouterMessage {
     AddRoute(Key, Box<dyn AnyRenderable<Ev = Command>>),
     AddDialog(Key, Box<dyn AnyRenderable<Ev = Command>>),
-    DelRoute(Key),
     DelDialog(Key),
     Navigate(Navigate),
 }
@@ -191,7 +208,6 @@ impl Router {
                 } else if self.dialogs.contains_key(&route) {
                     self.dialog_stack.push(route);
                     self.history.push(route);
-                    tracing::debug!("navigating to -> {} {}", self.history.len(), self.dialog_stack.len());
                     let dialog = self
                         .get_active_dialog()
                         .expect("attempt to navigate to non registered dialog");
@@ -219,7 +235,6 @@ impl Router {
 
                 let curr_is_dialog = self.dialogs.contains_key(&curr);
                 let prev_is_dialog = self.dialogs.contains_key(&prev);
-                tracing::debug!("im really confused, {} {}", self.history.len(), self.dialog_stack.len());
 
                 match (curr_is_dialog, prev_is_dialog) {
                     // we are on a route, navigating to a route
@@ -273,11 +288,6 @@ impl Renderable for Router {
         match self.message_receiver.try_recv() {
             Ok(RouterMessage::AddRoute(key, route)) => self.add_route(key, route),
             Ok(RouterMessage::AddDialog(key, route)) => self.add_dialog(key, route),
-            Ok(RouterMessage::DelRoute(key)) => {
-                tracing::trace!("dropping route with key: {key}");
-                self.history.retain(|&k| k != key);
-                self.routes.remove(&key);
-            }
             Ok(RouterMessage::DelDialog(key)) => {
                 tracing::trace!("dropping dialog with key: {key}");
                 self.dialog_stack.retain(|&k| k != key);

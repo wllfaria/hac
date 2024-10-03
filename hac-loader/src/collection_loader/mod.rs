@@ -53,7 +53,7 @@ fn create_persistent_colletion(name: String) -> Result<()> {
     let file_name = format!("{}.json", sanitize_filename(&name));
     tracing::debug!("creating new collection {file_name} on disk");
     let path = super::collections_dir().join(&file_name);
-    let collection = json_collection::JsonCollection::new(name, Default::default(), file_name, &path);
+    let collection = json_collection::JsonCollection::new(file_name, &path);
     let strigified = serde_json::to_string_pretty(&collection).expect("invalid collection format to be stringified");
     fs::write(&path, strigified).map_err(|_| Error::Create("failed to write collection to disk".into()))?;
     Ok(())

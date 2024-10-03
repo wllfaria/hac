@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Div;
 use std::rc::Rc;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{channel, Sender};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_core::command::Command;
@@ -14,7 +14,9 @@ use ratatui::Frame;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use super::request_uri::{RequestUri, RequestUriEvent};
+use super::sidebar::create_request_form::CreateRequestForm;
 use super::sidebar::{Sidebar, SidebarEvent};
+use crate::app::Routes;
 use crate::pages::collection_list::CollectionListData;
 //use crate::pages::collection_viewer::collection_store::{CollectionStore, CollectionStoreAction};
 //use crate::pages::collection_viewer::request_editor::{RequestEditor, RequestEditorEvent};
@@ -22,7 +24,8 @@ use crate::pages::collection_list::CollectionListData;
 //use crate::pages::collection_viewer::response_viewer::{ResponseViewer, ResponseViewerEvent};
 //use crate::pages::collection_viewer::sidebar::{self, Sidebar, SidebarEvent};
 use crate::renderable::{Eventful, Renderable};
-use crate::{HacColors, HacConfig};
+use crate::router::RouterMessage;
+use crate::{router_add_dialog, router_navigate_to, HacColors, HacConfig};
 
 #[derive(Debug, PartialEq)]
 pub struct ExplorerLayout {
@@ -32,6 +35,7 @@ pub struct ExplorerLayout {
     pub req_editor: Rect,
     pub response_preview: Rect,
     pub create_req_form: Rect,
+    pub total_size: Rect,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -83,6 +87,7 @@ pub struct CollectionViewer {
     selection: Option<PaneFocus>,
     request_uri: RequestUri,
     sidebar: Sidebar,
+    messager: Sender<RouterMessage>,
 
     //response_viewer: ResponseViewer<'cv>,
     //request_editor: RequestEditor<'cv>,
@@ -114,6 +119,7 @@ impl CollectionViewer {
             selection: None,
             request_uri: RequestUri::new(colors.clone(), layout.req_uri),
             sidebar,
+            messager: channel().0,
 
             //request_editor,
             //response_viewer,
@@ -407,6 +413,10 @@ impl Renderable for CollectionViewer {
         //self.response_viewer.resize(new_layout.response_preview);
         self.layout = new_layout;
     }
+
+    fn attach_navigator(&mut self, messager: Sender<RouterMessage>) {
+        self.messager = messager;
+    }
 }
 
 impl Eventful for CollectionViewer {
@@ -456,13 +466,15 @@ impl Eventful for CollectionViewer {
                         self.update_selection(None);
                         self.focus_prev();
                     }
+                    Some(SidebarEvent::CreateRequest) => {
+                        tracing::trace!("opening create request form from sidebar");
+                        let create_request_form = CreateRequestForm::new(self.colors.clone(), self.layout.total_size);
+                        router_add_dialog!(&self.messager, Routes::CreateRequest, create_request_form);
+                        router_navigate_to!(&self.messager, Routes::CreateRequest);
+                    }
                     Some(SidebarEvent::RemoveSelection) => self.update_selection(None),
                     Some(e) => tracing::trace!("{e:?}"),
                     None => (),
-                    //Some(SidebarEvent::CreateRequest) => self
-                    //    .collection_store
-                    //    .borrow_mut()
-                    //    .push_overlay(CollectionViewerOverlay::CreateRequest),
                     //Some(SidebarEvent::EditRequest) => self
                     //    .collection_store
                     //    .borrow_mut()
@@ -547,5 +559,6 @@ pub fn build_layout(size: Rect) -> ExplorerLayout {
         req_editor,
         response_preview,
         create_req_form,
+        total_size: size,
     }
 }

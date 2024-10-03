@@ -11,6 +11,9 @@ use crate::renderable::{Eventful, Renderable};
 use crate::router::Router;
 use crate::{HacColors, HacConfig};
 
+static FRAME_RATE: f64 = 60f64;
+static TICK_RATE: f64 = 30f64;
+
 #[derive(Debug)]
 pub struct InvalidRouteNumber(u8);
 
@@ -30,6 +33,7 @@ pub enum Routes {
     EditCollection,
     DeleteCollection,
     CollectionViewer,
+    CreateRequest,
 }
 
 impl TryFrom<u8> for Routes {
@@ -42,6 +46,7 @@ impl TryFrom<u8> for Routes {
             2 => Ok(Routes::EditCollection),
             3 => Ok(Routes::DeleteCollection),
             4 => Ok(Routes::CollectionViewer),
+            5 => Ok(Routes::CreateRequest),
             _ => Err(InvalidRouteNumber(value)),
         }
     }
@@ -55,6 +60,7 @@ impl From<Routes> for u8 {
             Routes::EditCollection => 2,
             Routes::DeleteCollection => 3,
             Routes::CollectionViewer => 4,
+            Routes::CreateRequest => 5,
         }
     }
 }
@@ -79,7 +85,7 @@ impl App {
         router.add_route(Routes::ListCollections.into(), Box::new(collection_list));
 
         Ok(Self {
-            event_pool: EventPool::new(60f64, 30f64),
+            event_pool: EventPool::new(FRAME_RATE, TICK_RATE),
             should_quit: false,
             router,
             command_receiver,

@@ -1,10 +1,10 @@
 use hac_store::collection::{
-    BodyKind, Collection, CollectionInfo, Folder, HeaderEntry, ReqMethod, ReqTree, ReqTreeNode, Request, WhichSlab,
+    BodyKind, Collection, Folder, HeaderEntry, ReqMethod, ReqTree, ReqTreeNode, Request, WhichSlab,
 };
 use hac_store::slab::{Key, Slab};
 
 use super::json_collection::{
-    JsonBodyKind, JsonCollection, JsonCollectionInfo, JsonFolder, JsonHeaderEntry, JsonReqMethod, JsonRequest, ReqKind,
+    JsonBodyKind, JsonCollection, JsonFolder, JsonHeaderEntry, JsonReqMethod, JsonRequest, ReqKind,
 };
 use super::{IntoCollection, Result};
 
@@ -61,7 +61,6 @@ fn from_file_to_collection(file_collection: JsonCollection) -> Collection {
     let layout = ReqTree { nodes };
 
     Collection {
-        info: file_collection.info.into(),
         folders,
         requests,
         root_requests,
@@ -130,15 +129,6 @@ impl From<JsonRequest> for Request {
             body_kind: file_req.body_kind.into(),
             method: file_req.method.into(),
             headers: file_req.headers.into_iter().map(Into::into).collect::<Vec<_>>(),
-        }
-    }
-}
-
-impl From<JsonCollectionInfo> for CollectionInfo {
-    fn from(collection_info: JsonCollectionInfo) -> Self {
-        Self {
-            name: collection_info.name,
-            description: collection_info.description,
         }
     }
 }

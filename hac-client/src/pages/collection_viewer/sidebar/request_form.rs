@@ -1,9 +1,6 @@
-use std::cell::RefCell;
 use std::ops::{Add, Div, Sub};
-use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 
-use hac_core::collection::types::{Request, RequestMethod};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Stylize;
 use ratatui::text::Line;
@@ -11,11 +8,9 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
 use crate::ascii::LOGO_ASCII;
-use crate::pages::collection_viewer::collection_store::CollectionStore;
-use crate::pages::collection_viewer::sidebar::select_request_parent::SelectRequestParent;
 use crate::pages::input::Input;
 use crate::pages::overlay::make_overlay_old;
-use crate::pages::Renderable;
+use crate::renderable::Renderable;
 
 #[derive(Debug)]
 pub enum RequestFormEvent {
@@ -57,7 +52,6 @@ pub struct RequestFormEdit;
 #[derive(Debug)]
 pub struct RequestForm<'rf, State = RequestFormCreate> {
     pub colors: &'rf hac_colors::Colors,
-    pub collection_store: Rc<RefCell<CollectionStore>>,
 
     /// the name of the current request being edited or created
     pub request_name: String,

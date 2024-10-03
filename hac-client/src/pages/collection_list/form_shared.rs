@@ -100,7 +100,6 @@ pub fn handle_form_key_event(
 
 pub fn draw_form_layout(layout: FormLayout, name: String, colors: &HacColors, frame: &mut Frame) {
     let label = String::from("Collection Name");
-    let name = name.to_string();
     let name_input = Input::new(Some(&name), Some(&label), colors.clone())
         .value_style(Style::default().fg(colors.normal.white))
         .label_style(Style::default().fg(colors.bright.black));

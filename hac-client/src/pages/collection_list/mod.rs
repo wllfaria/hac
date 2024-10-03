@@ -19,7 +19,7 @@ use ratatui::widgets::{Block, Clear, Paragraph};
 use ratatui::Frame;
 
 use crate::app::Routes;
-use crate::components::list_itemm::ListItem;
+use crate::components::list_item::ListItem;
 use crate::pages::collection_viewer::CollectionViewer;
 use crate::renderable::{Eventful, Renderable};
 use crate::router::{Navigate, RouterMessage};
@@ -219,8 +219,7 @@ impl Renderable for CollectionList {
             Ok(Routes::EditCollection) => CollectionListData::EditCollection(self.selected),
             Ok(Routes::DeleteCollection) => CollectionListData::DeleteCollection(self.selected),
             Ok(Routes::CollectionViewer) => CollectionListData::DeleteCollection(self.selected),
-            Ok(Routes::ListCollections) => unreachable!(),
-            Err(_) => unreachable!(),
+            _ => unreachable!(),
         }
     }
 

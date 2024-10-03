@@ -10,19 +10,17 @@ pub struct JsonInfo {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JsonCollection {
-    pub info: JsonCollectionInfo,
     pub requests: Vec<ReqKind>,
     #[serde(skip)]
     pub file_info: JsonInfo,
 }
 
 impl JsonCollection {
-    pub fn new<P>(name: String, description: String, file_name: String, path: P) -> Self
+    pub fn new<P>(file_name: String, path: P) -> Self
     where
         P: AsRef<Path>,
     {
         Self {
-            info: JsonCollectionInfo { name, description },
             file_info: JsonInfo {
                 name: file_name,
                 path: path.as_ref().to_path_buf(),
@@ -30,12 +28,6 @@ impl JsonCollection {
             requests: Default::default(),
         }
     }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct JsonCollectionInfo {
-    pub name: String,
-    pub description: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
