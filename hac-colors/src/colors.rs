@@ -61,14 +61,8 @@ fn token_highlight() -> HashMap<String, Style> {
     tokens.insert("boolean".into(), Style::new().fg(colors.red));
     tokens.insert("number".into(), Style::new().fg(colors.magenta));
     tokens.insert("property".into(), Style::new().fg(colors.yellow));
-    tokens.insert(
-        "punctuation.bracket".into(),
-        Style::new().fg(colors.magenta),
-    );
-    tokens.insert(
-        "punctuation.delimiter".into(),
-        Style::new().fg(colors.magenta),
-    );
+    tokens.insert("punctuation.bracket".into(), Style::new().fg(colors.magenta));
+    tokens.insert("punctuation.delimiter".into(), Style::new().fg(colors.magenta));
     tokens.insert("string".into(), Style::new().fg(colors.green));
 
     tokens
@@ -78,7 +72,8 @@ impl Default for PrimaryColors {
     fn default() -> Self {
         PrimaryColors {
             foreground: Color::Rgb(0x0F, 0x14, 0x19),
-            background: Color::Rgb(0x18, 0x16, 0x16),
+            //background: Color::Rgb(0x18, 0x16, 0x16),
+            background: Color::Reset,
             accent: Color::Rgb(0xb6, 0x92, 0x7b),
             hover: Color::Rgb(0x38, 0x38, 0x38),
         }

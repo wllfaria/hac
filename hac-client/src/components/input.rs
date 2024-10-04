@@ -3,8 +3,8 @@ use std::borrow::Cow;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
-use ratatui::text::Line;
-use ratatui::widgets::{Block, Borders, Paragraph, Widget};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph, Widget};
 
 use crate::HacColors;
 
@@ -25,10 +25,10 @@ impl<'input> Input<'input> {
     {
         Self {
             value: value.map(Into::into),
-            value_style: Style::default(),
+            value_style: Style::default().fg(colors.normal.white),
             label: label.map(Into::into),
-            label_style: Style::default(),
-            border_style: Style::default().fg(colors.normal.white).bg(colors.normal.black),
+            label_style: Style::default().fg(colors.bright.black),
+            border_style: Style::default().fg(colors.normal.white),
             colors,
         }
     }
@@ -84,9 +84,7 @@ impl Widget for Input<'_> {
         if self.has_label() {
             let size = Rect::new(area.x, area.y, area.width, 1);
             let label = self.label.as_ref().unwrap().to_string();
-            let fill = size.width as usize - label.len();
-            let label = format!("{}{}", label, " ".repeat(fill));
-            let label = Line::from(label).style(self.label_style);
+            let label = Line::from(Span::from(label).style(self.label_style));
             label.render(size, buf);
             area.y += 1;
             area.height -= 1;
@@ -99,9 +97,8 @@ impl Widget for Input<'_> {
 
         let value = self.value.as_ref().map(|v| v.to_string()).unwrap_or_default();
         let size = Rect::new(area.x, area.y, area.width, 3);
-        let fill = size.width as usize - value.len();
-        let value = format!("{}{}", value, " ".repeat(fill));
-        let value = Line::from(value).style(self.value_style);
+        let value = Line::from(Span::from(value).style(self.value_style));
+        Clear.render(size, buf);
         Paragraph::new(value).block(block).render(size, buf);
     }
 }

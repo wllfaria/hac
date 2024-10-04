@@ -1,5 +1,10 @@
 use std::io::Stdout;
 use std::sync::mpsc::{Receiver, Sender};
+use std::time::{Duration, Instant};
+
+pub trait A<T> {
+    fn asda() -> T;
+}
 
 use hac_core::command::Command;
 use ratatui::backend::CrosstermBackend;
@@ -85,7 +90,7 @@ impl App {
         router.add_route(Routes::ListCollections.into(), Box::new(collection_list));
 
         Ok(Self {
-            event_pool: EventPool::new(FRAME_RATE, TICK_RATE),
+            event_pool: EventPool::default(),
             should_quit: false,
             router,
             command_receiver,
@@ -98,10 +103,16 @@ impl App {
     /// to pass them down the chain, and render the terminal screen
     pub async fn run(&mut self) -> anyhow::Result<()> {
         self.event_pool.start();
-
         startup()?;
 
+        let render_delay = Duration::from_secs_f64(1.0 / FRAME_RATE);
+        let tick_delay = Duration::from_secs_f64(1.0 / TICK_RATE);
+        let frame_delta = Instant::now();
+        let mut tick_delta = Instant::now();
+
         loop {
+            let frame_start = Instant::now();
+
             {
                 while let Ok(command) = self.command_receiver.try_recv() {
                     match command {
@@ -113,7 +124,6 @@ impl App {
 
             if let Some(event) = self.event_pool.next_event() {
                 match event {
-                    Event::Tick => self.router.tick()?,
                     Event::Resize(new_size) => self.router.resize(new_size),
                     Event::Key(_) => {
                         if let Some(command) = self.router.handle_event(Some(event.clone()))? {
@@ -122,16 +132,22 @@ impl App {
                                 .expect("failed to send command through channel")
                         }
                     }
-                    Event::Render => {
-                        self.terminal.draw(|f| {
-                            if let Err(e) = self.router.draw(f, f.size()) {
-                                self.command_sender
-                                    .send(Command::Error(format!("Failed to draw: {:?}", e)))
-                                    .expect("failed to send command through channel");
-                            }
-                        })?;
-                    }
                 }
+            }
+
+            if frame_start.duration_since(tick_delta) >= tick_delay {
+                self.router.tick()?;
+                tick_delta = frame_start;
+            }
+
+            if frame_start.duration_since(frame_delta) >= render_delay {
+                self.terminal.draw(|f| {
+                    if let Err(e) = self.router.draw(f, f.size()) {
+                        self.command_sender
+                            .send(Command::Error(format!("Failed to draw: {:?}", e)))
+                            .expect("failed to send command through channel");
+                    }
+                })?;
             }
 
             if self.should_quit {

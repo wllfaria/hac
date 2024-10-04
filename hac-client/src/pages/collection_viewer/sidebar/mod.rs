@@ -163,10 +163,7 @@ impl Renderable for Sidebar {
                     EntryStatus::Both => Style::new().fg(self.colors.normal.red).underlined().italic().bold(),
                 };
 
-                lines.push(Line::from(vec![
-                    colored_method(method, &self.colors),
-                    name.set_style(style),
-                ]));
+                lines.push(Line::default().spans([colored_method(method, &self.colors), name.set_style(style)]));
             }),
             ReqTreeNode::Folder(folder_key, requests) => {
                 hac_store::collection::get_folder(folder_key, |folder, status| {
@@ -175,8 +172,12 @@ impl Renderable for Sidebar {
                         EntryStatus::None => Style::new().fg(self.colors.normal.yellow).bold(),
                         _ => Style::new().fg(self.colors.normal.yellow).underlined().italic().bold(),
                     };
-                    let name = Line::from(vec![
-                        format!("{}     ", Icons::FOLDER).bold().fg(self.colors.normal.yellow),
+                    let icon = match folder.collapsed {
+                        true => Icons::FOLDER,
+                        false => Icons::FOLDER_OPEN,
+                    };
+                    let name = Line::default().spans([
+                        format!("{icon}     ").bold().fg(self.colors.normal.yellow),
                         folder_name.set_style(style),
                     ]);
                     lines.push(name);
@@ -199,7 +200,7 @@ impl Renderable for Sidebar {
                                 }
                             };
 
-                            lines.push(Line::from(vec![
+                            lines.push(Line::default().spans([
                                 " ".repeat(self.config.borrow().tab_size).into(),
                                 colored_method(method, &self.colors),
                                 name.set_style(style),

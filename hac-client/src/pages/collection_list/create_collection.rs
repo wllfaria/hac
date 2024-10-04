@@ -61,11 +61,8 @@ impl Renderable for CreateCollection {
         make_overlay(self.colors.clone(), self.colors.normal.black, 0.2, frame);
         draw_form_layout(self.layout, self.name.to_string(), &self.colors, frame);
         set_form_cursor(self.layout, &self.cursor, frame);
-
         Ok(())
     }
-
-    fn update(&mut self, _data: Self::Input) {}
 
     fn resize(&mut self, new_size: Rect) {
         self.size = new_size;

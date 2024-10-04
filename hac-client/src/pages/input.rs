@@ -50,11 +50,7 @@ impl<'a> Input<'a> {
             (value, color)
         };
 
-        let without_space = format!(
-            "{value}{}",
-            " ".repeat(size.width.saturating_sub(value.len() as u16) as usize)
-        );
-        Paragraph::new(without_space)
+        Paragraph::new(value)
             .block(
                 Block::default()
                     .title(self.name.clone())

@@ -269,6 +269,17 @@ where
     })
 }
 
+pub fn folders<F>(f: F)
+where
+    F: FnMut(&Folder),
+{
+    HAC_STORE.with_borrow(|store| {
+        if let Some(collection) = store.collection.as_ref() {
+            collection.folders.iter().for_each(f)
+        }
+    })
+}
+
 pub fn get_folder<F>(key: Key, f: F)
 where
     F: FnOnce(&Folder, EntryStatus),

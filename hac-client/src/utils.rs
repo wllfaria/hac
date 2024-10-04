@@ -163,7 +163,7 @@ pub fn build_syntax_highlighted_lines(
 /// use ratatui::prelude::Color;
 /// Color::Rgb(128, 128, 128);
 /// ```
-pub fn blend_colors_multiply(original: Color, overlay: Color, alpha: f32) -> Color {
+pub fn alpha_blend_multiply(original: Color, overlay: Color, alpha: f32) -> Color {
     let blend_component = |fg, bg| (alpha * fg as f32 + (1.0 - alpha) * bg as f32) as u8;
 
     let Some(foreground) = color_to_rgb(original) else {

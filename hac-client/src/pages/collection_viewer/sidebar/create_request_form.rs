@@ -2,14 +2,16 @@ use std::rc::Rc;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_core::command::Command;
-use hac_store::collection::ReqMethod;
+use hac_store::collection::{Folder, ReqMethod, ReqTreeNode};
+use hac_store::slab::Key;
 use ratatui::layout::{Constraint, Flex, Layout, Margin, Rect};
-use ratatui::style::{Style, Stylize};
+use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph};
 use ratatui::Frame;
 
 use crate::ascii::LOGO_ASCII;
+use crate::components::blending_list::BlendingList;
 use crate::components::input::Input;
 use crate::pages::overlay::make_overlay;
 use crate::renderable::{Eventful, Renderable};
@@ -22,6 +24,7 @@ struct CreateReqFormLayout {
     logo: Rect,
     parent: Rect,
     methods: Rc<[Rect]>,
+    parent_listing: Rect,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -51,22 +54,34 @@ impl FieldFocus {
 }
 
 #[derive(Debug)]
+enum FormStep {
+    MainForm,
+    ParentSelector,
+}
+
+#[derive(Debug)]
 pub struct CreateRequestForm {
     colors: HacColors,
     layout: CreateReqFormLayout,
     name: String,
     method: ReqMethod,
     focus: FieldFocus,
+    parent: Option<Key>,
+    form_step: FormStep,
+    parent_listing: BlendingList,
 }
 
 impl CreateRequestForm {
     pub fn new(colors: HacColors, area: Rect) -> Self {
         Self {
-            colors,
             layout: build_layout(area),
             name: Default::default(),
             method: Default::default(),
             focus: Default::default(),
+            parent: None,
+            form_step: FormStep::MainForm,
+            parent_listing: BlendingList::new(0, 6, 1, colors.clone()),
+            colors,
         }
     }
 
@@ -105,23 +120,14 @@ impl CreateRequestForm {
                 " - Cancel • ".fg(self.colors.bright.black),
                 "1-5".fg(self.colors.bright.green).bold(),
                 " - Change Method • ".fg(self.colors.bright.black),
-                "p".fg(self.colors.bright.green).bold(),
-                " - Select Parent".fg(self.colors.bright.black),
+                "Ctrl p".fg(self.colors.bright.green).bold(),
+                " - Parent".fg(self.colors.bright.black),
             ]
             .into_iter(),
         }
     }
-}
 
-impl Renderable for CreateRequestForm {
-    type Input = ();
-    type Output = ();
-
-    fn data(&self, _: u8) -> Self::Output {}
-
-    fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
-        make_overlay(self.colors.clone(), self.colors.normal.black, 0.15, frame);
-
+    fn draw_main_form(&mut self, frame: &mut Frame) {
         let border_style = match self.focus == FieldFocus::Name {
             true => Style::new().fg(self.colors.normal.white),
             false => Style::new().fg(self.colors.bright.black),
@@ -131,8 +137,6 @@ impl Renderable for CreateRequestForm {
             .border_style(border_style)
             .value_style(Style::default().fg(self.colors.normal.white))
             .label_style(Style::default().fg(self.colors.bright.black));
-
-        let hint = self.make_contextual_hint();
 
         let logo = Paragraph::new(
             LOGO_ASCII
@@ -171,15 +175,61 @@ impl Renderable for CreateRequestForm {
             frame.render_widget(Paragraph::new(Line::from(parts)).block(block), area);
         }
 
+        let hint = self.make_contextual_hint();
+        let parent_name = "No Parent".to_string();
+        let parent = Paragraph::new(Line::from(parent_name).centered())
+            .block(Block::new().borders(Borders::ALL).fg(self.colors.normal.white));
+
         frame.render_widget(name_input, self.layout.name);
         frame.render_widget(logo, self.layout.logo);
+        frame.render_widget(Clear, self.layout.parent);
+        frame.render_widget(parent, self.layout.parent);
         frame.render_widget(Line::from(hint.collect::<Vec<_>>()).centered(), self.layout.hint);
 
         if let FieldFocus::Name = self.focus {
-            frame.set_cursor(self.layout.name.x + 1 + self.name.len() as u16, self.layout.name.y + 2);
+            frame.set_cursor(
+                self.layout.name.x + 1 + self.name.chars().count() as u16,
+                self.layout.name.y + 2,
+            );
+        }
+    }
+
+    fn draw_parent_selector(&mut self, frame: &mut Frame) {
+        let logo = Paragraph::new(
+            LOGO_ASCII
+                .iter()
+                .map(|line| Line::from(line.to_string()).fg(self.colors.bright.red).centered())
+                .collect::<Vec<_>>(),
+        );
+
+        let mut folders = vec![];
+        hac_store::collection::folders(|folder| folders.push(folder.name.clone()));
+        self.parent_listing
+            .draw_with(frame, folders.iter(), |name| name, self.layout.parent_listing);
+
+        frame.render_widget(logo, self.layout.logo);
+    }
+}
+
+impl Renderable for CreateRequestForm {
+    type Input = ();
+    type Output = ();
+
+    fn data(&self, _: u8) -> Self::Output {}
+
+    fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
+        make_overlay(self.colors.clone(), self.colors.normal.black, 0.15, frame);
+
+        match self.form_step {
+            FormStep::MainForm => self.draw_main_form(frame),
+            FormStep::ParentSelector => self.draw_parent_selector(frame),
         }
 
         Ok(())
+    }
+
+    fn resize(&mut self, new_size: Rect) {
+        self.layout = build_layout(new_size);
     }
 }
 
@@ -192,16 +242,20 @@ impl Eventful for CreateRequestForm {
         }
 
         match key_event.code {
+            KeyCode::Char('p') if matches!(key_event.modifiers, KeyModifiers::CONTROL) => {
+                self.form_step = FormStep::ParentSelector;
+            }
+
             KeyCode::Char(ch) if matches!(self.focus, FieldFocus::Name) => self.name.push(ch),
             KeyCode::Backspace if matches!(self.focus, FieldFocus::Name) => _ = self.name.pop(),
 
-            KeyCode::Char(ch @ '1'..='5') if matches!(self.focus, FieldFocus::Methods) => {
-                self.method = ReqMethod::from(ch)
-            }
             KeyCode::Left if matches!(self.focus, FieldFocus::Methods) => self.method.set_prev(),
             KeyCode::Right if matches!(self.focus, FieldFocus::Methods) => self.method.set_next(),
             KeyCode::Up if matches!(self.focus, FieldFocus::Methods) => self.method.set_first(),
             KeyCode::Down if matches!(self.focus, FieldFocus::Methods) => self.method.set_last(),
+            KeyCode::Char(ch @ '1'..='5') if matches!(self.focus, FieldFocus::Methods) => {
+                self.method = ReqMethod::from(ch)
+            }
 
             KeyCode::Tab => self.focus.next(),
             KeyCode::BackTab => self.focus.prev(),
@@ -236,6 +290,16 @@ fn build_layout(area: Rect) -> CreateReqFormLayout {
     .flex(Flex::Center)
     .areas(form);
 
+    let [_, _, parent_listing, _, _] = Layout::vertical([
+        Constraint::Length(LOGO_ASCII.len() as u16),
+        Constraint::Length(1),
+        Constraint::Length(13),
+        Constraint::Length(1),
+        Constraint::Length(1),
+    ])
+    .flex(Flex::Center)
+    .areas(form);
+
     let methods = Layout::horizontal((0..ReqMethod::size()).map(|_| Constraint::Fill(1))).split(methods);
 
     CreateReqFormLayout {
@@ -244,5 +308,6 @@ fn build_layout(area: Rect) -> CreateReqFormLayout {
         logo,
         methods,
         parent,
+        parent_listing,
     }
 }

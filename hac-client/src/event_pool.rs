@@ -1,5 +1,3 @@
-use std::ops::Div;
-
 use crossterm::event::{Event as CrosstermEvent, KeyEventKind};
 use futures::{FutureExt, StreamExt};
 use ratatui::layout::Rect;
@@ -8,8 +6,6 @@ use ratatui::layout::Rect;
 pub enum Event {
     Key(crossterm::event::KeyEvent),
     Resize(Rect),
-    Tick,
-    Render,
 }
 
 /// Core component responsible for pooling events from crossterm and sending
@@ -18,36 +14,28 @@ pub enum Event {
 pub struct EventPool {
     event_rx: std::sync::mpsc::Receiver<Event>,
     event_tx: std::sync::mpsc::Sender<Event>,
-    frame_rate: f64,
-    tick_rate: f64,
+}
+
+impl Default for EventPool {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl EventPool {
-    pub fn new(frame_rate: f64, tick_rate: f64) -> Self {
+    pub fn new() -> Self {
         let (event_tx, event_rx) = std::sync::mpsc::channel();
-
-        EventPool {
-            event_rx,
-            event_tx,
-            frame_rate,
-            tick_rate,
-        }
+        EventPool { event_rx, event_tx }
     }
 
     #[cfg_attr(test, mutants::skip)]
     pub fn start(&mut self) {
-        let render_delay = std::time::Duration::from_secs_f64(1.0.div(self.frame_rate));
-        let tick_delay = std::time::Duration::from_secs_f64(1.0.div(self.tick_rate));
-
         let event_tx = self.event_tx.clone();
+
         tokio::spawn(async move {
             let mut reader = crossterm::event::EventStream::new();
-            let mut render_interval = tokio::time::interval(render_delay);
-            let mut tick_interval = tokio::time::interval(tick_delay);
 
             loop {
-                let render_delay = render_interval.tick();
-                let tick_delay = tick_interval.tick();
                 let crossterm_event = reader.next().fuse();
 
                 tokio::select! {
@@ -64,12 +52,6 @@ impl EventPool {
                             _ => {}
                         }
                     }
-                    _ = tick_delay => {
-                        event_tx.send(Event::Tick).expect("failed to send event through channel");
-                    },
-                    _ = render_delay => {
-                        event_tx.send(Event::Render).expect("failed to send event through channel");
-                    },
                 }
             }
         });
@@ -77,6 +59,6 @@ impl EventPool {
 
     #[cfg_attr(test, mutants::skip)]
     pub fn next_event(&mut self) -> Option<Event> {
-        self.event_rx.recv().ok()
+        self.event_rx.try_recv().ok()
     }
 }
