@@ -105,7 +105,7 @@ pub struct CollectionViewer {
 
 impl CollectionViewer {
     pub fn new(size: Rect, colors: HacColors, config: HacConfig) -> Self {
-        let layout = build_layout(size);
+        let layout = build_layout(size, 1);
         let (request_tx, response_rx) = unbounded_channel::<Response>();
 
         //
@@ -409,7 +409,7 @@ impl Renderable for CollectionViewer {
     }
 
     fn resize(&mut self, new_size: Rect) {
-        let new_layout = build_layout(new_size);
+        let new_layout = build_layout(new_size, 1);
         //self.request_editor.resize(new_layout.req_editor);
         //self.response_viewer.resize(new_layout.response_preview);
         self.layout = new_layout;
@@ -459,11 +459,14 @@ impl Eventful for CollectionViewer {
                     None => {}
                 },
                 PaneFocus::Sidebar => match self.sidebar.handle_key_event(key_event)? {
+                    Some(SidebarEvent::Quit) => return Ok(Some(Command::Quit)),
                     Some(SidebarEvent::SelectNext) => {
+                        self.layout = build_layout(self.layout.total_size, 1);
                         self.update_selection(None);
                         self.focus_next();
                     }
                     Some(SidebarEvent::SelectPrev) => {
+                        self.layout = build_layout(self.layout.total_size, 1);
                         self.update_selection(None);
                         self.focus_prev();
                     }
@@ -474,7 +477,8 @@ impl Eventful for CollectionViewer {
                         router_navigate_to!(&self.messager, Routes::CreateRequest);
                     }
                     Some(SidebarEvent::RemoveSelection) => self.update_selection(None),
-                    Some(e) => tracing::trace!("{e:?}"),
+                    Some(SidebarEvent::ShowExtendedHint) => self.layout = build_layout(self.layout.total_size, 3),
+                    Some(SidebarEvent::HideExtendedHint) => self.layout = build_layout(self.layout.total_size, 1),
                     None => (),
                     //Some(SidebarEvent::EditRequest) => self
                     //    .collection_store
@@ -518,10 +522,10 @@ impl Eventful for CollectionViewer {
     }
 }
 
-pub fn build_layout(size: Rect) -> ExplorerLayout {
+pub fn build_layout(size: Rect, hint_size: u16) -> ExplorerLayout {
     let [top_pane, hint_pane] = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Fill(1), Constraint::Length(1)])
+        .constraints([Constraint::Fill(1), Constraint::Length(hint_size)])
         .areas(size);
 
     let [sidebar, right_pane] = Layout::default()

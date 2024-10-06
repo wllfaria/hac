@@ -5,7 +5,7 @@ use hac_core::command::Command;
 use hac_store::collection_meta::CollectionMeta;
 use ratatui::layout::{Constraint, Flex, Layout, Margin, Rect};
 use ratatui::style::Stylize;
-use ratatui::text::Line;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::Frame;
 
@@ -61,12 +61,15 @@ impl Renderable for DeleteCollection {
 
         let drawer = |meta: &CollectionMeta| {
             let name = meta.name().to_string();
-            let name = format!("are you sure you want to delete {name}?");
+            let name = vec![
+                Span::from("are you sure you want to delete "),
+                Span::from(name).bold().underlined(),
+                "?".into(),
+            ];
             let name = Paragraph::new(Line::from(name).fg(self.colors.normal.red).centered()).wrap(Wrap { trim: true });
 
-            let left_button = Paragraph::new(Line::from("[ENTER] CONFIRM").centered())
+            let left_button = Paragraph::new(Line::from("[ENTER] CONFIRM").centered().fg(self.colors.normal.black))
                 .block(Block::default().borders(Borders::ALL).fg(self.colors.bright.red))
-                .fg(self.colors.normal.black)
                 .bg(self.colors.bright.red)
                 .bold();
 

@@ -91,7 +91,7 @@ impl CreateRequestForm {
         }
     }
 
-    fn make_contextual_hint(&self) -> impl Iterator<Item = Span> {
+    fn make_contextual_hint(&self) -> Vec<Span> {
         match self.focus {
             FieldFocus::Name => vec![
                 "Enter".fg(self.colors.bright.green).bold(),
@@ -104,8 +104,7 @@ impl CreateRequestForm {
                 " - Prev • ".fg(self.colors.bright.black),
                 "Ctrl p".fg(self.colors.bright.green).bold(),
                 " - Parent".fg(self.colors.bright.black),
-            ]
-            .into_iter(),
+            ],
             FieldFocus::Methods => vec![
                 "Enter".fg(self.colors.bright.green).bold(),
                 " - Confirm • ".fg(self.colors.bright.black),
@@ -117,8 +116,7 @@ impl CreateRequestForm {
                 " - Prev • ".fg(self.colors.bright.black),
                 "1-5".fg(self.colors.bright.green).bold(),
                 " - Method".fg(self.colors.bright.black),
-            ]
-            .into_iter(),
+            ],
             FieldFocus::Parent => vec![
                 "Enter".fg(self.colors.bright.green).bold(),
                 " - Confirm • ".fg(self.colors.bright.black),
@@ -128,8 +126,7 @@ impl CreateRequestForm {
                 " - Parent • ".fg(self.colors.bright.black),
                 "Backspace".fg(self.colors.bright.green).bold(),
                 " - Remove parent".fg(self.colors.bright.black),
-            ]
-            .into_iter(),
+            ],
         }
     }
 
@@ -197,7 +194,7 @@ impl CreateRequestForm {
         frame.render_widget(logo, self.layout.logo);
         frame.render_widget(Clear, self.layout.parent);
         frame.render_widget(parent, self.layout.parent);
-        frame.render_widget(Line::from(hint.collect::<Vec<_>>()).centered(), self.layout.hint);
+        frame.render_widget(Line::from(hint).centered(), self.layout.hint);
 
         if let FieldFocus::Name = self.focus {
             frame.set_cursor(

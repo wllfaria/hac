@@ -166,15 +166,15 @@ impl CollectionList {
         } else {
             let hint = vec![
                 "j/k ↑/↓".fg(self.colors.normal.green),
-                " - choose • ".fg(self.colors.bright.black),
+                " - Choose • ".fg(self.colors.bright.black),
                 "n".fg(self.colors.normal.green),
-                " - new • ".fg(self.colors.bright.black),
-                "enter".fg(self.colors.normal.green),
-                " - select • ".fg(self.colors.bright.black),
+                " - New • ".fg(self.colors.bright.black),
+                "Enter".fg(self.colors.normal.green),
+                " - Select • ".fg(self.colors.bright.black),
                 "?".fg(self.colors.normal.green),
-                " - show more • ".fg(self.colors.bright.black),
-                "ctrl c".fg(self.colors.normal.green),
-                " - quit".fg(self.colors.bright.black),
+                " - Show more • ".fg(self.colors.bright.black),
+                "Ctrl c".fg(self.colors.normal.green),
+                " - Quit".fg(self.colors.bright.black),
             ];
             frame.render_widget(Line::from(hint), self.layout.hint_pane);
         };

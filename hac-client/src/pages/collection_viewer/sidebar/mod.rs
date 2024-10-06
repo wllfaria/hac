@@ -16,42 +16,17 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
 use crate::icons::Icons;
-use crate::pages::collection_viewer::collection_viewer::CollectionViewerOverlay;
 use crate::renderable::{Eventful, Renderable};
 use crate::{HacColors, HacConfig};
 
-/// set of events Sidebar can emit to the caller when handling events.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SidebarEvent {
-    /// user pressed `CreateRequest (n)` hotkey, which should notify the caller to open
-    /// the create_request_form and properly handle the creation of a new request
-    CreateRequest,
-    /// user pressed `Edit (e)` hotkey on a request, which should notify the caller to open
-    /// the edit_request_form and properly handle the editing of the existing request
-    EditRequest,
-    /// user pressed `Edit (e)` hotkey on a directory, which should notify the caller to
-    /// open the `edit_request_form` and properly handle the editing of the current directory
-    EditDirectory,
-    /// user pressed `CreateDirectory (d)` hotkey, which should notify the caller to open
-    /// the `create_directory_form` overlay to create a new directory on the collection
-    CreateDirectory,
-    /// user pressed `Esc` so we notify the caller to remove the selection from
-    /// this pane, essentially bubbling the key handling scope to the caller
-    RemoveSelection,
-    /// tells the parent to move selection to the next pane
-    SelectNext,
-    /// tells the parent to move selection to the previous pane
+    ShowExtendedHint,
+    HideExtendedHint,
     SelectPrev,
-    /// event to force a full rebuild of the view, when a request is deleted
-    RebuildView,
-    /// this event is used when a request or directory is created, this notify the parent
-    /// to sync changes with the file system.
-    SyncCollection,
-    /// user pressed `DeleteItem (D)` hotkey, which should notify the caller to open the
-    /// delete_item_prompt to ask the user for confirmation
-    DeleteItem(String),
-    /// user pressed a hotkey to quit the application, so we bubble up so the caller
-    /// can do a few things before bubbling the quit request further up
+    SelectNext,
+    RemoveSelection,
+    CreateRequest,
     Quit,
 }
 
@@ -61,32 +36,18 @@ pub struct Sidebar {
     config: HacConfig,
     selected: bool,
     focused: bool,
-    //request_form: RequestFormVariant<'sbar>,
-    //directory_form: DirectoryFormVariant<'sbar>,
-    //delete_item_prompt: DeleteItemPrompt<'sbar>,
+    show_extended_hint: bool,
 }
 
 impl Sidebar {
     pub fn new(colors: HacColors, config: HacConfig) -> Self {
-        let mut sidebar = Self {
+        Self {
             colors,
             config,
             selected: false,
             focused: false,
-            //request_form: RequestFormVariant::Create(RequestForm::<RequestFormCreate>::new(
-            //    colors,
-            //    collection_store.clone(),
-            //)),
-            //directory_form: DirectoryFormVariant::Create(DirectoryForm::<DirectoryFormCreate>::new(
-            //    colors,
-            //    collection_store.clone(),
-            //)),
-            //delete_item_prompt: DeleteItemPrompt::new(colors, collection_store.clone()),
-        };
-
-        sidebar.rebuild_tree_view();
-
-        sidebar
+            show_extended_hint: false,
+        }
     }
 
     pub fn focus(&mut self) {
@@ -105,42 +66,66 @@ impl Sidebar {
         self.selected = false;
     }
 
-    pub fn rebuild_tree_view(&mut self) {
-        //let mut collection_store = self.collection_store.borrow_mut();
-        //self.lines = build_lines(
-        //    collection_store.get_requests(),
-        //    0,
-        //    collection_store.get_selected_request(),
-        //    collection_store.get_hovered_request(),
-        //    collection_store.get_dirs_expanded().unwrap().clone(),
-        //    self.colors,
-        //);
-    }
+    fn draw_hint(&self, frame: &mut Frame, size: Rect) {
+        if !self.selected {
+            let hint = vec![
+                "Enter".fg(self.colors.bright.green).bold(),
+                " - Select • ".fg(self.colors.bright.black),
+                "Tab".fg(self.colors.bright.green).bold(),
+                " - Next • ".fg(self.colors.bright.black),
+                "S-Tab".fg(self.colors.bright.green).bold(),
+                " - Prev".fg(self.colors.bright.black),
+            ];
+            let size = Rect::new(size.x, size.height - 1, size.width, 1);
+            frame.render_widget(Line::from(hint).centered(), size);
+            return;
+        }
 
-    pub fn draw_overlay(&mut self, _frame: &mut Frame, _overlay: CollectionViewerOverlay) -> anyhow::Result<()> {
-        //match overlay {
-        //    CollectionViewerOverlay::CreateRequest => {
-        //        self.request_form.inner().draw(frame, frame.size())?;
-        //    }
-        //    CollectionViewerOverlay::EditRequest => {
-        //        self.request_form.inner().draw(frame, frame.size())?;
-        //    }
-        //    CollectionViewerOverlay::SelectParentDir => {
-        //        self.request_form.inner().draw_overlay(frame, overlay)?;
-        //    }
-        //    CollectionViewerOverlay::CreateDirectory => {
-        //        self.directory_form.inner().draw(frame, frame.size())?;
-        //    }
-        //    CollectionViewerOverlay::EditDirectory => {
-        //        self.directory_form.inner().draw(frame, frame.size())?;
-        //    }
-        //    CollectionViewerOverlay::DeleteSidebarItem(_) => {
-        //        self.delete_item_prompt.draw(frame, frame.size())?;
-        //    }
-        //    _ => {}
-        //};
-
-        Ok(())
+        if self.show_extended_hint {
+            let lines = vec![
+                Line::from(vec![
+                    "j/k ↑/↓".fg(self.colors.normal.green),
+                    " - Choose          • ".fg(self.colors.bright.black),
+                    "n".fg(self.colors.normal.green),
+                    "      - New request    • ".fg(self.colors.bright.black),
+                    "Enter".fg(self.colors.normal.green),
+                    " - Select request".fg(self.colors.bright.black),
+                ]),
+                Line::from(vec![
+                    "?".fg(self.colors.normal.green),
+                    "       - Show less       • ".fg(self.colors.bright.black),
+                    "Ctrl c".fg(self.colors.normal.green),
+                    " - Quit           • ".fg(self.colors.bright.black),
+                    "d".fg(self.colors.normal.green),
+                    "     - Delete item".fg(self.colors.bright.black),
+                ]),
+                Line::from(vec![
+                    "e".fg(self.colors.normal.green),
+                    "       - Edit            • ".fg(self.colors.bright.black),
+                    "Tab".fg(self.colors.normal.green),
+                    "    - Next           • ".fg(self.colors.bright.black),
+                    "S-Tab".fg(self.colors.normal.green),
+                    " - Prev".fg(self.colors.bright.black),
+                ]),
+            ];
+            let size = Rect::new(size.x + 1, size.height - 3, size.width - 2, 3);
+            frame.render_widget(Paragraph::new(lines), size);
+        } else {
+            let hint = vec![
+                "Enter".fg(self.colors.bright.green).bold(),
+                " - Select Request • ".fg(self.colors.bright.black),
+                "Esc".fg(self.colors.bright.green).bold(),
+                " - Deselect • ".fg(self.colors.bright.black),
+                "Tab".fg(self.colors.bright.green).bold(),
+                " - Next • ".fg(self.colors.bright.black),
+                "S-Tab".fg(self.colors.bright.green).bold(),
+                " - Prev • ".fg(self.colors.bright.black),
+                "?".fg(self.colors.bright.green).bold(),
+                " - Help".fg(self.colors.bright.black),
+            ];
+            let size = Rect::new(size.x, size.height - 1, size.width, 1);
+            frame.render_widget(Line::from(hint).centered(), size);
+        }
     }
 }
 
@@ -223,6 +208,11 @@ impl Renderable for Sidebar {
         let size = Rect::new(size.x + 1, size.y + 1, size.width - 2, size.height - 2);
         frame.render_widget(Paragraph::new(lines), size);
 
+        if self.selected || self.focused {
+            let size = frame.size();
+            self.draw_hint(frame, size);
+        }
+
         Ok(())
     }
 
@@ -239,128 +229,6 @@ impl Eventful for Sidebar {
             return Ok(Some(SidebarEvent::Quit));
         }
 
-        //let is_selected = self
-        //    .collection_store
-        //    .borrow()
-        //    .get_selected_pane()
-        //    .is_some_and(|pane| pane.eq(&PaneFocus::Sidebar));
-        //assert!(is_selected, "handled an event to the sidebar while it was not selected");
-        //
-        //let overlay = self.collection_store.borrow_mut().peek_overlay();
-        //
-        //match overlay {
-        //    CollectionViewerOverlay::CreateRequest => match self.request_form.inner().handle_key_event(key_event)? {
-        //        Some(RequestFormEvent::Confirm) => {
-        //            let mut store = self.collection_store.borrow_mut();
-        //            store.pop_overlay();
-        //            drop(store);
-        //            self.rebuild_tree_view();
-        //            return Ok(Some(SidebarEvent::SyncCollection));
-        //        }
-        //        Some(RequestFormEvent::Cancel) => {
-        //            let mut store = self.collection_store.borrow_mut();
-        //            store.pop_overlay();
-        //            drop(store);
-        //            self.rebuild_tree_view();
-        //            return Ok(None);
-        //        }
-        //        None => return Ok(None),
-        //    },
-        //    CollectionViewerOverlay::SelectParentDir => {
-        //        let result = self.request_form.inner().handle_key_event(key_event)?;
-        //        assert!(
-        //            result.is_none(),
-        //            "should never return an event when selecting parent dir"
-        //        );
-        //        return Ok(None);
-        //    }
-        //    CollectionViewerOverlay::CreateDirectory => {
-        //        match self.directory_form.inner().handle_key_event(key_event)? {
-        //            Some(DirectoryFormEvent::Confirm) => {
-        //                let mut store = self.collection_store.borrow_mut();
-        //                store.pop_overlay();
-        //                drop(store);
-        //                self.rebuild_tree_view();
-        //                return Ok(Some(SidebarEvent::SyncCollection));
-        //            }
-        //            Some(DirectoryFormEvent::Cancel) => {
-        //                let mut store = self.collection_store.borrow_mut();
-        //                store.pop_overlay();
-        //                drop(store);
-        //                self.rebuild_tree_view();
-        //                return Ok(None);
-        //            }
-        //            None => return Ok(None),
-        //        }
-        //    }
-        //    CollectionViewerOverlay::EditDirectory => match self.directory_form.inner().handle_key_event(key_event)? {
-        //        Some(DirectoryFormEvent::Confirm) => {
-        //            let mut store = self.collection_store.borrow_mut();
-        //            store.pop_overlay();
-        //            drop(store);
-        //            self.rebuild_tree_view();
-        //            return Ok(Some(SidebarEvent::SyncCollection));
-        //        }
-        //        Some(DirectoryFormEvent::Cancel) => {
-        //            let mut store = self.collection_store.borrow_mut();
-        //            store.pop_overlay();
-        //            drop(store);
-        //            self.rebuild_tree_view();
-        //            return Ok(None);
-        //        }
-        //        None => return Ok(None),
-        //    },
-        //    CollectionViewerOverlay::EditRequest => {
-        //        // when editing, we setup the form to display the current header information.
-        //        match self.request_form.inner().handle_key_event(key_event)? {
-        //            Some(RequestFormEvent::Confirm) => {
-        //                let mut store = self.collection_store.borrow_mut();
-        //                store.pop_overlay();
-        //                drop(store);
-        //                self.rebuild_tree_view();
-        //                return Ok(Some(SidebarEvent::SyncCollection));
-        //            }
-        //            Some(RequestFormEvent::Cancel) => {
-        //                let mut store = self.collection_store.borrow_mut();
-        //                store.pop_overlay();
-        //                drop(store);
-        //                self.rebuild_tree_view();
-        //                return Ok(None);
-        //            }
-        //            None => return Ok(None),
-        //        }
-        //    }
-        //    CollectionViewerOverlay::DeleteSidebarItem(item_id) => {
-        //        match self.delete_item_prompt.handle_key_event(key_event)? {
-        //            Some(DeleteItemPromptEvent::Confirm) => {
-        //                let mut store = self.collection_store.borrow_mut();
-        //                let changed_selection = store
-        //                    .get_selected_request()
-        //                    .is_some_and(|req| req.read().unwrap().id.eq(&item_id));
-        //                store.remove_item(item_id);
-        //                store.pop_overlay();
-        //                drop(store);
-        //                self.rebuild_tree_view();
-        //
-        //                if changed_selection {
-        //                    return Ok(Some(SidebarEvent::RebuildView));
-        //                } else {
-        //                    return Ok(None);
-        //                }
-        //            }
-        //            Some(DeleteItemPromptEvent::Cancel) => {
-        //                let mut store = self.collection_store.borrow_mut();
-        //                store.pop_overlay();
-        //                drop(store);
-        //                self.rebuild_tree_view();
-        //                return Ok(None);
-        //            }
-        //            None => return Ok(None),
-        //        }
-        //    }
-        //    _ => {}
-        //};
-
         match key_event.code {
             KeyCode::Tab => return Ok(Some(SidebarEvent::SelectNext)),
             KeyCode::BackTab => return Ok(Some(SidebarEvent::SelectPrev)),
@@ -368,6 +236,14 @@ impl Eventful for Sidebar {
             KeyCode::Char('j') | KeyCode::Down => collection::hover_next(),
             KeyCode::Char('k') | KeyCode::Up => collection::hover_prev(),
             KeyCode::Char('n') => return Ok(Some(SidebarEvent::CreateRequest)),
+            KeyCode::Char('?') => {
+                self.show_extended_hint = !self.show_extended_hint;
+                if self.show_extended_hint {
+                    return Ok(Some(SidebarEvent::ShowExtendedHint));
+                } else {
+                    return Ok(Some(SidebarEvent::HideExtendedHint));
+                }
+            }
             KeyCode::Enter => {
                 if let Some((which, key)) = collection::get_hovered_request(|req| req) {
                     match which {
@@ -413,10 +289,10 @@ impl Eventful for Sidebar {
 
 fn colored_method(method: &ReqMethod, colors: &HacColors) -> Span<'static> {
     match method {
-        ReqMethod::Get => format!("{method}   ").fg(colors.normal.green).bold(),
-        ReqMethod::Post => format!("{method}  ").fg(colors.normal.magenta).bold(),
-        ReqMethod::Put => format!("{method}   ").fg(colors.normal.yellow).bold(),
-        ReqMethod::Patch => format!("{method} ").fg(colors.normal.orange).bold(),
-        ReqMethod::Delete => format!("{method}").fg(colors.normal.red).bold(),
+        ReqMethod::Get => format!("{method}    ").fg(colors.normal.green).bold(),
+        ReqMethod::Post => format!("{method}   ").fg(colors.normal.magenta).bold(),
+        ReqMethod::Put => format!("{method}    ").fg(colors.normal.yellow).bold(),
+        ReqMethod::Patch => format!("{method}  ").fg(colors.normal.orange).bold(),
+        ReqMethod::Delete => format!("{method} ").fg(colors.normal.red).bold(),
     }
 }

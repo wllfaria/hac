@@ -120,7 +120,7 @@ pub fn draw_form_layout(layout: FormLayout, name: String, colors: &HacColors, fr
 
     frame.render_widget(logo, layout.logo);
     frame.render_widget(name_input, layout.name_input);
-    frame.render_widget(Line::from(hint), layout.hint);
+    frame.render_widget(Line::from(hint).centered(), layout.hint);
 }
 
 pub fn set_form_cursor(layout: FormLayout, cursor: &Cursor, frame: &mut Frame) {
