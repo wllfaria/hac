@@ -128,7 +128,7 @@ pub fn draw_main_form(
             false => colors.bright.black,
         };
         let area = layout.methods[idx];
-        let method = method.to_string();
+        let method = m.to_string();
         let remaining_width = area.width as usize - 3 - method.len();
         let left_pad = remaining_width / 2;
 

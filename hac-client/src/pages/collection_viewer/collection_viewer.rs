@@ -16,6 +16,7 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use super::request_uri::{RequestUri, RequestUriEvent};
 use super::sidebar::create_request_form::CreateRequestForm;
+use super::sidebar::delete_item_form::DeleteItemForm;
 use super::sidebar::{Sidebar, SidebarEvent};
 use crate::app::Routes;
 use crate::pages::collection_list::CollectionListData;
@@ -473,6 +474,11 @@ impl Eventful for CollectionViewer {
                         self.layout = build_layout(self.layout.total_size, 1);
                         self.update_selection(None);
                         self.focus_prev();
+                    }
+                    Some(SidebarEvent::DeleteItem) => {
+                        let delete_item_form = DeleteItemForm::new(self.colors.clone(), self.layout.total_size);
+                        router_add_dialog!(&self.messager, Routes::DeleteItem, delete_item_form);
+                        router_navigate_to!(&self.messager, Routes::DeleteItem);
                     }
                     Some(SidebarEvent::CreateRequest) => {
                         tracing::trace!("opening create request form from sidebar");

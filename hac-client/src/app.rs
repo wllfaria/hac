@@ -40,6 +40,7 @@ pub enum Routes {
     CollectionViewer,
     CreateRequest,
     EditRequest,
+    DeleteItem,
 }
 
 impl TryFrom<u8> for Routes {
@@ -53,6 +54,8 @@ impl TryFrom<u8> for Routes {
             3 => Ok(Routes::DeleteCollection),
             4 => Ok(Routes::CollectionViewer),
             5 => Ok(Routes::CreateRequest),
+            6 => Ok(Routes::EditRequest),
+            7 => Ok(Routes::DeleteItem),
             _ => Err(InvalidRouteNumber(value)),
         }
     }
@@ -68,6 +71,7 @@ impl From<Routes> for u8 {
             Routes::CollectionViewer => 4,
             Routes::CreateRequest => 5,
             Routes::EditRequest => 6,
+            Routes::DeleteItem => 7,
         }
     }
 }

@@ -55,6 +55,28 @@ impl<T> Slab<T> {
         }
     }
 
+    pub fn prev_key(&self, key: Key) -> Key {
+        assert!(key == 0, "cant call prev key on first key");
+        tracing::error!("{key}");
+
+        for i in 0..key - 1 {
+            if let Entry::Full(_) = &self.inner[i] {
+                return i;
+            }
+        }
+        key
+    }
+
+    pub fn next_key(&self, key: Key) -> Key {
+        assert!(key < self.inner.len() - 1, "cant call next key on last key");
+        for i in (key + 1)..self.inner.len() {
+            if let Entry::Full(_) = &self.inner[i] {
+                return i;
+            }
+        }
+        key
+    }
+
     pub fn remove(&mut self, idx: Key) -> T {
         let mut entry = Entry::free(self.next_idx.take());
         self.next_idx = Some(idx);
@@ -82,9 +104,7 @@ impl<T> Slab<T> {
 
     pub fn try_get(&self, idx: Key) -> Option<&T> {
         if let Some(entry) = self.inner.get(idx) {
-            let Entry::Full(val) = entry else {
-                panic!("attempted to get an empty entry");
-            };
+            let Entry::Full(val) = entry else { return None };
             Some(val)
         } else {
             None
@@ -93,9 +113,7 @@ impl<T> Slab<T> {
 
     pub fn try_get_mut(&mut self, idx: Key) -> Option<&mut T> {
         if let Some(entry) = self.inner.get_mut(idx) {
-            let Entry::Full(val) = entry else {
-                panic!("attempted to get an empty entry");
-            };
+            let Entry::Full(val) = entry else { return None };
             Some(val)
         } else {
             None
@@ -121,6 +139,13 @@ impl<T> Slab<T> {
             Some(idx) => idx,
             None => self.len(),
         }
+    }
+
+    pub fn enumerated_iter(&self) -> impl Iterator<Item = (usize, &T)> {
+        self.inner.iter().enumerate().filter_map(|(i, e)| match e {
+            Entry::Full(val) => Some((i, val)),
+            Entry::Free(_) => None,
+        })
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &T> {

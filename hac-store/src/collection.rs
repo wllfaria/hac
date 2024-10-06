@@ -33,7 +33,7 @@ impl From<(bool, bool)> for EntryStatus {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WhichSlab {
     Requests,
     Folders,
@@ -183,6 +183,14 @@ pub fn set_collection(collection: Option<Collection>) {
     HAC_STORE.with_borrow_mut(|store| store.collection = collection);
 }
 
+pub fn get_selected_entry() -> Option<(WhichSlab, Key)> {
+    HAC_STORE.with_borrow(|store| {
+        assert!(store.collection.is_some());
+        let collection = store.collection.as_ref().unwrap();
+        collection.selected_request
+    })
+}
+
 pub fn get_selected_request<F, R>(f: F) -> Option<R>
 where
     F: FnOnce(&Request) -> Option<R>,
@@ -261,6 +269,18 @@ pub fn remove_root_request(key: Key) -> Request {
         assert!(store.collection.is_some());
         let collection = store.collection.as_mut().unwrap();
         collection.root_requests.remove(key)
+    })
+}
+
+pub fn remove_folder(key: Key) -> Folder {
+    HAC_STORE.with_borrow_mut(|store| {
+        assert!(store.collection.is_some());
+        let collection = store.collection.as_mut().unwrap();
+        let folder = collection.folders.remove(key);
+        for req in folder.requests.iter() {
+            collection.requests.remove(*req);
+        }
+        folder
     })
 }
 
@@ -355,9 +375,9 @@ pub fn has_folders() -> bool {
     len_folders() != 0
 }
 
-pub fn get_folder<F>(key: Key, f: F)
+pub fn get_folder<F, R>(key: Key, f: F) -> R
 where
-    F: FnOnce(&Folder, EntryStatus),
+    F: FnOnce(&Folder, EntryStatus) -> R,
 {
     HAC_STORE.with_borrow(|store| {
         assert!(store.collection.is_some());
@@ -369,7 +389,7 @@ where
         let is_selected = collection
             .selected_request
             .is_some_and(|(slab, k)| matches!(slab, WhichSlab::Folders) && key == k);
-        f(folder, (is_hovered, is_selected).into());
+        f(folder, (is_hovered, is_selected).into())
     })
 }
 
@@ -391,12 +411,21 @@ where
     })
 }
 
+// TODO: this sucks, rewrite it probably
 pub fn hover_next() {
     HAC_STORE.with_borrow_mut(|store| {
         assert!(store.collection.is_some());
         let collection = store.collection.as_mut().unwrap();
-        if let Some((which, key)) = collection.hovered_request {
-            match which {
+        match collection.hovered_request {
+            None => {
+                if let Some(node) = collection.layout.nodes.first() {
+                    match node {
+                        ReqTreeNode::Req(key) => collection.hovered_request = Some((WhichSlab::RootRequests, *key)),
+                        ReqTreeNode::Folder(key, _) => collection.hovered_request = Some((WhichSlab::Folders, *key)),
+                    }
+                }
+            }
+            Some((which, key)) => match which {
                 WhichSlab::Requests => {
                     let req = collection.requests.get(key);
                     let parent_key = req.parent.expect("nested request has no parent");
@@ -428,7 +457,8 @@ pub fn hover_next() {
                     // when the folder is collapsed or has no requests, and its not the
                     // last folder on the collection, we can hover the next folder
                     if (folder.requests.is_empty() || folder.collapsed) && key < collection.folders.len() - 1 {
-                        collection.hovered_request = Some((WhichSlab::Folders, key + 1));
+                        let key = collection.folders.next_key(key);
+                        collection.hovered_request = Some((WhichSlab::Folders, key));
                         return;
                     }
 
@@ -452,7 +482,7 @@ pub fn hover_next() {
                     // when we are not at the last one, we can simply hover the next
                     collection.hovered_request = Some((WhichSlab::RootRequests, key + 1));
                 }
-            }
+            },
         }
     })
 }
@@ -487,8 +517,13 @@ pub fn hover_prev() {
                     // when we are hovering a folder, we try to hover the previous folders's last
                     // request if it exists and the folder is not collapsed, otherwise we select
                     // the previous folder itself
+
+                    // TODO: have a method that instead tries to find the previous key rather than
+                    // doing index math, as indexes are unrealiable
                     if key > 0 {
-                        let folder = collection.folders.get(key - 1);
+                        let Some(folder) = collection.folders.try_get(key - 1) else {
+                            return;
+                        };
 
                         if !folder.collapsed {
                             if let Some(last) = folder.requests.last() {
@@ -505,16 +540,17 @@ pub fn hover_prev() {
                     if !collection.root_requests.is_empty() {
                         let key = collection.root_requests.len() - 1;
                         collection.hovered_request = Some((WhichSlab::RootRequests, key));
+                        return;
                     }
 
-                    // when there are no root requests or previou folders, we do nothing
+                    collection.hovered_request = None;
                 }
                 WhichSlab::RootRequests => {
-                    // when we are hovering on a root request, we either hover the preivous or
-                    // do nothing
-
                     if key > 0 {
                         collection.hovered_request = Some((WhichSlab::RootRequests, key - 1));
+                    }
+                    if collection.root_requests.is_empty() {
+                        collection.hovered_request = None;
                     }
                 }
             }
@@ -590,8 +626,7 @@ pub fn rebuild_tree_layout() {
         nodes.extend(
             collection
                 .folders
-                .iter()
-                .enumerate()
+                .enumerated_iter()
                 .map(|(idx, folder)| ReqTreeNode::Folder(idx, folder.requests.clone()))
                 .collect::<Vec<_>>(),
         );

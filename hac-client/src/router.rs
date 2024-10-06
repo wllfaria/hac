@@ -8,7 +8,6 @@ use hac_core::command::Command;
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
-use crate::event_pool::Event;
 use crate::pages::terminal_too_small::TerminalTooSmall;
 use crate::renderable::{Eventful, Renderable};
 use crate::{HacColors, MIN_HEIGHT, MIN_WIDTH};
@@ -79,7 +78,6 @@ pub trait AnyRenderable: Debug {
     fn register_command_handler(&mut self, sender: Sender<Command>);
     fn handle_command(&mut self, command: Command) -> anyhow::Result<()>;
     fn tick(&mut self) -> anyhow::Result<()>;
-    fn handle_event(&mut self, event: Option<Event>) -> anyhow::Result<Option<Self::Ev>>;
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Ev>>;
 }
 
@@ -117,10 +115,6 @@ impl<K: AnyCommand, T: Renderable + Eventful<Result = K> + Debug> AnyRenderable 
 
     fn tick(&mut self) -> anyhow::Result<()> {
         <Self as Renderable>::tick(self)
-    }
-
-    fn handle_event(&mut self, event: Option<Event>) -> anyhow::Result<Option<Self::Ev>> {
-        <Self as Eventful>::handle_event(self, event)
     }
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Ev>> {

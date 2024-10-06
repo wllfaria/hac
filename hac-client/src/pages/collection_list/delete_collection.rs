@@ -13,8 +13,8 @@ use super::{CollectionListData, Routes};
 use crate::ascii::LOGO_ASCII;
 use crate::pages::overlay::make_overlay;
 use crate::renderable::{Eventful, Renderable};
-use crate::router::{Navigate, RouterMessage};
-use crate::{HacColors, HacConfig, MIN_HEIGHT, MIN_WIDTH};
+use crate::router::RouterMessage;
+use crate::{router_drop_dialog, router_navigate_back, HacColors, HacConfig, MIN_HEIGHT, MIN_WIDTH};
 
 #[derive(Debug)]
 struct DeleteCollectionLayout {
@@ -116,23 +116,15 @@ impl Eventful for DeleteCollection {
 
         match key_event.code {
             KeyCode::Esc => {
-                self.messager
-                    .send(RouterMessage::Navigate(Navigate::Back))
-                    .expect("failed to send router message");
-                self.messager
-                    .send(RouterMessage::DelDialog(Routes::DeleteCollection.into()))
-                    .expect("failed to send router message");
+                router_navigate_back!(&self.messager);
+                router_drop_dialog!(&self.messager, Routes::DeleteCollection.into());
             }
             KeyCode::Char('o') | KeyCode::Char('y') | KeyCode::Enter => {
                 let name =
                     hac_store::collection_meta::get_collection_meta(self.selected_idx, |meta| meta.name().to_string());
                 hac_loader::collection_loader::delete_collection(name, &self.config)?;
-                self.messager
-                    .send(RouterMessage::Navigate(Navigate::Back))
-                    .expect("failed to send router message");
-                self.messager
-                    .send(RouterMessage::DelDialog(Routes::DeleteCollection.into()))
-                    .expect("failed to send router message");
+                router_navigate_back!(&self.messager);
+                router_drop_dialog!(&self.messager, Routes::DeleteCollection.into());
             }
             _ => {}
         }

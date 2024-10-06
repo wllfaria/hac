@@ -1,12 +1,7 @@
 pub mod create_request_form;
+pub mod delete_item_form;
 pub mod edit_request_form;
 mod request_form_layout;
-// mod create_directory_form;
-// mod delete_item_prompt;
-// mod directory_form;
-// mod edit_directory_form;
-// mod request_form;
-// mod select_request_parent;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_store::collection::{self, EntryStatus, ReqMethod, ReqTreeNode, WhichSlab};
@@ -29,6 +24,7 @@ pub enum SidebarEvent {
     RemoveSelection,
     CreateRequest,
     EditRequest,
+    DeleteItem,
     Quit,
 }
 
@@ -256,6 +252,7 @@ impl Eventful for Sidebar {
                     Ok(None)
                 });
             }
+            KeyCode::Char('d') => return Ok(Some(SidebarEvent::DeleteItem)),
             KeyCode::Char('n') => return Ok(Some(SidebarEvent::CreateRequest)),
             KeyCode::Char('?') => {
                 self.show_extended_hint = !self.show_extended_hint;
@@ -274,34 +271,6 @@ impl Eventful for Sidebar {
                 };
             }
             _ => (),
-            //    KeyCode::Char('e') => {
-            //        let hovered_request = store.find_hovered_request();
-            //        drop(store);
-            //        match hovered_request {
-            //            RequestKind::Single(req) => {
-            //                self.request_form = RequestFormVariant::Edit(RequestForm::<RequestFormEdit>::new(
-            //                    self.colors,
-            //                    self.collection_store.clone(),
-            //                    req.clone(),
-            //                ));
-            //                return Ok(Some(SidebarEvent::EditRequest));
-            //            }
-            //            RequestKind::Nested(dir) => {
-            //                self.directory_form = DirectoryFormVariant::Edit(DirectoryForm::<DirectoryFormEdit>::new(
-            //                    self.colors,
-            //                    self.collection_store.clone(),
-            //                    Some((dir.id.clone(), dir.name.clone())),
-            //                ));
-            //                return Ok(Some(SidebarEvent::EditDirectory));
-            //            }
-            //        }
-            //    }
-            //    KeyCode::Char('D') => {
-            //        if let Some(item_id) = store.get_hovered_request() {
-            //            return Ok(Some(SidebarEvent::DeleteItem(item_id)));
-            //        }
-            //    }
-            //    KeyCode::Char('d') => return Ok(Some(SidebarEvent::CreateDirectory)),
         }
 
         Ok(None)
