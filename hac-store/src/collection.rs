@@ -258,7 +258,6 @@ where
         let is_selected = collection
             .selected_request
             .is_some_and(|(slab, k)| matches!(slab, WhichSlab::RootRequests) && key == k);
-
         f(req, (is_hovered, is_selected).into());
     })
 }

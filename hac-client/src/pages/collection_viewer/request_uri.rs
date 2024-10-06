@@ -108,8 +108,21 @@ impl Eventful for RequestUri {
             KeyCode::Esc => return Ok(Some(RequestUriEvent::RemoveSelection)),
             KeyCode::Tab => return Ok(Some(RequestUriEvent::SelectNext)),
             KeyCode::BackTab => return Ok(Some(RequestUriEvent::SelectPrev)),
-            KeyCode::Char(c) => hac_store::collection::get_selected_request_mut(|req| req.uri.push(c)),
             KeyCode::Backspace => hac_store::collection::get_selected_request_mut(|req| _ = req.uri.pop()),
+            KeyCode::Char('w') if matches!(key_event.modifiers, KeyModifiers::CONTROL) => {
+                hac_store::collection::get_selected_request_mut(|req| {
+                    let len = req.uri.len().saturating_sub(1);
+                    let position = req
+                        .uri
+                        .chars()
+                        .rev()
+                        .skip(1)
+                        .position(|ch| !matches!(ch, 'a'..='z' | 'A'..='Z' | '0'..='9'))
+                        .unwrap_or(len);
+                    req.uri.truncate(len - position);
+                })
+            }
+            KeyCode::Char(c) => hac_store::collection::get_selected_request_mut(|req| req.uri.push(c)),
             KeyCode::Enter => return Ok(Some(RequestUriEvent::SendRequest)),
             _ => {}
         };

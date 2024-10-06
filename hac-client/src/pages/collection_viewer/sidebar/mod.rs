@@ -1,15 +1,16 @@
 pub mod create_request_form;
+pub mod edit_request_form;
+mod request_form_layout;
 // mod create_directory_form;
 // mod delete_item_prompt;
 // mod directory_form;
 // mod edit_directory_form;
-// mod edit_request_form;
 // mod request_form;
 // mod select_request_parent;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_store::collection::{self, EntryStatus, ReqMethod, ReqTreeNode, WhichSlab};
-use ratatui::layout::Rect;
+use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Style, Styled, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
@@ -17,7 +18,7 @@ use ratatui::Frame;
 
 use crate::icons::Icons;
 use crate::renderable::{Eventful, Renderable};
-use crate::{HacColors, HacConfig};
+use crate::{HacColors, HacConfig, MIN_WIDTH};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SidebarEvent {
@@ -27,6 +28,7 @@ pub enum SidebarEvent {
     SelectNext,
     RemoveSelection,
     CreateRequest,
+    EditRequest,
     Quit,
 }
 
@@ -108,7 +110,13 @@ impl Sidebar {
                     " - Prev".fg(self.colors.bright.black),
                 ]),
             ];
-            let size = Rect::new(size.x + 1, size.height - 3, size.width - 2, 3);
+            let size = Rect::new(size.x, size.height - 3, size.width, 3);
+            let [_, size, _] = Layout::horizontal([
+                Constraint::Fill(1),
+                Constraint::Length(MIN_WIDTH - 2),
+                Constraint::Fill(1),
+            ])
+            .areas(size);
             frame.render_widget(Paragraph::new(lines), size);
         } else {
             let hint = vec![
@@ -163,7 +171,7 @@ impl Renderable for Sidebar {
                         false => Icons::FOLDER_OPEN,
                     };
                     let name = Line::default().spans([
-                        format!("{icon}     ").bold().fg(self.colors.normal.yellow),
+                        format!("{icon}      ").bold().fg(self.colors.normal.yellow),
                         folder_name.set_style(style),
                     ]);
                     lines.push(name);
@@ -235,6 +243,19 @@ impl Eventful for Sidebar {
             KeyCode::Esc => return Ok(Some(SidebarEvent::RemoveSelection)),
             KeyCode::Char('j') | KeyCode::Down => collection::hover_next(),
             KeyCode::Char('k') | KeyCode::Up => collection::hover_prev(),
+            KeyCode::Char('e') => {
+                return collection::get_hovered_request(|entry| {
+                    if let Some((which, _)) = entry {
+                        match which {
+                            WhichSlab::Requests | WhichSlab::RootRequests => {
+                                return Ok(Some(SidebarEvent::EditRequest))
+                            }
+                            WhichSlab::Folders => todo!(),
+                        };
+                    };
+                    Ok(None)
+                });
+            }
             KeyCode::Char('n') => return Ok(Some(SidebarEvent::CreateRequest)),
             KeyCode::Char('?') => {
                 self.show_extended_hint = !self.show_extended_hint;

@@ -5,9 +5,9 @@ use std::rc::Rc;
 use std::sync::mpsc::{channel, Sender};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use futures::stream::SelectNextSome;
 use hac_core::command::Command;
 use hac_core::net::request_manager::Response;
+use hac_store::collection::WhichSlab;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Stylize;
 use ratatui::widgets::{Block, Clear};
@@ -19,6 +19,7 @@ use super::sidebar::create_request_form::CreateRequestForm;
 use super::sidebar::{Sidebar, SidebarEvent};
 use crate::app::Routes;
 use crate::pages::collection_list::CollectionListData;
+use crate::pages::collection_viewer::sidebar::edit_request_form::EditRequestForm;
 //use crate::pages::collection_viewer::collection_store::{CollectionStore, CollectionStoreAction};
 //use crate::pages::collection_viewer::request_editor::{RequestEditor, RequestEditorEvent};
 //use crate::pages::collection_viewer::request_uri::{RequestUri, RequestUriEvent};
@@ -460,6 +461,9 @@ impl Eventful for CollectionViewer {
                 },
                 PaneFocus::Sidebar => match self.sidebar.handle_key_event(key_event)? {
                     Some(SidebarEvent::Quit) => return Ok(Some(Command::Quit)),
+                    Some(SidebarEvent::RemoveSelection) => self.update_selection(None),
+                    Some(SidebarEvent::ShowExtendedHint) => self.layout = build_layout(self.layout.total_size, 3),
+                    Some(SidebarEvent::HideExtendedHint) => self.layout = build_layout(self.layout.total_size, 1),
                     Some(SidebarEvent::SelectNext) => {
                         self.layout = build_layout(self.layout.total_size, 1);
                         self.update_selection(None);
@@ -476,9 +480,38 @@ impl Eventful for CollectionViewer {
                         router_add_dialog!(&self.messager, Routes::CreateRequest, create_request_form);
                         router_navigate_to!(&self.messager, Routes::CreateRequest);
                     }
-                    Some(SidebarEvent::RemoveSelection) => self.update_selection(None),
-                    Some(SidebarEvent::ShowExtendedHint) => self.layout = build_layout(self.layout.total_size, 3),
-                    Some(SidebarEvent::HideExtendedHint) => self.layout = build_layout(self.layout.total_size, 1),
+                    Some(SidebarEvent::EditRequest) => {
+                        let entry = hac_store::collection::get_hovered_request(|entry| entry);
+                        if let Some((which, key)) = entry {
+                            match which {
+                                WhichSlab::Requests => hac_store::collection::get_request(key, |req, _| {
+                                    let edit_request_form = EditRequestForm::new(
+                                        req.name.clone(),
+                                        req.method,
+                                        key,
+                                        req.parent,
+                                        self.colors.clone(),
+                                        self.layout.total_size,
+                                    );
+                                    router_add_dialog!(&self.messager, Routes::EditRequest, edit_request_form);
+                                    router_navigate_to!(&self.messager, Routes::EditRequest);
+                                }),
+                                WhichSlab::RootRequests => hac_store::collection::get_root_request(key, |req, _| {
+                                    let edit_request_form = EditRequestForm::new(
+                                        req.name.clone(),
+                                        req.method,
+                                        key,
+                                        req.parent,
+                                        self.colors.clone(),
+                                        self.layout.total_size,
+                                    );
+                                    router_add_dialog!(&self.messager, Routes::EditRequest, edit_request_form);
+                                    router_navigate_to!(&self.messager, Routes::EditRequest);
+                                }),
+                                _ => {}
+                            };
+                        }
+                    }
                     None => (),
                     //Some(SidebarEvent::EditRequest) => self
                     //    .collection_store
