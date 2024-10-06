@@ -5,6 +5,7 @@ use std::rc::Rc;
 use std::sync::mpsc::{channel, Sender};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use futures::stream::SelectNextSome;
 use hac_core::command::Command;
 use hac_core::net::request_manager::Response;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};

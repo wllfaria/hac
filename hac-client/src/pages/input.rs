@@ -35,7 +35,7 @@ impl<'a> Input<'a> {
         self.focused = true;
     }
 
-    fn build_input(&self, value: String, size: Rect) -> Paragraph<'_> {
+    fn build_input(&self, value: String, _: Rect) -> Paragraph<'_> {
         let border_color = if self.focused {
             Style::default().fg(self.colors.normal.red)
         } else {

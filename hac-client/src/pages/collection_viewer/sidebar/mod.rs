@@ -151,6 +151,7 @@ impl Renderable for Sidebar {
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
         let layout = hac_store::collection::tree_layout();
         let mut lines = vec![];
+
         layout.nodes.into_iter().for_each(|node| match node {
             ReqTreeNode::Req(key) => hac_store::collection::get_root_request(key, |req, status| {
                 let name = req.name.clone();
@@ -368,7 +369,7 @@ impl Eventful for Sidebar {
             KeyCode::Char('k') | KeyCode::Up => collection::hover_prev(),
             KeyCode::Char('n') => return Ok(Some(SidebarEvent::CreateRequest)),
             KeyCode::Enter => {
-                if let Some((which, key)) = collection::get_hovered_request(|req| req).flatten() {
+                if let Some((which, key)) = collection::get_hovered_request(|req| req) {
                     match which {
                         WhichSlab::Requests | WhichSlab::RootRequests => collection::select_request((which, key)),
                         WhichSlab::Folders => collection::toggle_dir(key),

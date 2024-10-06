@@ -39,10 +39,28 @@ macro_rules! router_add_dialog {
 }
 
 #[macro_export]
+macro_rules! router_drop_dialog {
+    ($messager:expr, $dialog:expr) => {
+        $messager
+            .send(RouterMessage::DelDialog($dialog))
+            .expect("failed to send router message");
+    };
+}
+
+#[macro_export]
 macro_rules! router_navigate_to {
     ($messager:expr, $route:expr) => {
         $messager
             .send(RouterMessage::Navigate($crate::router::Navigate::To($route.into())))
+            .expect("failed to send router message");
+    };
+}
+
+#[macro_export]
+macro_rules! router_navigate_back {
+    ($messager:expr) => {
+        $messager
+            .send(RouterMessage::Navigate($crate::router::Navigate::Back))
             .expect("failed to send router message");
     };
 }
@@ -128,7 +146,6 @@ pub struct Router {
     command_sender: Sender<Command>,
     message_receiver: Receiver<RouterMessage>,
     message_sender: Sender<RouterMessage>,
-    parent_messager: Option<Sender<RouterMessage>>,
     too_small: TerminalTooSmall,
 }
 
@@ -144,13 +161,8 @@ impl Router {
             message_receiver,
             message_sender,
             command_sender,
-            parent_messager: None,
             too_small: TerminalTooSmall::new(colors.clone()),
         }
-    }
-
-    pub fn message_sender(&self) -> Sender<RouterMessage> {
-        self.message_sender.clone()
     }
 
     pub fn add_route(&mut self, key: Key, mut route: Box<dyn AnyRenderable<Ev = Command>>) {
@@ -169,10 +181,6 @@ impl Router {
         let route = self.get_active_route();
         route.handle_command(command)?;
         Ok(())
-    }
-
-    pub fn attach_parent_navigator(&mut self, messager: Sender<RouterMessage>) {
-        self.parent_messager = Some(messager);
     }
 
     fn get_active_route(&mut self) -> &mut Box<dyn AnyRenderable<Ev = Command>> {
