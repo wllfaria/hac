@@ -14,7 +14,7 @@ pub struct ReqTree {
     pub nodes: Vec<ReqTreeNode>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum EntryStatus {
     None,
     Hovered,
@@ -244,9 +244,29 @@ pub fn tree_layout() -> ReqTree {
     nodes
 }
 
-pub fn get_root_request<F>(key: Key, f: F)
+pub fn remove_request(key: Key) -> Request {
+    HAC_STORE.with_borrow_mut(|store| {
+        assert!(store.collection.is_some());
+        let collection = store.collection.as_mut().unwrap();
+        let req = collection.requests.remove(key);
+        assert!(req.parent.is_some());
+        let folder = collection.folders.get_mut(req.parent.unwrap());
+        folder.requests.retain(|r| *r != key);
+        req
+    })
+}
+
+pub fn remove_root_request(key: Key) -> Request {
+    HAC_STORE.with_borrow_mut(|store| {
+        assert!(store.collection.is_some());
+        let collection = store.collection.as_mut().unwrap();
+        collection.root_requests.remove(key)
+    })
+}
+
+pub fn get_root_request<F, R>(key: Key, f: F) -> R
 where
-    F: FnOnce(&Request, EntryStatus),
+    F: FnOnce(&Request, EntryStatus) -> R,
 {
     HAC_STORE.with_borrow(|store| {
         assert!(store.collection.is_some());
@@ -258,18 +278,54 @@ where
         let is_selected = collection
             .selected_request
             .is_some_and(|(slab, k)| matches!(slab, WhichSlab::RootRequests) && key == k);
+        f(req, (is_hovered, is_selected).into())
+    })
+}
+
+pub fn get_root_request_mut<F>(key: Key, f: F)
+where
+    F: FnOnce(&mut Request, EntryStatus),
+{
+    HAC_STORE.with_borrow_mut(|store| {
+        assert!(store.collection.is_some());
+        let collection = store.collection.as_mut().unwrap();
+        let req = collection.root_requests.get_mut(key);
+        let is_hovered = collection
+            .hovered_request
+            .is_some_and(|(slab, k)| matches!(slab, WhichSlab::RootRequests) && key == k);
+        let is_selected = collection
+            .selected_request
+            .is_some_and(|(slab, k)| matches!(slab, WhichSlab::RootRequests) && key == k);
         f(req, (is_hovered, is_selected).into());
     })
 }
 
-pub fn get_request<F>(key: Key, f: F)
+pub fn get_request<F, R>(key: Key, f: F) -> R
 where
-    F: FnOnce(&Request, EntryStatus),
+    F: FnOnce(&Request, EntryStatus) -> R,
 {
     HAC_STORE.with_borrow(|store| {
         assert!(store.collection.is_some());
         let collection = store.collection.as_ref().unwrap();
         let req = collection.requests.get(key);
+        let is_hovered = collection
+            .hovered_request
+            .is_some_and(|(slab, k)| matches!(slab, WhichSlab::Requests) && key == k);
+        let is_selected = collection
+            .selected_request
+            .is_some_and(|(slab, k)| matches!(slab, WhichSlab::Requests) && key == k);
+        f(req, (is_hovered, is_selected).into())
+    })
+}
+
+pub fn get_request_mut<F>(key: Key, f: F)
+where
+    F: FnOnce(&mut Request, EntryStatus),
+{
+    HAC_STORE.with_borrow_mut(|store| {
+        assert!(store.collection.is_some());
+        let collection = store.collection.as_mut().unwrap();
+        let req = collection.requests.get_mut(key);
         let is_hovered = collection
             .hovered_request
             .is_some_and(|(slab, k)| matches!(slab, WhichSlab::Requests) && key == k);
@@ -307,6 +363,24 @@ where
         assert!(store.collection.is_some());
         let collection = store.collection.as_ref().unwrap();
         let folder = collection.folders.get(key);
+        let is_hovered = collection
+            .hovered_request
+            .is_some_and(|(slab, k)| matches!(slab, WhichSlab::Folders) && key == k);
+        let is_selected = collection
+            .selected_request
+            .is_some_and(|(slab, k)| matches!(slab, WhichSlab::Folders) && key == k);
+        f(folder, (is_hovered, is_selected).into());
+    })
+}
+
+pub fn get_folder_mut<F>(key: Key, f: F)
+where
+    F: FnOnce(&mut Folder, EntryStatus),
+{
+    HAC_STORE.with_borrow_mut(|store| {
+        assert!(store.collection.is_some());
+        let collection = store.collection.as_mut().unwrap();
+        let folder = collection.folders.get_mut(key);
         let is_hovered = collection
             .hovered_request
             .is_some_and(|(slab, k)| matches!(slab, WhichSlab::Folders) && key == k);
@@ -448,6 +522,22 @@ pub fn hover_prev() {
     })
 }
 
+pub fn set_selected_request(new_hovered: Option<(WhichSlab, Key)>) {
+    HAC_STORE.with_borrow_mut(|store| {
+        assert!(store.collection.is_some());
+        let collection = store.collection.as_mut().unwrap();
+        collection.selected_request = new_hovered;
+    })
+}
+
+pub fn set_hovered_request(new_hovered: Option<(WhichSlab, Key)>) {
+    HAC_STORE.with_borrow_mut(|store| {
+        assert!(store.collection.is_some());
+        let collection = store.collection.as_mut().unwrap();
+        collection.hovered_request = new_hovered;
+    })
+}
+
 pub fn get_hovered_request<F, R>(f: F) -> R
 where
     F: FnOnce(Option<(WhichSlab, Key)>) -> R,
@@ -476,7 +566,7 @@ pub fn toggle_dir(key: Key) {
     });
 }
 
-pub fn push_request(request: Request, parent: Option<Key>) {
+pub fn push_request(request: Request, parent: Option<Key>) -> Key {
     HAC_STORE.with_borrow_mut(|store| {
         assert!(store.collection.is_some());
         let collection = store.collection.as_mut().unwrap();
@@ -485,14 +575,14 @@ pub fn push_request(request: Request, parent: Option<Key>) {
                 let new_key = collection.requests.push(request);
                 let folder = collection.folders.get_mut(key);
                 folder.requests.push(new_key);
+                new_key
             }
-            None => _ = collection.root_requests.push(request),
-        };
-    });
-    rebuild_tree_layout();
+            None => collection.root_requests.push(request),
+        }
+    })
 }
 
-fn rebuild_tree_layout() {
+pub fn rebuild_tree_layout() {
     HAC_STORE.with_borrow_mut(|store| {
         assert!(store.collection.is_some());
         let collection = store.collection.as_mut().unwrap();

@@ -103,11 +103,17 @@ impl<T> Slab<T> {
     }
 
     pub fn len(&self) -> usize {
-        self.inner.len()
+        self.inner
+            .iter()
+            .filter_map(|e| match e {
+                Entry::Full(val) => Some(val),
+                Entry::Free(_) => None,
+            })
+            .count()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.inner.is_empty()
+        self.len() == 0
     }
 
     pub fn next_idx(&self) -> Key {

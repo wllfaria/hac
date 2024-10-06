@@ -2,7 +2,7 @@ use std::sync::mpsc::{channel, Sender};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_core::command::Command;
-use hac_store::collection::ReqMethod;
+use hac_store::collection::{EntryStatus, ReqMethod, WhichSlab};
 use hac_store::slab::Key;
 use ratatui::layout::Rect;
 use ratatui::Frame;
@@ -75,12 +75,74 @@ impl EditRequestForm {
             KeyCode::Tab => self.focus.next(),
             KeyCode::BackTab => self.focus.prev(),
             KeyCode::Esc => {
-                router_drop_dialog!(&self.messager, Routes::CreateRequest.into());
+                router_drop_dialog!(&self.messager, Routes::EditRequest.into());
             }
             KeyCode::Enter => {
-                let request = hac_store::collection::Request::new(self.name.clone(), self.method, self.parent);
-                hac_store::collection::push_request(request, self.parent);
-                router_drop_dialog!(&self.messager, Routes::CreateRequest.into());
+                // editing a request gives us a few possible scenarios:
+                // 1. parent of the request didn't change, either if it had no parent and still has
+                //    no parent, or if it had one and it wasn't changed.
+                //    - in this case, we just need to update the request  on the current slab it
+                //      lives in
+                // 2. parent of the request changed from not having a parent to having a parent.
+                //    - in this case we need to remove the request from root_requests and move it
+                //    to requests, also updating the new parent to hold the key to its new request
+                // 3. parent of the request changed from having a parent to not having a parent.
+                //    - similar to the previous one, we need to remove it from requests, and also
+                //    remove the key from the current parent, and then add it into root_requests.
+                // 4. parent of the request changed to another parent, so we only need to update
+                //    both folders
+                match (self.prev_parent, self.parent) {
+                    (Some(a), Some(b)) if a == b => hac_store::collection::get_request_mut(self.key, |req, _| {
+                        req.name.clone_from(&self.name);
+                        req.method = self.method;
+                        req.parent = self.parent;
+                    }),
+                    (None, None) => hac_store::collection::get_root_request_mut(self.key, |req, _| {
+                        req.name.clone_from(&self.name);
+                        req.method = self.method;
+                        req.parent = self.parent;
+                    }),
+                    (None, Some(new_parent)) => {
+                        let status = hac_store::collection::get_root_request(self.key, |_, status| status);
+                        let is_selected = matches!(status, EntryStatus::Selected | EntryStatus::Both);
+                        let mut req = hac_store::collection::remove_root_request(self.key);
+                        req.name.clone_from(&self.name);
+                        req.method = self.method;
+                        req.parent = self.parent;
+                        let key = hac_store::collection::push_request(req, Some(new_parent));
+                        hac_store::collection::set_hovered_request(Some((WhichSlab::Requests, key)));
+                        if is_selected {
+                            hac_store::collection::set_selected_request(Some((WhichSlab::Requests, key)));
+                        }
+                    }
+                    (Some(_), None) => {
+                        let status = hac_store::collection::get_request(self.key, |_, status| status);
+                        let is_selected = matches!(status, EntryStatus::Selected | EntryStatus::Both);
+                        let mut req = hac_store::collection::remove_request(self.key);
+                        req.name.clone_from(&self.name);
+                        req.method = self.method;
+                        req.parent = self.parent;
+                        let key = hac_store::collection::push_request(req, None);
+                        hac_store::collection::set_hovered_request(Some((WhichSlab::RootRequests, key)));
+                        if is_selected {
+                            hac_store::collection::set_selected_request(Some((WhichSlab::RootRequests, key)));
+                        }
+                    }
+                    (Some(curr_parent), Some(new_parent)) => {
+                        hac_store::collection::get_request_mut(self.key, |req, _| {
+                            req.name.clone_from(&self.name);
+                            req.method = self.method;
+                            req.parent = self.parent;
+                        });
+                        hac_store::collection::get_folder_mut(curr_parent, |folder, _| {
+                            folder.requests.retain(|r| *r != self.key)
+                        });
+                        hac_store::collection::get_folder_mut(new_parent, |folder, _| folder.requests.push(self.key));
+                    }
+                }
+
+                hac_store::collection::rebuild_tree_layout();
+                router_drop_dialog!(&self.messager, Routes::EditRequest.into());
             }
             _ => {}
         };
@@ -92,6 +154,7 @@ impl EditRequestForm {
         match key_event.code {
             KeyCode::Char('j') | KeyCode::Down => self.parent_listing.select_down(),
             KeyCode::Char('k') | KeyCode::Up => self.parent_listing.select_up(),
+            KeyCode::Esc => self.form_step = FormStep::MainForm,
             KeyCode::Enter => {
                 if hac_store::collection::has_folders() {
                     self.parent = Some(self.parent_listing.selected);
@@ -109,8 +172,6 @@ impl EditRequestForm {
 impl Renderable for EditRequestForm {
     type Input = ();
     type Output = ();
-
-    fn data(&self, _requester: u8) -> Self::Output {}
 
     fn draw(&mut self, frame: &mut Frame, _: Rect) -> anyhow::Result<()> {
         make_overlay(self.colors.clone(), self.colors.normal.black, 0.15, frame);
@@ -131,6 +192,12 @@ impl Renderable for EditRequestForm {
         }
 
         Ok(())
+    }
+
+    fn data(&self, _requester: u8) -> Self::Output {}
+
+    fn attach_navigator(&mut self, messager: Sender<RouterMessage>) {
+        self.messager = messager;
     }
 }
 

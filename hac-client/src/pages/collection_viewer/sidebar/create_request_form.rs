@@ -76,6 +76,7 @@ impl CreateRequestForm {
             KeyCode::Enter => {
                 let request = hac_store::collection::Request::new(self.name.clone(), self.method, self.parent);
                 hac_store::collection::push_request(request, self.parent);
+                hac_store::collection::rebuild_tree_layout();
                 router_drop_dialog!(&self.messager, Routes::CreateRequest.into());
             }
             _ => {}
@@ -88,6 +89,7 @@ impl CreateRequestForm {
         match key_event.code {
             KeyCode::Char('j') | KeyCode::Down => self.parent_listing.select_down(),
             KeyCode::Char('k') | KeyCode::Up => self.parent_listing.select_up(),
+            KeyCode::Esc => self.form_step = FormStep::MainForm,
             KeyCode::Enter => {
                 if hac_store::collection::has_folders() {
                     self.parent = Some(self.parent_listing.selected);

@@ -86,27 +86,27 @@ impl Sidebar {
         if self.show_extended_hint {
             let lines = vec![
                 Line::from(vec![
-                    "j/k ↑/↓".fg(self.colors.normal.green),
+                    "j/k ↑/↓".fg(self.colors.bright.green).bold(),
                     " - Choose          • ".fg(self.colors.bright.black),
-                    "n".fg(self.colors.normal.green),
+                    "n".fg(self.colors.bright.green).bold(),
                     "      - New request    • ".fg(self.colors.bright.black),
-                    "Enter".fg(self.colors.normal.green),
+                    "Enter".fg(self.colors.bright.green).bold(),
                     " - Select request".fg(self.colors.bright.black),
                 ]),
                 Line::from(vec![
-                    "?".fg(self.colors.normal.green),
+                    "?".fg(self.colors.bright.green).bold(),
                     "       - Show less       • ".fg(self.colors.bright.black),
-                    "Ctrl c".fg(self.colors.normal.green),
+                    "Ctrl c".fg(self.colors.bright.green).bold(),
                     " - Quit           • ".fg(self.colors.bright.black),
-                    "d".fg(self.colors.normal.green),
+                    "d".fg(self.colors.bright.green).bold(),
                     "     - Delete item".fg(self.colors.bright.black),
                 ]),
                 Line::from(vec![
-                    "e".fg(self.colors.normal.green),
+                    "e".fg(self.colors.bright.green).bold(),
                     "       - Edit            • ".fg(self.colors.bright.black),
-                    "Tab".fg(self.colors.normal.green),
+                    "Tab".fg(self.colors.bright.green).bold(),
                     "    - Next           • ".fg(self.colors.bright.black),
-                    "S-Tab".fg(self.colors.normal.green),
+                    "S-Tab".fg(self.colors.bright.green).bold(),
                     " - Prev".fg(self.colors.bright.black),
                 ]),
             ];
