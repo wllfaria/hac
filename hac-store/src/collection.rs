@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::slab::{Key, Slab};
+use crate::slab::{EntryRef, Key, Slab};
 use crate::HAC_STORE;
 
 #[derive(Debug, Clone)]
@@ -631,5 +631,34 @@ pub fn rebuild_tree_layout() {
                 .collect::<Vec<_>>(),
         );
         collection.layout = ReqTree { nodes };
+    })
+}
+
+pub fn borrow_selected_request() -> EntryRef<Request> {
+    HAC_STORE.with_borrow_mut(|store| {
+        assert!(store.collection.is_some());
+        let collection = store.collection.as_mut().unwrap();
+        let Some((slab, key)) = collection.selected_request else {
+            panic!("trying to borrow a request without having one?");
+        };
+        let request_ref = match slab {
+            WhichSlab::Requests => collection.requests.borrow(key, slab),
+            WhichSlab::RootRequests => collection.root_requests.borrow(key, slab),
+            _ => unreachable!(),
+        };
+        request_ref
+    })
+}
+
+pub fn restore_request(request_ref: EntryRef<Request>) {
+    HAC_STORE.with_borrow_mut(|store| {
+        assert!(store.collection.is_some());
+        let collection = store.collection.as_mut().unwrap();
+
+        match request_ref.id() {
+            WhichSlab::Requests => collection.requests.restore(request_ref),
+            WhichSlab::RootRequests => collection.root_requests.restore(request_ref),
+            _ => unreachable!(),
+        };
     })
 }

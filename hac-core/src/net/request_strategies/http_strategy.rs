@@ -7,7 +7,7 @@ use hac_store::collection::{ReqMethod, Request};
 pub struct HttpResponse;
 
 impl RequestStrategy for HttpResponse {
-    async fn handle(&self, request: Request) -> Response {
+    async fn handle(&self, request: &Request) -> Response {
         let client = RequestClient::default();
 
         match request.method {
@@ -21,7 +21,7 @@ impl RequestStrategy for HttpResponse {
 }
 
 impl HttpResponse {
-    async fn handle_get_request(&self, client: RequestClient, request: Request) -> Response {
+    async fn handle_get_request(&self, client: RequestClient, request: &Request) -> Response {
         let now = std::time::Instant::now();
         match client.get(&request).send().await {
             Ok(response) => {
@@ -43,7 +43,7 @@ impl HttpResponse {
         }
     }
 
-    async fn handle_post_request(&self, client: RequestClient, request: Request) -> Response {
+    async fn handle_post_request(&self, client: RequestClient, request: &Request) -> Response {
         let now = std::time::Instant::now();
         match client.post(&request).json(&request.body).send().await {
             Ok(response) => {
@@ -65,7 +65,7 @@ impl HttpResponse {
         }
     }
 
-    async fn handle_put_request(&self, client: RequestClient, request: Request) -> Response {
+    async fn handle_put_request(&self, client: RequestClient, request: &Request) -> Response {
         let now = std::time::Instant::now();
         match client.put(&request).json(&request.body).send().await {
             Ok(response) => {
@@ -87,7 +87,7 @@ impl HttpResponse {
         }
     }
 
-    async fn handle_patch_request(&self, client: RequestClient, request: Request) -> Response {
+    async fn handle_patch_request(&self, client: RequestClient, request: &Request) -> Response {
         let now = std::time::Instant::now();
         match client.patch(&request).json(&request.body).send().await {
             Ok(response) => {
@@ -109,7 +109,7 @@ impl HttpResponse {
         }
     }
 
-    async fn handle_delete_request(&self, client: RequestClient, request: Request) -> Response {
+    async fn handle_delete_request(&self, client: RequestClient, request: &Request) -> Response {
         let now = std::time::Instant::now();
         match client.delete(&request).json(&request.body).send().await {
             Ok(response) => {

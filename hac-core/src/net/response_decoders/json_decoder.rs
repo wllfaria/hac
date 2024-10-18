@@ -21,7 +21,7 @@ impl ResponseDecoder for JsonDecoder {
         let mut body: Option<String> = None;
         let mut pretty_body = None;
 
-        if response.content_length().is_some_and(|len| len.gt(&0)) {
+        if response.content_length().is_some_and(|len| len > 0) {
             if let Ok(body_str) = response.text().await {
                 let pretty_body_str = jsonxf::pretty_print(&body_str).unwrap_or_default();
                 pretty_body = Some(TextObject::from(pretty_body_str.as_str()));

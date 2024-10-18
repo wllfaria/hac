@@ -1,9 +1,24 @@
+use crate::collection::WhichSlab;
+use std::sync::Arc;
 pub type Key = usize;
 
 #[derive(Debug)]
 pub enum Entry<T> {
     Full(T),
     Free(Option<Key>),
+    Borrowed(Arc<T>),
+}
+
+pub struct EntryRef<T> {
+    pub inner: Arc<T>,
+    pub key: Key,
+    id: WhichSlab,
+}
+
+impl<T> EntryRef<T> {
+    pub fn id(&self) -> WhichSlab {
+        self.id
+    }
 }
 
 impl<T> Entry<T> {
@@ -77,6 +92,39 @@ impl<T> Slab<T> {
         key
     }
 
+    pub fn restore(&mut self, entry_ref: EntryRef<T>) {
+        let key = entry_ref.key;
+        let mut entry = Entry::free(None);
+        std::mem::swap(&mut self.inner[key], &mut entry);
+        drop(entry_ref);
+
+        let Entry::Borrowed(entry) = entry else {
+            panic!("attempting to restore a non-borrowed value");
+        };
+
+        let Ok(entry) = Arc::try_unwrap(entry) else {
+            panic!("restoring reference with more than one borrower");
+        };
+
+        let mut entry = Entry::full(entry);
+        std::mem::swap(&mut self.inner[key], &mut entry);
+    }
+
+    pub fn borrow(&mut self, key: Key, id: WhichSlab) -> EntryRef<T> {
+        let mut entry = Entry::free(None);
+        std::mem::swap(&mut self.inner[key], &mut entry);
+
+        let val = match entry {
+            Entry::Full(val) => val,
+            Entry::Free(_) | Entry::Borrowed(_) => panic!("cannot borrow a free or borrowed entry"),
+        };
+
+        let inner = Arc::new(val);
+        let mut entry = Entry::Borrowed(inner.clone());
+        std::mem::swap(&mut self.inner[key], &mut entry);
+        EntryRef { inner, key, id }
+    }
+
     pub fn remove(&mut self, idx: Key) -> T {
         let mut entry = Entry::free(self.next_idx.take());
         self.next_idx = Some(idx);
@@ -84,15 +132,16 @@ impl<T> Slab<T> {
 
         match entry {
             Entry::Full(val) => val,
-            Entry::Free(_) => panic!("cannot remove a free entry"),
+            Entry::Free(_) | Entry::Borrowed(_) => panic!("cannot remove a free or borrowed entry"),
         }
     }
 
     pub fn get(&self, idx: Key) -> &T {
-        let Entry::Full(val) = &self.inner[idx] else {
-            panic!("attempted to get an empty entry");
-        };
-        val
+        match &self.inner[idx] {
+            Entry::Full(val) => val,
+            Entry::Borrowed(val) => val,
+            _ => panic!("attempted to get an empty entry"),
+        }
     }
 
     pub fn get_mut(&mut self, idx: Key) -> &mut T {
@@ -124,7 +173,8 @@ impl<T> Slab<T> {
         self.inner
             .iter()
             .filter_map(|e| match e {
-                Entry::Full(val) => Some(val),
+                Entry::Full(_) => Some(()),
+                Entry::Borrowed(_) => Some(()),
                 Entry::Free(_) => None,
             })
             .count()
@@ -144,21 +194,21 @@ impl<T> Slab<T> {
     pub fn enumerated_iter(&self) -> impl Iterator<Item = (usize, &T)> {
         self.inner.iter().enumerate().filter_map(|(i, e)| match e {
             Entry::Full(val) => Some((i, val)),
-            Entry::Free(_) => None,
+            Entry::Free(_) | Entry::Borrowed(_) => None,
         })
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.inner.iter().filter_map(|e| match e {
             Entry::Full(val) => Some(val),
-            Entry::Free(_) => None,
+            Entry::Free(_) | Entry::Borrowed(_) => None,
         })
     }
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
         self.inner.iter_mut().filter_map(|e| match e {
             Entry::Full(val) => Some(val),
-            Entry::Free(_) => None,
+            Entry::Free(_) | Entry::Borrowed(_) => None,
         })
     }
 }
@@ -172,7 +222,7 @@ impl<T> IntoIterator for Slab<T> {
             .into_iter()
             .filter_map(|e| match e {
                 Entry::Full(val) => Some(val),
-                Entry::Free(_) => None,
+                Entry::Free(_) | Entry::Borrowed(_) => None,
             })
             .collect::<Vec<_>>()
             .into_iter()

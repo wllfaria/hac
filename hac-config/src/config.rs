@@ -63,6 +63,7 @@ pub struct Config {
     pub dry_run: bool,
     pub tab_size: usize,
     pub enable_icons: bool,
+    pub sync_delay: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

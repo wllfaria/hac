@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use hac_store::collection::{BodyKind, Request};
+use hac_store::slab::EntryRef;
 use reqwest::header::{HeaderMap, HeaderValue};
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -25,7 +26,7 @@ pub struct Response {
 pub struct RequestManager;
 
 impl RequestManager {
-    pub async fn handle<S>(strategy: S, request: Request) -> Response
+    pub async fn handle<S>(strategy: S, request: &Request) -> Response
     where
         S: RequestStrategy,
     {
@@ -58,14 +59,17 @@ impl From<&str> for ContentType {
 }
 
 #[tracing::instrument(skip_all)]
-pub fn handle_request(request: Request, response_tx: UnboundedSender<Response>) {
+pub fn handle_request(request: EntryRef<Request>, response_tx: UnboundedSender<(EntryRef<Request>, Response)>) {
     tokio::spawn(async move {
-        let response = match request.body_kind {
+        let response = match request.inner.body_kind {
             // if we dont have a body type, this is a GET request, so we use HTTP strategy
-            BodyKind::NoBody => RequestManager::handle(HttpResponse, request).await,
-            BodyKind::Json => RequestManager::handle(HttpResponse, request).await,
+            BodyKind::NoBody => RequestManager::handle(HttpResponse, &request.inner).await,
+            BodyKind::Json => RequestManager::handle(HttpResponse, &request.inner).await,
         };
 
-        response_tx.send(response).is_err().then(|| std::process::abort());
+        response_tx
+            .send((request, response))
+            .is_err()
+            .then(|| std::process::abort());
     });
 }

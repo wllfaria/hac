@@ -1,12 +1,11 @@
-use std::cell::RefCell;
 use std::iter;
 use std::ops::{Add, Sub};
-use std::rc::Rc;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crate::HacColors;
+
+use crate::components::spinner::Spinner;
+use crossterm::event::{KeyCode, KeyEvent};
 use hac_core::net::request_manager::Response;
-use hac_core::syntax::highlighter::HIGHLIGHTER;
-use rand::Rng;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
@@ -16,18 +15,12 @@ use ratatui::widgets::{
 use ratatui::Frame;
 use tree_sitter::Tree;
 
-use super::collection_store::CollectionStore;
-use crate::ascii::{BIG_ERROR_ART, LOGO_ASCII, SMALL_ERROR_ART};
-use crate::pages::collection_viewer::collection_viewer::PaneFocus;
-use crate::pages::spinner::Spinner;
-use crate::pages::under_construction::UnderConstruction;
-use crate::pages::{Eventful, Renderable};
-use crate::utils::build_syntax_highlighted_lines;
+use crate::ascii::{BIG_ERROR_ART, SMALL_ERROR_ART};
+use crate::renderable::{Eventful, Renderable};
 
 #[derive(Debug)]
 pub enum ResponseViewerEvent {
     RemoveSelection,
-    Quit,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -82,53 +75,37 @@ struct PreviewLayout {
     scrollbar: Rect,
 }
 
-#[derive(Debug, Clone)]
-pub struct ResponseViewer<'a> {
-    colors: &'a hac_colors::Colors,
-    response: Option<Rc<RefCell<Response>>>,
+#[derive(Debug)]
+pub struct ResponseViewer {
+    colors: HacColors,
+    response: Option<Response>,
     tree: Option<Tree>,
     lines: Vec<Line<'static>>,
     error_lines: Option<Vec<Line<'static>>>,
-    empty_lines: Vec<Line<'static>>,
     preview_layout: PreviewLayout,
     layout: ResViewerLayout,
-    collection_store: Rc<RefCell<CollectionStore>>,
     active_tab: ResViewerTabs,
     raw_scroll: usize,
     headers_scroll_y: usize,
     headers_scroll_x: usize,
     pretty_scroll: usize,
+
+    pub pending_request: bool,
+    focused: bool,
+    selected: bool,
 }
 
-impl<'a> ResponseViewer<'a> {
-    pub fn new(
-        colors: &'a hac_colors::Colors,
-        collection_store: Rc<RefCell<CollectionStore>>,
-        response: Option<Rc<RefCell<Response>>>,
-        size: Rect,
-    ) -> Self {
-        let tree = response.as_ref().and_then(|response| {
-            if let Some(ref pretty_body) = response.borrow().pretty_body {
-                let pretty_body = pretty_body.to_string();
-                let mut highlighter = HIGHLIGHTER.write().unwrap();
-                highlighter.parse(&pretty_body)
-            } else {
-                None
-            }
-        });
-
+impl ResponseViewer {
+    pub fn new(colors: HacColors, size: Rect) -> Self {
         let layout = build_layout(size);
         let preview_layout = build_preview_layout(layout.content_pane);
 
-        let empty_lines = make_empty_ascii_art(colors);
-
         ResponseViewer {
             colors,
-            response,
-            tree,
+            response: None,
+            tree: None,
             lines: vec![],
             error_lines: None,
-            empty_lines,
             preview_layout,
             layout,
             active_tab: ResViewerTabs::Preview,
@@ -136,8 +113,27 @@ impl<'a> ResponseViewer<'a> {
             headers_scroll_y: 0,
             headers_scroll_x: 0,
             pretty_scroll: 0,
-            collection_store,
+
+            pending_request: false,
+            focused: false,
+            selected: false,
         }
+    }
+
+    pub fn focus(&mut self) {
+        self.focused = true;
+    }
+
+    pub fn blur(&mut self) {
+        self.focused = false;
+    }
+
+    pub fn select(&mut self) {
+        self.selected = true;
+    }
+
+    pub fn deselect(&mut self) {
+        self.selected = false;
     }
 
     pub fn resize(&mut self, new_size: Rect) {
@@ -145,23 +141,22 @@ impl<'a> ResponseViewer<'a> {
         self.preview_layout = build_preview_layout(self.layout.content_pane);
     }
 
-    pub fn update(&mut self, response: Option<Rc<RefCell<Response>>>) {
-        let body_str = response
-            .as_ref()
-            .and_then(|res| res.borrow().pretty_body.as_ref().map(|body| body.to_string()))
-            .unwrap_or_default();
+    pub fn update(&mut self, response: Option<Response>) {
+        //let body_str = response
+        //    .as_ref()
+        //    .and_then(|res| res.pretty_body.as_ref().map(|body| body.to_string()))
+        //    .unwrap_or_default();
 
-        if body_str.len().gt(&0) {
-            self.tree = HIGHLIGHTER.write().unwrap().parse(&body_str);
-            self.lines = build_syntax_highlighted_lines(&body_str, self.tree.as_ref(), self.colors);
-        } else {
-            self.tree = None;
-            self.lines = vec![];
-        }
+        //if body_str.len().gt(&0) {
+        //    self.tree = HIGHLIGHTER.write().unwrap().parse(&body_str);
+        //    self.lines = build_syntax_highlighted_lines(&body_str, self.tree.as_ref(), self.colors);
+        //} else {
+        //    self.tree = None;
+        //    self.lines = vec![];
+        //}
 
         if let Some(res) = response.as_ref() {
             let cause: String = res
-                .borrow()
                 .cause
                 .as_ref()
                 .map(|cause| cause.to_string())
@@ -184,36 +179,16 @@ impl<'a> ResponseViewer<'a> {
             )
         };
 
-        self.empty_lines = make_empty_ascii_art(self.colors);
         self.response = response;
     }
 
     fn draw_container(&self, size: Rect, frame: &mut Frame) {
-        let is_focused = self
-            .collection_store
-            .borrow()
-            .get_focused_pane()
-            .eq(&PaneFocus::Preview);
-        let is_selected = self
-            .collection_store
-            .borrow()
-            .get_selected_pane()
-            .is_some_and(|pane| pane.eq(&PaneFocus::Preview));
-
-        let block_border = match (is_focused, is_selected) {
+        let block_border = match (self.focused, self.selected) {
             (true, false) => Style::default().fg(self.colors.bright.blue),
             (true, true) => Style::default().fg(self.colors.normal.red),
             (_, _) => Style::default().fg(self.colors.bright.black),
         };
-
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title(vec![
-                "P".fg(self.colors.normal.red).bold(),
-                "review".fg(self.colors.bright.black),
-            ])
-            .border_style(block_border);
-
+        let block = Block::default().borders(Borders::ALL).border_style(block_border);
         frame.render_widget(block, size);
     }
 
@@ -269,61 +244,18 @@ impl<'a> ResponseViewer<'a> {
         }
     }
 
-    fn draw_waiting_for_request(&self, frame: &mut Frame) {
-        let request_pane = self.preview_layout.content_pane;
-        frame.render_widget(Clear, request_pane);
-        frame.render_widget(Block::default().bg(self.colors.primary.background), request_pane);
-
-        let mut empty_message = self.empty_lines.clone();
-
-        if self.empty_lines.len() >= request_pane.height.into() {
-            empty_message = vec![
-                "your handy API client".fg(self.colors.normal.red).into(),
-                "".into(),
-                "make a request and the result will appear here"
-                    .fg(self.colors.normal.red)
-                    .into(),
-            ];
-        }
-
-        let center = request_pane
-            .y
-            .add(request_pane.height.div_ceil(2))
-            .sub(empty_message.len().div_ceil(2) as u16);
-
-        let size = Rect::new(
-            request_pane.x.add(1),
-            center,
-            request_pane.width,
-            self.empty_lines.len() as u16,
-        );
-
-        frame.render_widget(
-            Paragraph::new(empty_message).fg(self.colors.normal.red).centered(),
-            size,
-        )
-    }
-
     fn draw_current_tab(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
-        if self.response.as_ref().is_some_and(|res| res.borrow().is_error) {
+        if self.response.as_ref().is_some_and(|res| res.is_error) {
             self.draw_network_error(frame);
         };
 
-        if self.response.is_none() {
-            self.draw_waiting_for_request(frame);
-        }
-
-        if self.response.as_ref().is_some_and(|res| !res.borrow().is_error) {
+        if self.response.as_ref().is_some_and(|res| !res.is_error) {
             match self.active_tab {
                 ResViewerTabs::Preview => self.draw_pretty_response(frame, size),
                 ResViewerTabs::Raw => self.draw_raw_response(frame, size),
                 ResViewerTabs::Headers => self.draw_response_headers(frame),
-                ResViewerTabs::Cookies => UnderConstruction::new(self.colors).draw(frame, size)?,
+                ResViewerTabs::Cookies => (),
             }
-        }
-
-        if self.collection_store.borrow().has_pending_request() {
-            self.draw_spinner(frame);
         }
 
         Ok(())
@@ -331,7 +263,7 @@ impl<'a> ResponseViewer<'a> {
 
     fn draw_response_headers(&mut self, frame: &mut Frame) {
         if let Some(response) = self.response.as_ref() {
-            if let Some(headers) = response.borrow().headers.as_ref() {
+            if let Some(headers) = response.headers.as_ref() {
                 let mut longest_line: usize = 0;
 
                 let mut lines: Vec<Line> =
@@ -398,9 +330,8 @@ impl<'a> ResponseViewer<'a> {
 
     fn draw_raw_response(&mut self, frame: &mut Frame, size: Rect) {
         if let Some(response) = self.response.as_ref() {
-            let lines = if response.borrow().body.is_some() {
+            let lines = if response.body.is_some() {
                 response
-                    .borrow()
                     .body
                     .as_ref()
                     .unwrap()
@@ -454,42 +385,37 @@ impl<'a> ResponseViewer<'a> {
         frame.render_stateful_widget(scrollbar, size, &mut scrollbar_state);
     }
 
-    fn draw_pretty_response(&mut self, frame: &mut Frame, size: Rect) {
-        if self.response.as_ref().is_some() {
-            if self.pretty_scroll.ge(&self.lines.len().saturating_sub(1)) {
-                self.pretty_scroll = self.lines.len().saturating_sub(1);
-            }
-
-            self.draw_scrollbar(self.lines.len(), self.raw_scroll, frame, self.preview_layout.scrollbar);
-
-            let lines =
-                if self.lines.len().gt(&0) { self.lines.clone() } else { vec![Line::from("No body").centered()] };
-
-            let lines_in_view = lines
-                .into_iter()
-                .skip(self.pretty_scroll)
-                .chain(iter::repeat(Line::from("~".fg(self.colors.bright.black))))
-                .take(size.height.into())
-                .collect::<Vec<_>>();
-
-            let pretty_response = Paragraph::new(lines_in_view);
-            frame.render_widget(pretty_response, self.preview_layout.content_pane);
-        }
+    fn draw_pretty_response(&mut self, _frame: &mut Frame, _size: Rect) {
+        //if self.response.as_ref().is_some() {
+        //    if self.pretty_scroll.ge(&self.lines.len().saturating_sub(1)) {
+        //        self.pretty_scroll = self.lines.len().saturating_sub(1);
+        //    }
+        //
+        //    self.draw_scrollbar(self.lines.len(), self.raw_scroll, frame, self.preview_layout.scrollbar);
+        //
+        //    let lines =
+        //        if self.lines.len().gt(&0) { self.lines.clone() } else { vec![Line::from("No body").centered()] };
+        //
+        //    let lines_in_view = lines
+        //        .into_iter()
+        //        .skip(self.pretty_scroll)
+        //        .chain(iter::repeat(Line::from("~".fg(self.colors.bright.black))))
+        //        .take(size.height.into())
+        //        .collect::<Vec<_>>();
+        //
+        //    let pretty_response = Paragraph::new(lines_in_view);
+        //    frame.render_widget(pretty_response, self.preview_layout.content_pane);
+        //}
     }
 
     fn draw_summary(&self, frame: &mut Frame, size: Rect) {
         if let Some(ref response) = self.response {
-            let status_color = match response
-                .borrow()
-                .status
-                .map(|status| status.as_u16())
-                .unwrap_or_default()
-            {
+            let status_color = match response.status.map(|status| status.as_u16()).unwrap_or_default() {
                 s if s < 400 => self.colors.normal.green,
                 _ => self.colors.normal.red,
             };
 
-            let status = match response.borrow().status {
+            let status = match response.status {
                 Some(status) if size.width.gt(&50) => format!(
                     "{} ({})",
                     status.as_str(),
@@ -507,11 +433,11 @@ impl<'a> ResponseViewer<'a> {
                 status,
                 " ".into(),
                 "Time: ".fg(self.colors.bright.black),
-                format!("{}ms", response.borrow().duration.as_millis()).fg(self.colors.normal.green),
+                format!("{}ms", response.duration.as_millis()).fg(self.colors.normal.green),
                 " ".into(),
             ];
 
-            if let Some(size) = response.borrow().size {
+            if let Some(size) = response.size {
                 pieces.push("Size: ".fg(self.colors.bright.black));
                 pieces.push(format!("{} B", size).fg(self.colors.normal.green))
             };
@@ -521,8 +447,17 @@ impl<'a> ResponseViewer<'a> {
     }
 }
 
-impl<'a> Renderable for ResponseViewer<'a> {
+impl Renderable for ResponseViewer {
+    type Input = ();
+    type Output = ();
+
+    fn data(&self, _: u8) -> Self::Output {}
+
     fn draw(&mut self, frame: &mut Frame, size: Rect) -> anyhow::Result<()> {
+        if self.pending_request {
+            self.draw_spinner(frame);
+        }
+
         self.draw_tabs(frame, self.layout.tabs_pane);
         self.draw_current_tab(frame, self.layout.content_pane)?;
         self.draw_summary(frame, self.layout.summary_pane);
@@ -534,24 +469,20 @@ impl<'a> Renderable for ResponseViewer<'a> {
     fn resize(&mut self, _new_size: Rect) {}
 }
 
-impl<'a> Eventful for ResponseViewer<'a> {
+impl Eventful for ResponseViewer {
     type Result = ResponseViewerEvent;
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
-        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
-            return Ok(Some(ResponseViewerEvent::Quit));
-        }
-
-        if let KeyCode::Esc = key_event.code {
-            return Ok(Some(ResponseViewerEvent::RemoveSelection));
-        }
-
         if let KeyCode::Tab = key_event.code {
             self.active_tab = ResViewerTabs::next(&self.active_tab);
         }
 
         if let KeyCode::BackTab = key_event.code {
             self.active_tab = ResViewerTabs::prev(&self.active_tab);
+        }
+
+        if let KeyCode::Esc = key_event.code {
+            return Ok(Some(ResponseViewerEvent::RemoveSelection));
         }
 
         match key_event.code {
@@ -585,7 +516,6 @@ impl<'a> Eventful for ResponseViewer<'a> {
             }
             _ => {}
         }
-
         Ok(None)
     }
 }
@@ -641,20 +571,4 @@ fn get_error_ascii_art(width: u16) -> &'static [&'static str] {
         false => SMALL_ERROR_ART,
         true => BIG_ERROR_ART,
     }
-}
-
-fn make_empty_ascii_art(colors: &hac_colors::Colors) -> Vec<Line<'static>> {
-    LOGO_ASCII
-        .iter()
-        .map(|line| line.to_string().into())
-        .chain(vec![
-            "".into(),
-            "your handy API client".fg(colors.bright.blue).into(),
-            "".into(),
-            "".into(),
-            "make a request and the result will appear here"
-                .fg(colors.bright.black)
-                .into(),
-        ])
-        .collect::<Vec<_>>()
 }

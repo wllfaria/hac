@@ -7,7 +7,8 @@ use std::sync::mpsc::{channel, Sender};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use hac_core::command::Command;
 use hac_core::net::request_manager::Response;
-use hac_store::collection::WhichSlab;
+use hac_store::collection::{Request, WhichSlab};
+use hac_store::slab::EntryRef;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Stylize;
 use ratatui::widgets::{Block, Clear};
@@ -24,7 +25,7 @@ use crate::pages::collection_viewer::sidebar::edit_request_form::EditRequestForm
 //use crate::pages::collection_viewer::collection_store::{CollectionStore, CollectionStoreAction};
 //use crate::pages::collection_viewer::request_editor::{RequestEditor, RequestEditorEvent};
 //use crate::pages::collection_viewer::request_uri::{RequestUri, RequestUriEvent};
-//use crate::pages::collection_viewer::response_viewer::{ResponseViewer, ResponseViewerEvent};
+use crate::pages::collection_viewer::response_viewer::{ResponseViewer, ResponseViewerEvent};
 //use crate::pages::collection_viewer::sidebar::{self, Sidebar, SidebarEvent};
 use crate::renderable::{Eventful, Renderable};
 use crate::router::RouterMessage;
@@ -92,7 +93,8 @@ pub struct CollectionViewer {
     sidebar: Sidebar,
     messager: Sender<RouterMessage>,
 
-    //response_viewer: ResponseViewer<'cv>,
+    response_viewer: ResponseViewer,
+
     //request_editor: RequestEditor<'cv>,
     colors: HacColors,
     config: HacConfig,
@@ -101,19 +103,18 @@ pub struct CollectionViewer {
     collection_sync_timer: std::time::Instant,
 
     responses_map: HashMap<String, Rc<RefCell<Response>>>,
-    response_rx: UnboundedReceiver<Response>,
-    request_tx: UnboundedSender<Response>,
+
+    response_rx: UnboundedReceiver<(EntryRef<Request>, Response)>,
+    response_tx: UnboundedSender<(EntryRef<Request>, Response)>,
 }
 
 impl CollectionViewer {
     pub fn new(size: Rect, colors: HacColors, config: HacConfig) -> Self {
         let layout = build_layout(size, 1);
-        let (request_tx, response_rx) = unbounded_channel::<Response>();
+        let (response_tx, response_rx) = unbounded_channel::<(EntryRef<Request>, Response)>();
 
-        //
         //let request_editor = RequestEditor::new(colors, config, collection_store.clone(), layout.req_editor);
-        //
-        //let response_viewer = ResponseViewer::new(colors, collection_store.clone(), None, layout.response_preview);
+
         let mut sidebar = Sidebar::new(colors.clone(), config.clone());
         sidebar.focus();
 
@@ -123,9 +124,9 @@ impl CollectionViewer {
             request_uri: RequestUri::new(colors.clone(), layout.req_uri),
             sidebar,
             messager: channel().0,
+            response_viewer: ResponseViewer::new(colors.clone(), layout.response_preview),
 
             //request_editor,
-            //response_viewer,
             colors,
             layout,
             config,
@@ -133,49 +134,17 @@ impl CollectionViewer {
             collection_sync_timer: std::time::Instant::now(),
             responses_map: HashMap::default(),
             response_rx,
-            request_tx,
+            response_tx,
         }
     }
 
-    //fn rebuild_everything(&mut self) {
-    //    self.sidebar = sidebar::Sidebar::new(self.colors, self.collection_store.clone());
-    //    self.request_editor = RequestEditor::new(
-    //        self.colors,
-    //        self.config,
-    //        self.collection_store.clone(),
-    //        self.layout.req_editor,
-    //    );
-    //    self.response_viewer = ResponseViewer::new(
-    //        self.colors,
-    //        self.collection_store.clone(),
-    //        None,
-    //        self.layout.response_preview,
-    //    );
-    //    self.request_uri = RequestUri::new(self.colors, self.collection_store.clone(), self.layout.req_uri);
-    //}
-
-    // collect all pending responses from the channel. Here, I don't see a way we
-    // may have more than one response on this channel at any point, but it shouldn't matter
-    // if we have, so we can drain all the responses and update accordingly
-    //fn drain_responses_channel(&mut self) {
-    //    while let Ok(res) = self.response_rx.try_recv() {
-    //        let res = Rc::new(RefCell::new(res));
-    //        self.collection_store
-    //            .borrow()
-    //            .get_selected_request()
-    //            .as_ref()
-    //            .and_then(|req| {
-    //                self.responses_map
-    //                    .insert(req.read().unwrap().id.to_string(), Rc::clone(&res))
-    //            });
-    //        self.response_viewer.update(Some(Rc::clone(&res)));
-    //        self.response_rx.is_empty().then(|| {
-    //            self.collection_store
-    //                .borrow_mut()
-    //                .dispatch(CollectionStoreAction::SetPendingRequest(false));
-    //        });
-    //    }
-    //}
+    fn drain_responses_channel(&mut self) {
+        while let Ok((entry_ref, response)) = self.response_rx.try_recv() {
+            hac_store::collection::restore_request(entry_ref);
+            self.response_viewer.update(Some(response));
+            self.response_viewer.pending_request = false;
+        }
+    }
 
     //fn sync_collection_changes(&mut self) {
     //    let sender = self
@@ -227,13 +196,10 @@ impl CollectionViewer {
     //                }),
     //            });
     //    }
-
     //self.collection_sync_timer = std::time::Instant::now();
-
     //if self.dry_run {
     //    return;
     //}
-
     //tokio::spawn(async move {
     //    match hac_core::fs::sync_collection(collection).await {
     //        Ok(_) => {}
@@ -247,10 +213,6 @@ impl CollectionViewer {
     //});
     //}
 
-    /// updating selection will always also update the focus, as we cannot
-    /// select something that isn't also focused, unless pane_to_select is
-    /// None, in which case we won't change focus at all
-    #[inline]
     fn update_selection(&mut self, pane_to_select: Option<PaneFocus>) {
         if hac_store::collection::is_empty() {
             return;
@@ -259,7 +221,7 @@ impl CollectionViewer {
         match self.selection {
             Some(PaneFocus::Sidebar) => self.sidebar.deselect(),
             Some(PaneFocus::ReqUri) => self.request_uri.deselect(),
-            Some(PaneFocus::Preview) => {}
+            Some(PaneFocus::Preview) => self.response_viewer.deselect(),
             Some(PaneFocus::Editor) => {}
             None => {}
         }
@@ -273,6 +235,7 @@ impl CollectionViewer {
                 self.focus = pane;
             }
             Some(pane @ PaneFocus::Preview) => {
+                self.response_viewer.select();
                 self.focus = pane;
             }
             Some(pane @ PaneFocus::Editor) => {
@@ -283,18 +246,17 @@ impl CollectionViewer {
         self.selection = pane_to_select;
     }
 
-    #[inline]
     fn update_focus(&mut self, pane_to_focus: PaneFocus) {
         match self.focus {
             PaneFocus::Sidebar => self.sidebar.blur(),
             PaneFocus::ReqUri => self.request_uri.blur(),
-            PaneFocus::Preview => {}
+            PaneFocus::Preview => self.response_viewer.blur(),
             PaneFocus::Editor => {}
         }
         match pane_to_focus {
             PaneFocus::Sidebar => self.sidebar.focus(),
             PaneFocus::ReqUri => self.request_uri.focus(),
-            PaneFocus::Preview => {}
+            PaneFocus::Preview => self.response_viewer.focus(),
             PaneFocus::Editor => {}
         }
         self.focus = pane_to_focus;
@@ -322,83 +284,18 @@ impl Renderable for CollectionViewer {
         frame.render_widget(Clear, size);
         frame.render_widget(Block::default().bg(self.colors.primary.background), size);
 
-        //self.drain_responses_channel();
+        self.drain_responses_channel();
 
         self.request_uri.draw(frame, self.layout.req_uri)?;
         self.sidebar.draw(frame, self.layout.sidebar)?;
-
-        //self.response_viewer.draw(frame, self.layout.response_preview)?;
+        self.response_viewer.draw(frame, self.layout.response_preview)?;
         //self.request_editor.draw(frame, self.layout.req_editor)?;
-
-        //let overlay = self.collection_store.borrow().peek_overlay();
-        //match overlay {
-        //    CollectionViewerOverlay::CreateRequest => {
-        //        self.sidebar.draw_overlay(frame, overlay)?;
-        //    }
-        //    CollectionViewerOverlay::CreateDirectory => {
-        //        self.sidebar.draw_overlay(frame, overlay)?;
-        //    }
-        //    CollectionViewerOverlay::SelectParentDir => {
-        //        self.sidebar.draw_overlay(frame, overlay)?;
-        //    }
-        //    CollectionViewerOverlay::EditRequest => {
-        //        self.sidebar.draw_overlay(frame, overlay)?;
-        //    }
-        //    CollectionViewerOverlay::EditDirectory => {
-        //        self.sidebar.draw_overlay(frame, overlay)?;
-        //    }
-        //    CollectionViewerOverlay::DeleteSidebarItem(_) => {
-        //        self.sidebar.draw_overlay(frame, overlay)?;
-        //    }
-        //    CollectionViewerOverlay::HeadersHelp => {
-        //        self.request_editor.draw_overlay(frame, overlay)?;
-        //    }
-        //    CollectionViewerOverlay::HeadersDelete => {
-        //        self.request_editor.draw_overlay(frame, overlay)?;
-        //    }
-        //    CollectionViewerOverlay::HeadersForm(_, _) => {
-        //        self.request_editor.draw_overlay(frame, overlay)?;
-        //    }
-        //    CollectionViewerOverlay::ChangeAuthMethod => {
-        //        self.request_editor.draw_overlay(frame, overlay)?;
-        //    }
-        //    CollectionViewerOverlay::None => {}
-        //}
-
-        //if self
-        //    .collection_store
-        //    .borrow()
-        //    .get_selected_pane()
-        //    .as_ref()
-        //    .is_some_and(|pane| pane.eq(&PaneFocus::Editor))
-        //{
-        //    self.request_editor.maybe_draw_cursor(frame);
-        //}
-
-        //if self
-        //    .collection_store
-        //    .borrow()
-        //    .get_selected_pane()
-        //    .as_ref()
-        //    .is_some_and(|pane| pane.eq(&PaneFocus::ReqUri))
-        //{
-        //    if let Some(request) = self.collection_store.borrow().get_selected_request().as_ref() {
-        //        frame.set_cursor(
-        //            self.layout
-        //                .req_uri
-        //                .x
-        //                .add(request.read().unwrap().uri.chars().count() as u16)
-        //                .add(1),
-        //            self.layout.req_uri.y.add(1),
-        //        )
-        //    }
-        //}
 
         Ok(())
     }
 
     fn tick(&mut self) -> anyhow::Result<()> {
-        if self.collection_sync_timer.elapsed().as_secs().ge(&5) {
+        if self.collection_sync_timer.elapsed().as_secs() > self.config.borrow().sync_delay {
             //self.sync_collection_changes();
         }
         Ok(())
@@ -412,8 +309,8 @@ impl Renderable for CollectionViewer {
 
     fn resize(&mut self, new_size: Rect) {
         let new_layout = build_layout(new_size, 1);
+        self.response_viewer.resize(new_layout.response_preview);
         //self.request_editor.resize(new_layout.req_editor);
-        //self.response_viewer.resize(new_layout.response_preview);
         self.layout = new_layout;
     }
 
@@ -447,9 +344,12 @@ impl Eventful for CollectionViewer {
         if let Some(pane) = self.selection {
             match pane {
                 PaneFocus::ReqUri => match self.request_uri.handle_key_event(key_event)? {
-                    Some(RequestUriEvent::Quit) => return Ok(Some(Command::Quit)),
                     Some(RequestUriEvent::RemoveSelection) => self.update_selection(None),
-                    Some(RequestUriEvent::SendRequest) => todo!(),
+                    Some(RequestUriEvent::SendRequest) => {
+                        let request_ref = hac_store::collection::borrow_selected_request();
+                        hac_core::net::handle_request(request_ref, self.response_tx.clone());
+                        self.response_viewer.pending_request = true;
+                    }
                     Some(RequestUriEvent::SelectNext) => {
                         self.update_selection(None);
                         self.focus_next();
@@ -461,7 +361,6 @@ impl Eventful for CollectionViewer {
                     None => {}
                 },
                 PaneFocus::Sidebar => match self.sidebar.handle_key_event(key_event)? {
-                    Some(SidebarEvent::Quit) => return Ok(Some(Command::Quit)),
                     Some(SidebarEvent::RemoveSelection) => self.update_selection(None),
                     Some(SidebarEvent::ShowExtendedHint) => self.layout = build_layout(self.layout.total_size, 3),
                     Some(SidebarEvent::HideExtendedHint) => self.layout = build_layout(self.layout.total_size, 1),
@@ -518,35 +417,12 @@ impl Eventful for CollectionViewer {
                             };
                         }
                     }
-                    None => (),
-                    //Some(SidebarEvent::EditRequest) => self
-                    //    .collection_store
-                    //    .borrow_mut()
-                    //    .push_overlay(CollectionViewerOverlay::EditRequest),
-                    //Some(SidebarEvent::EditDirectory) => self
-                    //    .collection_store
-                    //    .borrow_mut()
-                    //    .push_overlay(CollectionViewerOverlay::EditDirectory),
-                    //Some(SidebarEvent::CreateDirectory) => self
-                    //    .collection_store
-                    //    .borrow_mut()
-                    //    .push_overlay(CollectionViewerOverlay::CreateDirectory),
-                    //Some(SidebarEvent::DeleteItem(item_id)) => self
-                    //    .collection_store
-                    //    .borrow_mut()
-                    //    .push_overlay(CollectionViewerOverlay::DeleteSidebarItem(item_id)),
-                    //Some(SidebarEvent::SyncCollection) => self.sync_collection_changes(),
-                    //Some(SidebarEvent::Quit) => return Ok(Some(Command::Quit)),
-                    //Some(SidebarEvent::RebuildView) => self.rebuild_everything(),
-                    //// when theres no event we do nothing
-                    //None => {}
+                    None => {}
                 },
-                //        PaneFocus::Preview => match self.response_viewer.handle_key_event(key_event)? {
-                //            Some(ResponseViewerEvent::RemoveSelection) => self.update_selection(None),
-                //            Some(ResponseViewerEvent::Quit) => return Ok(Some(Command::Quit)),
-                //            // when theres no event we do nothing
-                //            None => {}
-                //        },
+                PaneFocus::Preview => match self.response_viewer.handle_key_event(key_event)? {
+                    Some(ResponseViewerEvent::RemoveSelection) => self.update_selection(None),
+                    _ => {}
+                },
                 //        PaneFocus::Editor => match self.request_editor.handle_key_event(key_event)? {
                 //            Some(RequestEditorEvent::RemoveSelection) => self.update_selection(None),
                 //            Some(RequestEditorEvent::Quit) => return Ok(Some(Command::Quit)),

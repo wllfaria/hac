@@ -3,7 +3,7 @@ pub mod delete_item_form;
 pub mod edit_request_form;
 mod request_form_layout;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 use hac_store::collection::{self, EntryStatus, ReqMethod, ReqTreeNode, WhichSlab};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Style, Styled, Stylize};
@@ -25,7 +25,6 @@ pub enum SidebarEvent {
     CreateRequest,
     EditRequest,
     DeleteItem,
-    Quit,
 }
 
 #[derive(Debug)]
@@ -229,10 +228,6 @@ impl Eventful for Sidebar {
     type Result = SidebarEvent;
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
-        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
-            return Ok(Some(SidebarEvent::Quit));
-        }
-
         match key_event.code {
             KeyCode::Tab => return Ok(Some(SidebarEvent::SelectNext)),
             KeyCode::BackTab => return Ok(Some(SidebarEvent::SelectPrev)),

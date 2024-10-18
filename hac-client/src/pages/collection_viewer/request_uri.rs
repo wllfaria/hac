@@ -20,8 +20,6 @@ pub enum RequestUriEvent {
     SelectNext,
     /// requests the parent to select the previous pane
     SelectPrev,
-    /// user pressed `C-c` hotkey so we bubble up the event for the parent to handle
-    Quit,
 }
 
 #[derive(Debug)]
@@ -99,10 +97,6 @@ impl Eventful for RequestUri {
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> anyhow::Result<Option<Self::Result>> {
         assert!(self.selected);
-
-        if let (KeyCode::Char('c'), KeyModifiers::CONTROL) = (key_event.code, key_event.modifiers) {
-            return Ok(Some(RequestUriEvent::Quit));
-        }
 
         match key_event.code {
             KeyCode::Esc => return Ok(Some(RequestUriEvent::RemoveSelection)),

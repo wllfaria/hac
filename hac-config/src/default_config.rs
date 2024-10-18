@@ -2,6 +2,7 @@ pub static DEFAULT_CONFIG: &str = r##"
 dry_run = false
 tab_size = 2
 enable_icons = true
+sync_delay = 5
 
 [editor_keys.normal]
 "u" = "Undo"
