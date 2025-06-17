@@ -1,11 +1,9 @@
 use hac_core::net::request_manager::Response;
-use hac_core::syntax::highlighter::HIGHLIGHTER;
 
 use crate::ascii::{BIG_ERROR_ARTS, LOGO_ASCII, SMALL_ERROR_ARTS};
 use crate::pages::collection_viewer::collection_viewer::PaneFocus;
 use crate::pages::under_construction::UnderConstruction;
 use crate::pages::{spinner::Spinner, Eventful, Renderable};
-use crate::utils::build_syntax_highlighted_lines;
 
 use std::cell::RefCell;
 use std::iter;
@@ -20,7 +18,6 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Scrollbar};
 use ratatui::widgets::{ScrollbarOrientation, ScrollbarState, Tabs};
 use ratatui::Frame;
-use tree_sitter::Tree;
 
 use super::collection_store::CollectionStore;
 
@@ -86,7 +83,6 @@ struct PreviewLayout {
 pub struct ResponseViewer<'a> {
     colors: &'a hac_colors::Colors,
     response: Option<Rc<RefCell<Response>>>,
-    tree: Option<Tree>,
     lines: Vec<Line<'static>>,
     error_lines: Option<Vec<Line<'static>>>,
     empty_lines: Vec<Line<'static>>,
@@ -107,16 +103,6 @@ impl<'a> ResponseViewer<'a> {
         response: Option<Rc<RefCell<Response>>>,
         size: Rect,
     ) -> Self {
-        let tree = response.as_ref().and_then(|response| {
-            if let Some(ref pretty_body) = response.borrow().pretty_body {
-                let pretty_body = pretty_body.to_string();
-                let mut highlighter = HIGHLIGHTER.write().unwrap();
-                highlighter.parse(&pretty_body)
-            } else {
-                None
-            }
-        });
-
         let layout = build_layout(size);
         let preview_layout = build_preview_layout(layout.content_pane);
 
@@ -125,7 +111,6 @@ impl<'a> ResponseViewer<'a> {
         ResponseViewer {
             colors,
             response,
-            tree,
             lines: vec![],
             error_lines: None,
             empty_lines,
@@ -146,24 +131,6 @@ impl<'a> ResponseViewer<'a> {
     }
 
     pub fn update(&mut self, response: Option<Rc<RefCell<Response>>>) {
-        let body_str = response
-            .as_ref()
-            .and_then(|res| {
-                res.borrow()
-                    .pretty_body
-                    .as_ref()
-                    .map(|body| body.to_string())
-            })
-            .unwrap_or_default();
-
-        if body_str.len().gt(&0) {
-            self.tree = HIGHLIGHTER.write().unwrap().parse(&body_str);
-            self.lines = build_syntax_highlighted_lines(&body_str, self.tree.as_ref(), self.colors);
-        } else {
-            self.tree = None;
-            self.lines = vec![];
-        }
-
         if let Some(res) = response.as_ref() {
             let cause: String = res
                 .borrow()

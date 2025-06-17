@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/Main.schema.json",
+  "type": "object",
+  "properties": {
+    "environments": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_-]+$": {
+          "$ref": "../schemas/environment.schema.json"
+        }
+      }
+    },
+    "authentication": {
+      "$ref": "https://example.com/schemas/Authentication.schema.json"
+    },
+    "variables": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": ["environments", "authentication"],
+  "additionalProperties": false
+}

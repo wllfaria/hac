@@ -3,7 +3,6 @@ use hac_core::command::Command;
 use hac_core::net::request_manager::Response;
 
 use crate::pages::collection_viewer::collection_store::{CollectionStore, CollectionStoreAction};
-use crate::pages::collection_viewer::request_editor::{RequestEditor, RequestEditorEvent};
 use crate::pages::collection_viewer::request_uri::{RequestUri, RequestUriEvent};
 use crate::pages::collection_viewer::response_viewer::{ResponseViewer, ResponseViewerEvent};
 use crate::pages::collection_viewer::sidebar::{self, Sidebar, SidebarEvent};
@@ -77,7 +76,6 @@ impl PaneFocus {
 #[derive(Debug)]
 pub struct CollectionViewer<'cv> {
     response_viewer: ResponseViewer<'cv>,
-    request_editor: RequestEditor<'cv>,
     request_uri: RequestUri<'cv>,
     sidebar: Sidebar<'cv>,
 
@@ -108,9 +106,6 @@ impl<'cv> CollectionViewer<'cv> {
 
         let sidebar = sidebar::Sidebar::new(colors, collection_store.clone());
 
-        let request_editor =
-            RequestEditor::new(colors, config, collection_store.clone(), layout.req_editor);
-
         let response_viewer = ResponseViewer::new(
             colors,
             collection_store.clone(),
@@ -121,7 +116,6 @@ impl<'cv> CollectionViewer<'cv> {
         let request_uri = RequestUri::new(colors, collection_store.clone(), layout.req_uri);
 
         CollectionViewer {
-            request_editor,
             response_viewer,
             sidebar,
             request_uri,
@@ -140,12 +134,6 @@ impl<'cv> CollectionViewer<'cv> {
 
     fn rebuild_everything(&mut self) {
         self.sidebar = sidebar::Sidebar::new(self.colors, self.collection_store.clone());
-        self.request_editor = RequestEditor::new(
-            self.colors,
-            self.config,
-            self.collection_store.clone(),
-            self.layout.req_editor,
-        );
         self.response_viewer = ResponseViewer::new(
             self.colors,
             self.collection_store.clone(),
@@ -209,13 +197,8 @@ impl<'cv> CollectionViewer<'cv> {
             .clone();
         if let Some(request) = self.collection_store.borrow().get_selected_request() {
             let request = request.clone();
-            let body = self.request_editor.body().to_string();
             // this is not the best idea for when we start implementing other kinds of
             // body types like GraphQL
-            if !body.is_empty() {
-                request.write().unwrap().body = Some(body);
-                request.write().unwrap().body_type = Some(BodyType::Json)
-            }
 
             // we might later on decide to keep track of the actual dir/request index
             // so we dont have to go over all the possible requests, this might be a
@@ -290,7 +273,6 @@ impl Renderable for CollectionViewer<'_> {
         self.sidebar.draw(frame, self.layout.sidebar)?;
         self.response_viewer
             .draw(frame, self.layout.response_preview)?;
-        self.request_editor.draw(frame, self.layout.req_editor)?;
         self.request_uri.draw(frame, self.layout.req_uri)?;
 
         let overlay = self.collection_store.borrow().peek_overlay();
@@ -313,29 +295,11 @@ impl Renderable for CollectionViewer<'_> {
             CollectionViewerOverlay::DeleteSidebarItem(_) => {
                 self.sidebar.draw_overlay(frame, overlay)?;
             }
-            CollectionViewerOverlay::HeadersHelp => {
-                self.request_editor.draw_overlay(frame, overlay)?;
-            }
-            CollectionViewerOverlay::HeadersDelete => {
-                self.request_editor.draw_overlay(frame, overlay)?;
-            }
-            CollectionViewerOverlay::HeadersForm(_, _) => {
-                self.request_editor.draw_overlay(frame, overlay)?;
-            }
-            CollectionViewerOverlay::ChangeAuthMethod => {
-                self.request_editor.draw_overlay(frame, overlay)?;
-            }
+            CollectionViewerOverlay::HeadersHelp => {}
+            CollectionViewerOverlay::HeadersDelete => {}
+            CollectionViewerOverlay::HeadersForm(_, _) => {}
+            CollectionViewerOverlay::ChangeAuthMethod => {}
             CollectionViewerOverlay::None => {}
-        }
-
-        if self
-            .collection_store
-            .borrow()
-            .get_selected_pane()
-            .as_ref()
-            .is_some_and(|pane| pane.eq(&PaneFocus::Editor))
-        {
-            self.request_editor.maybe_draw_cursor(frame);
         }
 
         if self
@@ -379,7 +343,6 @@ impl Renderable for CollectionViewer<'_> {
 
     fn resize(&mut self, new_size: Rect) {
         let new_layout = build_layout(new_size);
-        self.request_editor.resize(new_layout.req_editor);
         self.response_viewer.resize(new_layout.response_preview);
         self.layout = new_layout;
     }
@@ -499,12 +462,7 @@ impl Eventful for CollectionViewer<'_> {
                     // when theres no event we do nothing
                     None => {}
                 },
-                PaneFocus::Editor => match self.request_editor.handle_key_event(key_event)? {
-                    Some(RequestEditorEvent::RemoveSelection) => self.update_selection(None),
-                    Some(RequestEditorEvent::Quit) => return Ok(Some(Command::Quit)),
-                    // when theres no event we do nothing
-                    None => {}
-                },
+                _ => todo!(),
             };
         }
 

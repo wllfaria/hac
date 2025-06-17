@@ -1,0 +1,7 @@
+[package]
+name = "hac-index"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+hac-config.workspace = true

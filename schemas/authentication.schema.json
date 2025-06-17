@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "bearer": { "type": "string" },
+    "basic": { "$ref": "./basic-auth.schema.json" }
+  },
+  "required": ["bearer", "basic"],
+  "additionalProperties": false
+}

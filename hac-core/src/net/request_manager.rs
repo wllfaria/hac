@@ -1,6 +1,5 @@
 use crate::collection::types::{BodyType, Request};
 use crate::net::request_strategies::{http_strategy::HttpResponse, RequestStrategy};
-use crate::text_object::{Readonly, TextObject};
 
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -11,7 +10,6 @@ use tokio::sync::mpsc::UnboundedSender;
 #[derive(Debug, PartialEq)]
 pub struct Response {
     pub body: Option<String>,
-    pub pretty_body: Option<TextObject<Readonly>>,
     pub headers: Option<HeaderMap<HeaderValue>>,
     pub duration: Duration,
     pub status: Option<reqwest::StatusCode>,
