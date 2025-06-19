@@ -1,14 +1,27 @@
 [workspace]
-default-members = ["hac-client"]
 members = [
     "hac-config",
     "hac-core",
-    "hac-client",
     "hac-colors",
     "hac-index",
     "hac-cli",
 ]
 resolver = "2"
+
+[package]
+name = "hac"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+hac-index.workspace = true
+tokio.workspace = true
+
+anathema = { git = "https://github.com/togglebyte/anathema" }
+itertools = "0.14.0"
+eyre = "0.6.12"
+color-eyre = "0.6.5"
+crossterm = "0.29.0"
 
 [workspace.metadata.crane]
 name = "hac"
@@ -25,13 +38,11 @@ hac-cli = { path = "hac-cli" }
 hac-index = { path = "hac-index" }
 
 anyhow = "1.0.81"
-crossterm = { version = "0.27.0", features = ["event-stream"] }
-tokio = { version = "1.39.2", features = ["rt", "rt-multi-thread", "macros", "fs"] }
+tokio = { version = "1.45.1", features = ["rt", "rt-multi-thread", "macros", "fs", "sync"] }
 tracing = "0.1.40"
 serde = { version = "1.0.204", features = ["derive", "rc"] }
 serde_json = "1.0.124"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"] }
-ratatui = { version = "0.26.3", features = ["all-widgets", "crossterm"] }
 tree-sitter = "0.22.6"
 tree-sitter-json = "0.21"
 divan = "0.1.14"

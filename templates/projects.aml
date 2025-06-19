@@ -1,0 +1,16 @@
+vstack
+    padding [top: 4]
+        vstack [width: 80, height: 1]
+            align [alignment: "top"]
+                text [foreground: "cyan", text_align: "center"] "Projects"
+
+    padding [top: 2]
+        align [alignment: "top"]
+            vstack [width: 80]
+                for collection in state.collections
+                    if state.selected == loop
+                        hstack [foreground: "white", background: "red"] 
+                            text collection.name
+                            spacer
+                    else
+                        text [foreground: "white"] collection.name

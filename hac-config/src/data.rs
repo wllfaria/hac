@@ -1,6 +1,24 @@
+use std::path::PathBuf;
+
+use crate::error::{Error, Result};
 use crate::{APP_NAME, COLLECTIONS_DIR, XDG_DEFAULTS, XDG_ENV_VARS};
 
-use std::path::PathBuf;
+pub fn get_data_dir_path() -> Result<PathBuf> {
+    let data_dir = std::env::var(XDG_ENV_VARS[1])
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from(XDG_DEFAULTS[1]));
+
+    let Some(home_dir) = dirs::home_dir() else {
+        return Err(Error::HomeDirNotFound);
+    };
+
+    let data_dir = home_dir.join(data_dir).join(APP_NAME);
+    if !data_dir.exists() {
+        std::fs::create_dir_all(&data_dir)?;
+    }
+
+    Ok(data_dir)
+}
 
 pub fn get_data_dir() -> PathBuf {
     let data_dir = std::env::var(XDG_ENV_VARS[1])

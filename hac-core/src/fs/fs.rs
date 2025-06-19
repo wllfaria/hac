@@ -1,7 +1,8 @@
-use crate::collection::{collection::create_from_form, Collection};
-use crate::fs::error::FsError;
-
 use std::path::Path;
+
+use crate::collection::collection::create_from_form;
+use crate::collection::Collection;
+use crate::fs::error::FsError;
 
 #[tracing::instrument(err, skip_all)]
 pub async fn delete_collection<P>(path: P) -> anyhow::Result<(), FsError>

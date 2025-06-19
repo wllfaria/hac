@@ -1,12 +1,14 @@
 pub mod config;
 pub mod data;
 mod default_config;
+pub mod error;
 
 pub use config::{
     default_as_str, get_config_dir_path, get_usual_path, load_config, Action, Config, KeyAction,
 };
 pub use data::{
-    get_collections_dir, get_or_create_collections_dir, get_or_create_data_dir, log_file,
+    get_collections_dir, get_data_dir_path, get_or_create_collections_dir, get_or_create_data_dir,
+    log_file,
 };
 use serde::{Deserialize, Serialize};
 

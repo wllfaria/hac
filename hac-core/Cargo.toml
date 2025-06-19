@@ -22,7 +22,6 @@ serde.workspace = true
 tokio.workspace = true
 reqwest.workspace = true
 serde_json.workspace = true
-ratatui.workspace = true
 tree-sitter.workspace = true
 tree-sitter-json.workspace = true
 lazy_static.workspace = true

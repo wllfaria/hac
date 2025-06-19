@@ -1,6 +1,8 @@
-use crate::net::{request_manager::Response, response_decoders::ResponseDecoder};
+use std::ops::Add;
+use std::time::Instant;
 
-use std::{ops::Add, time::Instant};
+use crate::net::request_manager::Response;
+use crate::net::response_decoders::ResponseDecoder;
 
 pub struct JsonDecoder;
 

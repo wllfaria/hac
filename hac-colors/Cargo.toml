@@ -16,8 +16,6 @@ workspace = "../"
 [dependencies]
 tracing.workspace = true
 anyhow.workspace = true
-crossterm.workspace = true
-ratatui.workspace = true
 serde.workspace = true
 
 toml = { version = "0.8.12" }

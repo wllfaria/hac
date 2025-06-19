@@ -17,6 +17,7 @@ workspace = "../"
 anyhow.workspace = true
 tracing.workspace = true
 serde.workspace = true
+thiserror = "2.0.12"
 
 dirs = "5.0.1"
 toml = "0.8.12"

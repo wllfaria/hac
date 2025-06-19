@@ -1,11 +1,12 @@
-use crate::collection::types::{BodyType, Request};
-use crate::net::request_strategies::{http_strategy::HttpResponse, RequestStrategy};
-
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use reqwest::header::{HeaderMap, HeaderValue};
 use tokio::sync::mpsc::UnboundedSender;
+
+use crate::collection::types::{BodyType, Request};
+use crate::net::request_strategies::http_strategy::HttpResponse;
+use crate::net::request_strategies::RequestStrategy;
 
 #[derive(Debug, PartialEq)]
 pub struct Response {
